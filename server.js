@@ -120,6 +120,21 @@ async function initDB() {
       );
     `);
 
+    // Tabela de horários específicos bloqueados (agendamentos manuais / ausências parciais)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS blocked_slots (
+        id         SERIAL       PRIMARY KEY,
+        date       DATE         NOT NULL,
+        st         TIME         NOT NULL,
+        et         TIME         NOT NULL,
+        reason     VARCHAR(200),
+        created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_bslot_date ON blocked_slots(date);
+    `);
+
     await client.query('COMMIT');
 
     // Seed: insere procedimentos padrão apenas se a tabela estiver vazia
@@ -449,12 +464,12 @@ app.get('/api/availability', async (req, res) => {
     if (!pRes.rowCount) return res.json([]);
     const dur = pRes.rows[0].dur;
 
-    // Busca agendamentos confirmados no dia
-    const aRes = await pool.query(
-      `SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`,
-      [date]
-    );
-    const busy = aRes.rows.map(r => ({
+    // Busca agendamentos confirmados E horários bloqueados no dia
+    const [aRes, sRes] = await Promise.all([
+      pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]),
+      pool.query(`SELECT st, et FROM blocked_slots WHERE date=$1`, [date]),
+    ]);
+    const busy = [...aRes.rows, ...sRes.rows].map(r => ({
       s: timeToMin(r.st),
       e: timeToMin(r.et),
     }));
@@ -499,6 +514,59 @@ app.get('/api/revenue/summary', requireAdmin, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Horários Bloqueados (blocked_slots) ──────────────────────────────────────
+app.get('/api/blocked-slots', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM blocked_slots ORDER BY date, st'
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/blocked-slots', requireAdmin, async (req, res) => {
+  const { date, st, et, reason } = req.body;
+  if (!date || !st || !et) return res.status(400).json({ error: 'Data, início e fim são obrigatórios' });
+  if (timeToMin(st) >= timeToMin(et)) return res.status(400).json({ error: 'Horário de início deve ser antes do fim' });
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO blocked_slots (date, st, et, reason) VALUES ($1,$2,$3,$4) RETURNING *',
+      [date, st, et, reason || null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/blocked-slots/:id', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM blocked_slots WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Backup / Export (admin, desktop only) ────────────────────────────────────
+app.get('/api/backup/export', requireAdmin, async (req, res) => {
+  try {
+    const [procs, appts, blocked, slots] = await Promise.all([
+      pool.query('SELECT * FROM procedures ORDER BY id'),
+      pool.query('SELECT * FROM appointments ORDER BY date, st'),
+      pool.query('SELECT * FROM blocked_dates ORDER BY date'),
+      pool.query('SELECT * FROM blocked_slots ORDER BY date, st'),
+    ]);
+    const today = new Date().toISOString().slice(0,10);
+    res.setHeader('Content-Disposition', `attachment; filename="bela-essencia-backup-${today}.json"`);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.json({
+      exportedAt: new Date().toISOString(),
+      version: '1.3.0',
+      procedures:    procs.rows,
+      appointments:  appts.rows,
+      blocked_dates: blocked.rows,
+      blocked_slots: slots.rows,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
