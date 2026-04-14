@@ -21,7 +21,12 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["beauty", "health", "lifestyle"],
+  "categories": [
+    "beauty",
+    "health",
+    "lifestyle"
+  ],
   "lang": "pt-BR",
-  "dir": "ltr"
+  "dir": "ltr",
+  "screenshots": []
 }
