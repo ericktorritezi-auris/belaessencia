@@ -151,6 +151,8 @@ h1,h2,h3,h4{font-family:'Cormorant Garamond',serif}
 .footer-bar{text-align:center;padding:14px;font-size:11px;color:var(--text-light)}
 .footer-bar a{color:var(--rose);opacity:.55;text-decoration:none;transition:var(--tr)}
 .footer-bar a:hover{opacity:1}
+.app-footer{text-align:center;padding:10px 16px 20px;font-size:10.5px;color:var(--text-light);letter-spacing:.04em;opacity:.7;line-height:1.8}
+.adm-main .app-footer{padding:14px 24px;border-top:1px solid var(--border);background:white;opacity:1;color:var(--text-light)}
 .skel{background:linear-gradient(90deg,var(--border) 25%,var(--border-light) 50%,var(--border) 75%);background-size:200% 100%;animation:skel 1.2s ease infinite;border-radius:var(--r-sm);height:56px}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
 
@@ -352,9 +354,7 @@ tr:hover td{background:#FAF3F6}
   <div class="footer-bar">
     <a href="#" onclick="showAdmin(event)">Área administrativa</a>
   </div>
-  <div style="text-align:center;padding:6px 16px 18px;font-size:10px;color:var(--text-light);opacity:.6">
-    Versão: 1.2.5 | Clínica Bela Essência © 2026
-  </div>
+  <div class="app-footer" id="footer-booking"></div>
 </div>
 
 <!-- ADMIN -->
@@ -446,9 +446,7 @@ tr:hover td{background:#FAF3F6}
             </div>
           </div>
         </div>
-        <div style="text-align:center;padding:16px 24px;font-size:11px;color:var(--text-light);border-top:1px solid var(--border);background:white;margin-top:auto">
-          Versão: 1.2.5 | Clínica Bela Essência © 2026
-        </div>
+        <div class="app-footer" id="footer-admin"></div>
       </main>
     </div>
   </div>
@@ -463,6 +461,18 @@ tr:hover td{background:#FAF3F6}
 <div class="toast" id="toast"></div>
 
 <script>
+// ══════════════════════════════════════════════════
+// VERSÃO — altere APENAS aqui; atualiza todos os rodapés
+// ══════════════════════════════════════════════════
+const APP_VERSION  = '1.2.5';
+const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
+
+function renderFooters() {
+  document.querySelectorAll('[id^="footer-"]').forEach(el => {
+    el.textContent = APP_COPY;
+  });
+}
+
 // ══════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════
@@ -1275,6 +1285,7 @@ if ('serviceWorker' in navigator) {
 // INIT
 // ══════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
+  renderFooters();  // Renderiza versão/copyright em todos os rodapés
   renderCities();
 
   // Esconde loader e mostra o app
