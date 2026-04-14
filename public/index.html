@@ -217,6 +217,24 @@ tr:hover td{background:#FAF3F6}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 ::-webkit-scrollbar-thumb:hover{background:var(--rose-mid)}
+/* ── DESKTOP ONLY ── */
+.desktop-only{display:block}
+@media(max-width:768px){.desktop-only{display:none!important}}
+
+/* ── SLOT CHIPS ── */
+.slot-chip{background:#FFF5F5;color:var(--error);border:1px solid #F5C0C0;border-radius:var(--r-sm);padding:8px 12px;font-size:11.5px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+.slot-chip-info{display:flex;flex-direction:column;gap:2px}
+.slot-chip-date{font-weight:800;font-size:12px;color:var(--dark)}
+.slot-chip-time{font-size:11px;color:var(--text-light)}
+.slot-chip-reason{font-size:11px;color:var(--error);font-style:italic}
+.slot-chip-del{background:none;border:none;cursor:pointer;color:var(--error);font-size:16px;opacity:.55;transition:var(--tr);flex-shrink:0;padding:2px}
+.slot-chip-del:hover{opacity:1}
+
+/* ── BLOCK TABS ── */
+.btab-wrap{display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:18px}
+.btab{background:none;border:none;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;padding:9px 16px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;color:var(--text-light);cursor:pointer;transition:var(--tr)}
+.btab.active{color:var(--rose);border-bottom-color:var(--rose)}
+
 /* ── APPT CARDS (mobile) ── */
 .appt-cards{display:none;padding:0 0 4px}
 .appt-card{background:white;border:1px solid var(--border);border-radius:var(--r-md);padding:14px 15px;margin-bottom:10px;box-shadow:var(--sh-sm)}
@@ -391,6 +409,7 @@ tr:hover td{background:#FAF3F6}
         <div style="margin-top:8px">
           <div class="nav-sec-ttl">Configurações</div>
           <div class="nav-item" id="nav-procs" onclick="showSec('procs')"><span class="nav-icon">✨</span> Procedimentos</div>
+          <div class="nav-item desktop-only" id="nav-backup" onclick="showSec('backup')"><span class="nav-icon">💾</span> Backup</div>
         </div>
         <div class="sb-foot">
           <div class="nav-item" onclick="doLogout()"><span class="nav-icon">🚪</span> Sair</div>
@@ -420,17 +439,48 @@ tr:hover td{background:#FAF3F6}
           </div>
           <div id="sec-blocked" class="hidden">
             <div class="tbl-wrap" style="margin-bottom:16px">
-              <div style="padding:18px">
-                <div class="tbl-ttl" style="margin-bottom:10px">Bloquear Data Global</div>
-                <p style="font-size:12px;color:var(--text-light);margin-bottom:14px">Datas bloqueadas ficam indisponíveis em <strong>todas as cidades</strong>.</p>
+              <div style="padding:18px 18px 0">
+                <div class="tbl-ttl" style="margin-bottom:14px">Bloqueios de Agenda</div>
+                <div class="btab-wrap">
+                  <button class="btab active" id="btab-day" onclick="switchBTab('day')">🗓 Dia Inteiro</button>
+                  <button class="btab" id="btab-slot" onclick="switchBTab('slot')">⏰ Horário Específico</button>
+                </div>
+              </div>
+              <!-- TAB: Dia inteiro -->
+              <div id="bpanel-day" style="padding:0 18px 18px">
+                <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Bloqueia o dia inteiro em <strong>todas as cidades</strong>. Use para folgas, feriados ou viagens.</p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
                   <input type="date" class="fi" id="bl-date" style="flex:1;min-width:140px">
                   <input type="text" class="fi" id="bl-reason" placeholder="Motivo (opcional)" style="flex:2;min-width:180px">
-                  <button class="btn btn-primary" onclick="addBlock()" style="width:auto;padding:8px 18px">Bloquear</button>
+                  <button class="btn btn-primary" onclick="addBlock()" style="width:auto;padding:8px 18px">Bloquear dia</button>
                 </div>
               </div>
+              <!-- TAB: Horário específico -->
+              <div id="bpanel-slot" class="hidden" style="padding:0 18px 18px">
+                <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Bloqueia um horário específico. Use para agendamentos feitos diretamente com a profissional.</p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+                  <input type="date" class="fi" id="bs-date" placeholder="Data">
+                  <input type="text" class="fi" id="bs-reason" placeholder="Motivo (ex: Atendimento presencial)">
+                  <input type="time" class="fi" id="bs-st" step="1800" placeholder="Início">
+                  <input type="time" class="fi" id="bs-et" step="1800" placeholder="Fim">
+                </div>
+                <button class="btn btn-primary" onclick="addBlockSlot()" style="width:auto;padding:8px 18px">Bloquear horário</button>
+              </div>
             </div>
-            <div class="tbl-wrap"><div style="padding:18px"><div class="tbl-ttl" style="margin-bottom:10px">Datas Bloqueadas</div><div class="bl-grid" id="bl-list"></div></div></div>
+            <!-- Dias bloqueados -->
+            <div class="tbl-wrap" style="margin-bottom:12px">
+              <div style="padding:16px 18px">
+                <div style="font-size:13px;font-weight:700;color:var(--dark);margin-bottom:10px">Dias Bloqueados</div>
+                <div class="bl-grid" id="bl-list"></div>
+              </div>
+            </div>
+            <!-- Horários bloqueados -->
+            <div class="tbl-wrap">
+              <div style="padding:16px 18px">
+                <div style="font-size:13px;font-weight:700;color:var(--dark);margin-bottom:10px">Horários Bloqueados</div>
+                <div id="bs-list"></div>
+              </div>
+            </div>
           </div>
           <div id="sec-revenue" class="hidden">
             <div class="rev-grid" id="rev-cards"></div>
@@ -445,6 +495,23 @@ tr:hover td{background:#FAF3F6}
               <div style="overflow-x:auto"><table><thead><tr><th>Procedimento</th><th>Duração</th><th>Valor</th><th>Ações</th></tr></thead><tbody id="procs-body"></tbody></table></div>
             </div>
           </div>
+          <!-- SEC: BACKUP (desktop only) -->
+          <div id="sec-backup" class="hidden desktop-only">
+            <div class="tbl-wrap" style="margin-bottom:16px">
+              <div style="padding:20px">
+                <div class="tbl-ttl" style="margin-bottom:6px">Exportar Backup</div>
+                <p style="font-size:12px;color:var(--text-light);margin-bottom:16px;line-height:1.7">Gera um arquivo <code>.json</code> com todos os dados: agendamentos, procedimentos e bloqueios. Salve antes de qualquer atualização do sistema.</p>
+                <button class="btn btn-primary" onclick="downloadBackup()" style="width:auto;padding:10px 24px">⬇ Baixar Backup JSON</button>
+              </div>
+            </div>
+            <div class="tbl-wrap">
+              <div style="padding:20px">
+                <div class="tbl-ttl" style="margin-bottom:12px">Resumo do Banco de Dados</div>
+                <div id="backup-summary"></div>
+              </div>
+            </div>
+          </div>
+
         </div>
         <div class="app-footer" id="footer-admin"></div>
       </main>
@@ -464,7 +531,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.2.5';
+const APP_VERSION  = '1.3.0';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -859,18 +926,27 @@ function initAdmin() {
   showSec('agenda');
 }
 
-const SEC_TITLES={agenda:'Agenda',blocked:'Bloquear Datas',revenue:'Receita',procs:'Procedimentos'};
+const SEC_TITLES={agenda:'Agenda',blocked:'Bloquear Datas',revenue:'Receita',procs:'Procedimentos',backup:'Backup'};
 function showSec(name){
-  ['agenda','blocked','revenue','procs'].forEach(s=>{
-    document.getElementById(`sec-${s}`).classList.toggle('hidden',s!==name);
+  ['agenda','blocked','revenue','procs','backup'].forEach(s=>{
+    const sec=document.getElementById(`sec-${s}`); if(sec) sec.classList.toggle('hidden',s!==name);
     const el=document.getElementById(`nav-${s}`); if(el) el.classList.toggle('active',s===name);
   });
   document.getElementById('adm-ttl').textContent=SEC_TITLES[name]||name;
   if(name==='agenda'){renderStats();renderAgenda()}
-  if(name==='blocked') renderBlocked();
+  if(name==='blocked'){renderBlocked();renderBlockedSlots()}
   if(name==='revenue'){renderRevCards();renderRevTable()}
   if(name==='procs') renderProcsAdmin();
+  if(name==='backup') renderBackupSummary();
   if(window.innerWidth<=768) document.getElementById('adm-sb').classList.remove('open');
+}
+
+// ── Block tab switcher ─────────────────────────────────────────
+function switchBTab(tab){
+  document.getElementById('bpanel-day').classList.toggle('hidden', tab!=='day');
+  document.getElementById('bpanel-slot').classList.toggle('hidden', tab!=='slot');
+  document.getElementById('btab-day').classList.toggle('active', tab==='day');
+  document.getElementById('btab-slot').classList.toggle('active', tab==='slot');
 }
 
 // ── STATS ────────────────────────────────────────
@@ -1086,6 +1162,56 @@ async function removeBlock(date) {
   catch(e){ showToast(e.message,'error'); }
 }
 
+// ── HORÁRIOS BLOQUEADOS ───────────────────────────────────────
+async function renderBlockedSlots() {
+  const el = document.getElementById('bs-list');
+  if (!el) return;
+  try {
+    const list = await GET('/api/blocked-slots');
+    if (!list.length) {
+      el.innerHTML='<div style="color:var(--text-light);font-size:12px">Nenhum horário bloqueado</div>';
+      return;
+    }
+    el.innerHTML = [...list].sort((a,b)=>a.date<b.date?-1:1).map(s=>`
+      <div class="slot-chip">
+        <div class="slot-chip-info">
+          <div class="slot-chip-date">${fmtDate(s.date)}</div>
+          <div class="slot-chip-time">${String(s.st).slice(0,5)} – ${String(s.et).slice(0,5)}</div>
+          ${s.reason?`<div class="slot-chip-reason">${s.reason}</div>`:''}
+        </div>
+        <button class="slot-chip-del" onclick="removeBlockSlot(${s.id})" title="Remover bloqueio">✕</button>
+      </div>
+    `).join('');
+  } catch(e){ el.innerHTML=`<div style="color:var(--error);font-size:12px">Erro: ${e.message}</div>`; }
+}
+
+async function addBlockSlot() {
+  const date   = document.getElementById('bs-date').value;
+  const st     = document.getElementById('bs-st').value;
+  const et     = document.getElementById('bs-et').value;
+  const reason = document.getElementById('bs-reason').value.trim();
+  if (!date || !st || !et) { showToast('Preencha data, início e fim','error'); return; }
+  if (st >= et) { showToast('Horário de início deve ser antes do fim','error'); return; }
+  try {
+    await POST('/api/blocked-slots', { date, st, et, reason });
+    document.getElementById('bs-date').value='';
+    document.getElementById('bs-st').value='';
+    document.getElementById('bs-et').value='';
+    document.getElementById('bs-reason').value='';
+    showToast('Horário bloqueado','ok');
+    renderBlockedSlots();
+  } catch(e){ showToast(e.message,'error'); }
+}
+
+async function removeBlockSlot(id) {
+  if (!confirm('Remover este bloqueio de horário?')) return;
+  try {
+    await DEL(`/api/blocked-slots/${id}`);
+    showToast('Bloqueio removido','ok');
+    renderBlockedSlots();
+  } catch(e){ showToast(e.message,'error'); }
+}
+
 // ── REVENUE ──────────────────────────────────────
 async function renderRevCards() {
   try {
@@ -1197,6 +1323,51 @@ async function deleteProc(id) {
     await DEL(`/api/procedures/${id}`);
     clearProcsCache(); showToast('Procedimento removido','ok'); renderProcsAdmin();
   } catch(e){ showToast(e.message,'error'); }
+}
+
+// ── BACKUP ───────────────────────────────────────
+async function downloadBackup() {
+  try {
+    showToast('Gerando backup...', '', 2000);
+    const r = await fetch('/api/backup/export', { credentials:'include' });
+    if (!r.ok) throw new Error('Erro ao gerar backup');
+    const blob = await r.blob();
+    const today = new Date().toISOString().slice(0,10);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bela-essencia-backup-${today}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Backup baixado com sucesso','ok');
+  } catch(e){ showToast(e.message,'error'); }
+}
+
+async function renderBackupSummary() {
+  const el = document.getElementById('backup-summary');
+  if (!el) return;
+  el.innerHTML='<div style="color:var(--text-light);font-size:12px">Carregando...</div>';
+  try {
+    const [appts, procs, blocked, slots] = await Promise.all([
+      GET('/api/appointments?'),
+      GET('/api/procedures'),
+      GET('/api/blocked'),
+      GET('/api/blocked-slots'),
+    ]);
+    const confirmed = appts.filter(a=>a.status==='confirmed').length;
+    const cancelled = appts.filter(a=>a.status==='cancelled').length;
+    el.innerHTML=`
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+        <div class="stat-card"><div class="stat-lbl">📅 Agendamentos</div><div class="stat-val">${appts.length}</div><div class="stat-sub">${confirmed} confirmados · ${cancelled} cancelados</div></div>
+        <div class="stat-card"><div class="stat-lbl">✨ Procedimentos</div><div class="stat-val">${procs.length}</div><div class="stat-sub">ativos no sistema</div></div>
+        <div class="stat-card"><div class="stat-lbl">🚫 Dias Bloqueados</div><div class="stat-val">${blocked.length}</div><div class="stat-sub">ativos</div></div>
+        <div class="stat-card"><div class="stat-lbl">⏰ Horários Bloq.</div><div class="stat-val">${slots.length}</div><div class="stat-sub">ativos</div></div>
+      </div>
+      <p style="font-size:11px;color:var(--text-light);margin-top:14px;line-height:1.7">
+        Última exportação: gere um backup agora para manter uma cópia de segurança atualizada.
+      </p>
+    `;
+  } catch(e){ el.innerHTML=`<div style="color:var(--error);font-size:12px">Erro: ${e.message}</div>`; }
 }
 
 // ── MODAL ─────────────────────────────────────────
