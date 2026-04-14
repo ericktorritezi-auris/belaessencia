@@ -156,6 +156,26 @@ h1,h2,h3,h4{font-family:'Cormorant Garamond',serif}
 .skel{background:linear-gradient(90deg,var(--border) 25%,var(--border-light) 50%,var(--border) 75%);background-size:200% 100%;animation:skel 1.2s ease infinite;border-radius:var(--r-sm);height:56px}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
 
+/* ── LOCATION CARD ── */
+.lc{margin-top:16px;border-radius:var(--r-md);overflow:hidden;border:1.5px solid var(--border);background:white;box-shadow:var(--sh-sm)}
+.lc-top{background:linear-gradient(135deg,var(--gold-light),#EDE4CE);padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.lc-top-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.14em;font-weight:900;color:var(--gold-deep);flex:1}
+.lc-pin{font-size:16px;flex-shrink:0}
+.lc-body{padding:15px 17px 17px}
+.lc-venue{font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;color:var(--rose);line-height:1.2;margin-bottom:6px}
+.lc-addr{font-size:13px;color:var(--text);line-height:1.6;font-weight:500}
+.lc-cep{font-size:11px;color:var(--text-light);margin-top:2px;letter-spacing:.03em}
+.lc-map{display:inline-flex;align-items:center;gap:6px;margin-top:13px;padding:9px 18px;background:var(--rose);color:white;border-radius:var(--r-xl);font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;text-decoration:none;transition:var(--tr);box-shadow:0 3px 10px rgba(155,77,106,.25)}
+.lc-map:hover{background:var(--rose-deep);transform:translateY(-1px);box-shadow:0 5px 14px rgba(155,77,106,.35)}
+
+/* ── SUCCESS LOCATION ── */
+.succ-loc{background:linear-gradient(135deg,var(--gold-light),#EDE4CE);border-radius:var(--r-md);padding:15px 18px;margin:0 auto 22px;text-align:left;border:1px solid var(--border);max-width:320px}
+.succ-loc-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.14em;font-weight:900;color:var(--gold-deep);margin-bottom:7px}
+.succ-loc-venue{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:var(--rose);margin-bottom:3px}
+.succ-loc-addr{font-size:12px;color:var(--text);line-height:1.6;font-weight:500}
+.succ-loc-map{display:inline-flex;align-items:center;gap:5px;margin-top:10px;font-size:11px;font-weight:700;color:var(--rose);text-decoration:none;font-family:'Nunito',sans-serif}
+.succ-loc-map:hover{text-decoration:underline}
+
 /* ── ADMIN ── */
 .adm-login-bg{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(145deg,#1A1214,#3D2B35)}
 .adm-login-card{background:white;border-radius:var(--r-lg);padding:38px 30px;width:100%;max-width:340px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -342,6 +362,7 @@ tr:hover td{background:#FAF3F6}
         <div class="rev-head"><h3 id="rv-proc">—</h3><p id="rv-city">—</p></div>
         <div class="rev-body" id="rv-body"></div>
       </div>
+      <div id="rv-location"></div>
       <div style="margin-top:14px;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--border)">
         <div style="background:var(--rose-light);padding:11px 15px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--border-light)">
           <span style="font-size:15px;flex-shrink:0">ℹ️</span>
@@ -364,6 +385,7 @@ tr:hover td{background:#FAF3F6}
         <div class="succ-icon">✓</div>
         <h2>Agendado <em style="color:var(--rose)">com sucesso</em>!</h2>
         <p id="succ-txt"></p>
+        <div id="succ-location"></div>
         <a id="wa-link" href="#" target="_blank" class="btn btn-wa" style="margin:0 auto 14px">💬 Falar com a Ana Paula</a>
         <button class="btn btn-secondary" onclick="resetBooking()">Fazer outro agendamento</button>
       </div>
@@ -531,7 +553,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.3.1';
+const APP_VERSION  = '1.3.2';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -813,6 +835,7 @@ function renderReview() {
   document.getElementById('rv-proc').textContent=p.name;
   document.getElementById('rv-city').textContent=c.name;
   const end=m2t(t2m(BK.time)+p.dur);
+  // Tabela de dados do agendamento
   document.getElementById('rv-body').innerHTML=`
     <div class="rev-row"><span class="rl">Data</span><span class="rv">${fmtDateLong(BK.date)}</span></div>
     <div class="rev-row"><span class="rl">Horário</span><span class="rv">${BK.time} – ${end}</span></div>
@@ -820,14 +843,23 @@ function renderReview() {
     <div class="rev-row"><span class="rl">Valor</span><span class="rv" style="color:var(--gold)">${fmtPrice(p)}</span></div>
     <div class="rev-row"><span class="rl">Nome</span><span class="rv">${BK.name}</span></div>
     <div class="rev-row"><span class="rl">WhatsApp</span><span class="rv"><a href="${phoneToWA(BK.phone)}" target="_blank" style="color:var(--rose);text-decoration:none">${fmtPhone(BK.phone)} 💬</a></span></div>
-    <div class="rev-row" style="align-items:flex-start">
-      <span class="rl">Local</span>
-      <span class="rv" style="text-align:right">
-        <strong style="display:block;color:var(--rose)">${c.local}</strong>
-        <span style="font-size:12px;color:var(--text-light);display:block;margin-top:2px">${c.address}</span>
-        <span style="font-size:11px;color:var(--text-light);display:block">${c.cep}</span>
-        <a href="${c.mapsUrl}" target="_blank" style="font-size:11px;color:var(--rose);text-decoration:none;display:inline-block;margin-top:4px">📍 Ver no mapa</a>
-      </span>
+  `;
+
+  // Card de localização — separado e com visual próprio
+  document.getElementById('rv-location').innerHTML=`
+    <div class="lc">
+      <div class="lc-top">
+        <span class="lc-pin">📍</span>
+        <span class="lc-top-lbl">Local do atendimento</span>
+      </div>
+      <div class="lc-body">
+        <div class="lc-venue">${c.local}</div>
+        <div class="lc-addr">${c.address}</div>
+        <div class="lc-cep">${c.cep}</div>
+        <a href="${c.mapsUrl}" target="_blank" class="lc-map">
+          🗺 Abrir no Google Maps
+        </a>
+      </div>
     </div>
   `;
 }
@@ -894,12 +926,24 @@ async function confirmBooking() {
     sessionStorage.setItem('be_client_phone', BK.phone);
 
     const sc = CITIES.find(x => Number(x.id) === Number(BK.cityId));
+
+    // Texto principal de confirmação
     document.getElementById('succ-txt').innerHTML =
       `<strong>${BK.name}</strong>, seu horário está confirmado!<br>` +
       `<strong>${fmtDateLong(BK.date)}</strong> às <strong>${BK.time}</strong>.<br>` +
-      `<span style="color:var(--gold)">${p.name}</span><br><br>` +
-      `<span style="font-size:12px;color:var(--rose);font-weight:700">${sc?.local||''}</span><br>` +
-      `<span style="font-size:12px;color:var(--text-light)">${sc?.address||''} · ${sc?.cep||''}</span>`;
+      `<span style="color:var(--gold)">${p.name}</span>`;
+
+    // Card de localização na tela de sucesso
+    if (sc) {
+      document.getElementById('succ-location').innerHTML=`
+        <div class="succ-loc">
+          <div class="succ-loc-lbl">📍 Local do atendimento</div>
+          <div class="succ-loc-venue">${sc.local}</div>
+          <div class="succ-loc-addr">${sc.address}<br>${sc.cep}</div>
+          <a href="${sc.mapsUrl}" target="_blank" class="succ-loc-map">🗺 Abrir no Google Maps →</a>
+        </div>
+      `;
+    }
     document.getElementById('wa-link').href = WA_PROF;
     goStep(7);
 
