@@ -375,6 +375,20 @@ app.patch('/api/appointments/:id/cancel', requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: excluir agendamento definitivamente da base (hard delete)
+app.delete('/api/appointments/:id', requireAdmin, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM appointments WHERE id=$1',
+      [req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Agendamento não encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Datas Bloqueadas ──────────────────────────────────────────────────────────
 app.get('/api/blocked', async (req, res) => {
   try {
