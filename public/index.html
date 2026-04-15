@@ -340,7 +340,7 @@ tr:hover td{background:#FAF3F6}
 <div id="booking-app" class="hidden">
   <header class="site-header">
     <div class="brand-name">Bela <em>Essência</em></div>
-    <div class="brand-tag">Estética &amp; Beleza · Ana Paula Silva</div>
+    <div class="brand-tag" id="prof-tag">Estética &amp; Beleza · Ana Paula Silva</div>
   </header>
   <div class="booking-wrap" id="bk-main">
     <div class="step-dots" id="step-dots">
@@ -424,7 +424,7 @@ tr:hover td{background:#FAF3F6}
         <h2>Agendado <em style="color:var(--rose)">com sucesso</em>!</h2>
         <p id="succ-txt"></p>
         <div id="succ-location"></div>
-        <a id="wa-link" href="#" target="_blank" class="btn btn-wa" style="margin:0 auto 14px">💬 Falar com a Ana Paula</a>
+        <a id="wa-link" href="#" target="_blank" class="btn btn-wa" style="margin:0 auto 14px"><span id="wa-link-label">💬 Falar com Ana Paula</span></a>
         <button class="btn btn-secondary" onclick="resetBooking()">Fazer outro agendamento</button>
       </div>
     </div>
@@ -487,7 +487,7 @@ tr:hover td{background:#FAF3F6}
         <div class="adm-topbar">
           <button class="mob-menu" onclick="toggleSB()">☰</button>
           <div class="adm-ttl" id="adm-ttl">Agenda</div>
-          <div style="font-size:11px;color:var(--text-light)">Ana Paula Silva</div>
+          <div id="admin-prof-name" style="font-size:11px;color:var(--text-light)">Ana Paula Silva</div>
         </div>
         <div class="adm-content">
           <div id="sec-agenda">
@@ -758,7 +758,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.5.4';
+const APP_VERSION  = '1.5.5';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -771,6 +771,41 @@ function renderFooters() {
 // CONFIG
 // ══════════════════════════════════════════════════
 const WA_PROF = 'https://wa.me/5543998734460';
+
+// Perfil do profissional — carregado do banco, usado em todo o sistema
+let PROF = { name: 'Profissional', phone: '', email: '' };
+
+async function loadProfProfile() {
+  try {
+    const data = await fetch('/api/admin/profile/public').then(r => r.json());
+    if (data && data.name) {
+      PROF = data;
+      applyProfProfile();
+    }
+  } catch {}
+}
+
+function applyProfProfile() {
+  // Header público
+  const tagEl = document.getElementById('prof-tag');
+  if (tagEl) tagEl.textContent = `Estética & Beleza · ${PROF.name}`;
+  // Botão WhatsApp na tela de sucesso
+  const waBtn = document.getElementById('wa-link-label');
+  if (waBtn) waBtn.textContent = `💬 Falar com ${PROF.name.split(' ')[0]}`;
+  // Topbar do admin
+  const adminName = document.getElementById('admin-prof-name');
+  if (adminName) adminName.textContent = PROF.name;
+  // Meta description (SEO)
+  const metaDesc = document.querySelector('meta[name="description"]');
+  if (metaDesc) metaDesc.content = `Agende seu procedimento estético com ${PROF.name}`;
+  // Link WA dinâmico (usa telefone do perfil se disponível)
+  if (PROF.phone) {
+    const d = PROF.phone.replace(/\D/g, '');
+    const waUrl = `https://wa.me/${d.startsWith('55') ? d : '55' + d}`;
+    const waLink = document.getElementById('wa-link');
+    if (waLink) waLink.href = waUrl;
+  }
+}
 // Cities loaded from API — replaces hardcoded constant
 let CITIES = [];
 let _citiesLoaded = false;
@@ -1279,6 +1314,7 @@ async function doLogin() {
     document.getElementById('adm-login').classList.add('hidden');
     document.getElementById('adm-dash').classList.remove('hidden');
     initAdmin();
+    loadProfProfile(); // atualiza nome no topbar do admin
   } catch {
     const err=document.getElementById('login-err');
     err.classList.remove('hidden');
@@ -2262,6 +2298,9 @@ async function saveProfile() {
   try {
     await PUT('/api/admin/profile',{name,phone,email});
     showToast('Perfil atualizado!','ok');
+    // Reaplica em todo o sistema imediatamente
+    PROF = { ...PROF, name, phone, email };
+    applyProfProfile();
   } catch(e){showToast(e.message,'error')}
 }
 
@@ -2370,6 +2409,7 @@ if ('serviceWorker' in navigator) {
 // ══════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
   renderFooters();
+  loadProfProfile(); // carrega nome/contato do profissional do banco
   renderCities(); // async — carrega do banco
 
   setTimeout(() => {
