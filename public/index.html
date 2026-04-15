@@ -156,6 +156,17 @@ h1,h2,h3,h4{font-family:'Cormorant Garamond',serif}
 .skel{background:linear-gradient(90deg,var(--border) 25%,var(--border-light) 50%,var(--border) 75%);background-size:200% 100%;animation:skel 1.2s ease infinite;border-radius:var(--r-sm);height:56px}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
 
+/* ── COMMEMORATIVE POPUP ── */
+.comm-overlay{position:fixed;inset:0;background:rgba(26,18,20,.7);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .35s ease}
+.comm-card{background:white;border-radius:var(--r-lg);padding:0;max-width:380px;width:100%;box-shadow:var(--sh-lg);overflow:hidden;animation:fsUp .4s ease}
+.comm-top{background:linear-gradient(135deg,var(--rose),var(--rose-deep));padding:28px 24px 22px;text-align:center;color:white}
+.comm-emoji{font-size:46px;margin-bottom:10px}
+.comm-title{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;line-height:1.2}
+.comm-body{padding:20px 24px 26px;text-align:center}
+.comm-msg{font-size:14px;color:var(--text);line-height:1.8;margin-bottom:22px}
+.comm-btn{background:var(--rose);color:white;border:none;padding:12px 32px;border-radius:var(--r-xl);font-family:'Nunito',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:var(--tr);box-shadow:0 4px 14px rgba(155,77,106,.3)}
+.comm-btn:hover{background:var(--rose-deep);transform:translateY(-1px)}
+
 /* ── PROMO BANNER ── */
 .promo-banner{background:linear-gradient(135deg,var(--rose),var(--rose-deep));border-radius:var(--r-md);padding:13px 16px;margin-bottom:16px;display:flex;align-items:center;gap:11px;color:white;animation:fsUp .3s ease}
 .promo-banner-icon{font-size:22px;flex-shrink:0}
@@ -454,9 +465,16 @@ tr:hover td{background:#FAF3F6}
           <div class="nav-item" id="nav-revenue" onclick="showSec('revenue')"><span class="nav-icon">💰</span> Receita</div>
         </div>
         <div style="margin-top:8px">
-          <div class="nav-sec-ttl">Configurações</div>
+          <div class="nav-sec-ttl">Marketing</div>
           <div class="nav-item" id="nav-promos" onclick="showSec('promos')"><span class="nav-icon">🏷</span> Promoções</div>
+          <div class="nav-item" id="nav-commem" onclick="showSec('commem')"><span class="nav-icon">🎉</span> Datas Comemorativas</div>
+        </div>
+        <div style="margin-top:8px">
+          <div class="nav-sec-ttl">Configurações</div>
+          <div class="nav-item" id="nav-cities" onclick="showSec('cities')"><span class="nav-icon">📍</span> Cidades</div>
+          <div class="nav-item" id="nav-schedules" onclick="showSec('schedules')"><span class="nav-icon">🕐</span> Horários</div>
           <div class="nav-item" id="nav-procs" onclick="showSec('procs')"><span class="nav-icon">✨</span> Procedimentos</div>
+          <div class="nav-item" id="nav-profile" onclick="showSec('profile')"><span class="nav-icon">👤</span> Perfil / Senha</div>
           <div class="nav-item desktop-only" id="nav-backup" onclick="showSec('backup')"><span class="nav-icon">💾</span> Backup</div>
         </div>
         <div class="sb-foot">
@@ -593,6 +611,97 @@ tr:hover td{background:#FAF3F6}
             </div>
           </div>
 
+          <!-- SEC: CIDADES -->
+          <div id="sec-cities" class="hidden">
+            <div class="tbl-wrap" style="margin-bottom:14px">
+              <div class="tbl-head">
+                <div class="tbl-ttl">Cidades Cadastradas</div>
+                <button class="btn btn-primary" onclick="openCityModal(null)" style="width:auto;padding:8px 16px">+ Nova Cidade</button>
+              </div>
+              <div id="cities-list" style="padding:0 4px 4px"></div>
+            </div>
+          </div>
+
+          <!-- SEC: HORÁRIOS -->
+          <div id="sec-schedules" class="hidden">
+            <div class="tbl-wrap" style="margin-bottom:14px">
+              <div style="padding:18px 18px 6px">
+                <div class="tbl-ttl" style="margin-bottom:4px">Configuração de Horários</div>
+                <p style="font-size:12px;color:var(--text-light);line-height:1.7;margin-bottom:14px">
+                  Defina horários de trabalho por cidade e dia da semana. Intervalos fixos de 30 minutos.
+                </p>
+                <select class="fs" id="sch-city-filter" onchange="renderSchedules()" style="min-width:200px">
+                  <option value="">Todas as cidades</option>
+                </select>
+              </div>
+              <div id="schedules-body" style="padding:0 18px 18px"></div>
+            </div>
+          </div>
+
+          <!-- SEC: PERFIL / SENHA -->
+          <div id="sec-profile" class="hidden">
+            <div class="tbl-wrap" style="margin-bottom:14px">
+              <div style="padding:20px">
+                <div class="tbl-ttl" style="margin-bottom:14px">Dados do Profissional</div>
+                <div class="fg"><label>Nome do Profissional</label><input type="text" id="pf-name" placeholder="Nome completo"></div>
+                <div class="fg"><label>WhatsApp (com DDD)</label><input type="tel" id="pf-phone" placeholder="(43) 99999-9999"></div>
+                <div class="fg"><label>E-mail</label><input type="email" id="pf-email" placeholder="email@exemplo.com"></div>
+                <div class="fg"><label>Login</label><input type="text" value="admin" disabled style="opacity:.5;cursor:not-allowed"></div>
+                <button class="btn btn-primary" onclick="saveProfile()" style="width:auto;padding:10px 24px">Salvar dados</button>
+              </div>
+            </div>
+            <div class="tbl-wrap">
+              <div style="padding:20px">
+                <div class="tbl-ttl" style="margin-bottom:14px">Alterar Senha</div>
+                <div id="pwd-msg" class="hidden" style="margin-bottom:12px"></div>
+                <div class="fg"><label>Senha atual</label><input type="password" id="pwd-current" placeholder="••••••••"></div>
+                <div class="fg"><label>Nova senha</label><input type="password" id="pwd-new" placeholder="Mín. 8 chars, letras e números"></div>
+                <div class="fg"><label>Confirmar nova senha</label><input type="password" id="pwd-confirm" placeholder="Repita a nova senha"></div>
+                <div style="font-size:11px;color:var(--text-light);margin-bottom:14px;line-height:1.7">
+                  Regras: mínimo 8 caracteres · letras e números · pelo menos uma maiúscula · sem caracteres especiais
+                </div>
+                <button class="btn btn-primary" onclick="changePassword()" style="width:auto;padding:10px 24px">Alterar senha</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SEC: DATAS COMEMORATIVAS -->
+          <div id="sec-commem" class="hidden">
+            <div class="tbl-wrap" style="margin-bottom:14px">
+              <div style="padding:20px">
+                <div class="tbl-ttl" style="margin-bottom:6px">Nova Data Comemorativa</div>
+                <p style="font-size:12px;color:var(--text-light);margin-bottom:14px;line-height:1.7">
+                  Quando a data chegar, o cliente vê um pop-up especial ao abrir o sistema.
+                </p>
+                <div style="display:grid;grid-template-columns:80px 80px 1fr;gap:10px;margin-bottom:10px">
+                  <div class="fg" style="margin:0"><label>Dia</label><input type="number" class="fi" id="cd-day" min="1" max="31" placeholder="15" style="width:100%"></div>
+                  <div class="fg" style="margin:0"><label>Mês</label>
+                    <select class="fs" id="cd-month" style="width:100%;padding:12px 10px">
+                      <option value="1">Jan</option><option value="2">Fev</option><option value="3">Mar</option>
+                      <option value="4">Abr</option><option value="5">Mai</option><option value="6">Jun</option>
+                      <option value="7">Jul</option><option value="8">Ago</option><option value="9">Set</option>
+                      <option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option>
+                    </select>
+                  </div>
+                  <div class="fg" style="margin:0"><label>Título</label><input type="text" class="fi" id="cd-title" placeholder="Ex: Dia das Mães" style="width:100%"></div>
+                </div>
+                <div class="fg">
+                  <label>Mensagem de comemoração <span id="cd-chars" style="font-weight:400;color:var(--text-light)">(0/300)</span></label>
+                  <textarea id="cd-msg" rows="3" oninput="document.getElementById('cd-chars').textContent='('+this.value.length+'/300)'" maxlength="300"
+                    style="width:100%;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--r-sm);padding:13px 15px;font-family:'Nunito',sans-serif;font-size:14px;color:var(--dark);outline:none;resize:vertical;transition:var(--tr)"
+                    placeholder="Mensagem que aparecerá para o cliente nesta data especial..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="createCommem()" style="width:auto;padding:10px 24px">🎉 Cadastrar Data</button>
+              </div>
+            </div>
+            <div class="tbl-wrap">
+              <div style="padding:18px">
+                <div class="tbl-ttl" style="margin-bottom:14px">Datas Cadastradas</div>
+                <div id="commem-list"></div>
+              </div>
+            </div>
+          </div>
+
           <!-- SEC: BACKUP (desktop only) -->
           <div id="sec-backup" class="hidden desktop-only">
             <div class="tbl-wrap" style="margin-bottom:16px">
@@ -617,6 +726,20 @@ tr:hover td{background:#FAF3F6}
   </div>
 </div>
 
+<!-- COMMEMORATIVE POPUP -->
+<div id="comm-overlay" class="comm-overlay hidden">
+  <div class="comm-card">
+    <div class="comm-top">
+      <div class="comm-emoji">🌸</div>
+      <div class="comm-title" id="comm-title">Feliz Dia!</div>
+    </div>
+    <div class="comm-body">
+      <div class="comm-msg" id="comm-msg"></div>
+      <button class="comm-btn" onclick="closeCommem()">Fazer meu agendamento ✨</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL -->
 <div id="modal-bg" class="modal-bg hidden" onclick="if(event.target===this)closeModal()">
   <div class="modal-card" id="modal-card"></div>
@@ -629,7 +752,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.4.1';
+const APP_VERSION  = '1.5.0';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -642,22 +765,29 @@ function renderFooters() {
 // CONFIG
 // ══════════════════════════════════════════════════
 const WA_PROF = 'https://wa.me/5543998734460';
-const CITIES = [
-  {
-    id:1, name:'São Sebastião da Amoreira - PR', short:'São Sebastião da Amoreira', days:[1,2,4,5,6],
-    local:'Clínica Bela Essência',
-    address:'Praça Comendador Jeremias Lunardelli, 55 — 2º andar',
-    cep:'CEP: 86240-000',
-    mapsUrl:'https://maps.google.com/?q=Praça+Comendador+Jeremias+Lunardelli+55+São+Sebastião+da+Amoreira+PR'
-  },
-  {
-    id:2, name:'Assaí - PR', short:'Assaí', days:[3],
-    local:'Studio K',
-    address:'Rua Vereador Clovis Negreiro, 250',
-    cep:'CEP: 86220-000',
-    mapsUrl:'https://maps.google.com/?q=Rua+Vereador+Clovis+Negreiro+250+Assaí+PR'
-  }
-];
+// Cities loaded from API — replaces hardcoded constant
+let CITIES = [];
+let _citiesLoaded = false;
+
+async function loadCities() {
+  if (_citiesLoaded) return CITIES;
+  try {
+    const data = await GET('/api/cities');
+    CITIES = data.map(c => ({
+      ...c,
+      short: c.name,
+      local: c.local_name,
+      address: [c.address, c.number, c.complement].filter(Boolean).join(', '),
+      cep: 'CEP: ' + c.cep,
+      mapsUrl: c.maps_url || '',
+      days: c.activeDays || [],
+    }));
+    _citiesLoaded = true;
+  } catch(e) { console.error('Error loading cities:', e); }
+  return CITIES;
+}
+
+function clearCitiesCache() { _citiesLoaded = false; CITIES = []; }
 
 // ══════════════════════════════════════════════════
 // API HELPERS
@@ -754,14 +884,31 @@ function updDots(n) {
 // ══════════════════════════════════════════════════
 // STEP 1: CITIES
 // ══════════════════════════════════════════════════
-function renderCities() {
-  document.getElementById('city-grid').innerHTML = CITIES.map(c => `
-    <div class="city-card" onclick="selCity(${c.id})">
-      <div><div class="cn">${c.short}</div><div class="cd">${c.id===1?'Seg · Ter · Qui · Sex · Sáb':'Somente às quartas-feiras'}</div></div>
-      <div class="ci">📍</div>
-    </div>
-  `).join('');
+const DAY_NAMES_SHORT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+async function renderCities() {
+  const grid = document.getElementById('city-grid');
+  grid.innerHTML = '<div class="skel" style="height:72px"></div><div class="skel" style="height:72px"></div>';
+  await loadCities();
+  if (!CITIES.length) {
+    grid.innerHTML = '<div class="notice warn">Nenhuma cidade cadastrada. Aguarde ou contate o suporte.</div>';
+    return;
+  }
+  grid.innerHTML = CITIES.map(c => {
+    const dayLabel = c.days.length === 7 ? 'Todos os dias'
+      : c.days.map(d => DAY_NAMES_SHORT[d]).join(' · ');
+    return `
+      <div class="city-card" onclick="selCity(${c.id})">
+        <div>
+          <div class="cn">${c.short}</div>
+          <div class="cd">${dayLabel}</div>
+        </div>
+        <div class="ci">📍</div>
+      </div>
+    `;
+  }).join('');
 }
+
 function selCity(id) {
   BK.cityId=id; BK.procId=null; BK.procData=null; BK.date=null; BK.time=null;
   renderProcs(); goStep(2);
@@ -857,8 +1004,9 @@ async function selProc(id) {
 // STEP 3: CALENDAR
 // ══════════════════════════════════════════════════
 function isValidDay(date, cityId) {
-  const city=CITIES.find(c=>c.id===cityId); if(!city) return false;
-  const[y,m,d]=date.split('-').map(Number);
+  const city = CITIES.find(c => Number(c.id) === Number(cityId));
+  if (!city) return false;
+  const [y,m,d] = date.split('-').map(Number);
   return city.days.includes(new Date(y,m-1,d).getDay());
 }
 function renderCal() {
@@ -1126,19 +1274,27 @@ async function doLogout() {
 }
 function toggleSB(){document.getElementById('adm-sb').classList.toggle('open')}
 
-function initAdmin() {
+async function initAdmin() {
+  // Load cities for agenda filter
+  await loadCities();
   document.getElementById('fl-city').innerHTML='<option value="">Todas as cidades</option>'+
     CITIES.map(c=>`<option value="${c.id}">${c.short}</option>`).join('');
-  // Data vazia = padrão mostra todos a partir de hoje (backend filtra date >= today)
   document.getElementById('fl-date').value='';
   const now=new Date();
   document.getElementById('fl-month').value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   showSec('agenda');
 }
 
-const SEC_TITLES={agenda:'Agenda',blocked:'Bloquear Datas',revenue:'Receita',promos:'Promoções',procs:'Procedimentos',backup:'Backup'};
+const SEC_TITLES={
+  agenda:'Agenda',blocked:'Bloquear Datas',revenue:'Receita',
+  promos:'Promoções',commem:'Datas Comemorativas',
+  cities:'Cidades',schedules:'Configuração de Horários',
+  procs:'Procedimentos',profile:'Perfil & Senha',backup:'Backup'
+};
+const ALL_SECS = ['agenda','blocked','revenue','promos','commem','cities','schedules','procs','profile','backup'];
+
 function showSec(name){
-  ['agenda','blocked','revenue','promos','procs','backup'].forEach(s=>{
+  ALL_SECS.forEach(s=>{
     const sec=document.getElementById(`sec-${s}`); if(sec) sec.classList.toggle('hidden',s!==name);
     const el=document.getElementById(`nav-${s}`); if(el) el.classList.toggle('active',s===name);
   });
@@ -1147,7 +1303,11 @@ function showSec(name){
   if(name==='blocked'){renderBlocked();renderBlockedSlots()}
   if(name==='revenue'){renderRevCards();renderRevTable()}
   if(name==='promos') renderPromos();
+  if(name==='commem') renderCommem();
+  if(name==='cities') renderCitiesAdmin();
+  if(name==='schedules') renderSchedules();
   if(name==='procs') renderProcsAdmin();
+  if(name==='profile') loadProfile();
   if(name==='backup') renderBackupSummary();
   if(window.innerWidth<=768) document.getElementById('adm-sb').classList.remove('open');
 }
@@ -1532,7 +1692,8 @@ async function deleteProc(id) {
   if(!confirm('Remover procedimento? O histórico de agendamentos é preservado.')) return;
   try {
     await DEL(`/api/procedures/${id}`);
-    clearProcsCache(); showToast('Procedimento removido','ok'); renderProcsAdmin();
+    clearProcsCache(); clearCitiesCache();
+    showToast('Procedimento removido','ok'); renderProcsAdmin();
   } catch(e){ showToast(e.message,'error'); }
 }
 
@@ -1726,6 +1887,367 @@ async function renderBackupSummary() {
   } catch(e){ el.innerHTML=`<div style="color:var(--error);font-size:12px">Erro: ${e.message}</div>`; }
 }
 
+// ══════════════════════════════════════════════════
+// DATAS COMEMORATIVAS
+// ══════════════════════════════════════════════════
+const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                     'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+async function checkCommemorative() {
+  try {
+    const data = await GET('/api/commemorative');
+    if (!data) return;
+    document.getElementById('comm-title').textContent = data.title;
+    document.getElementById('comm-msg').textContent   = data.message;
+    // Pick emoji based on month
+    const emojis = ['🎆','💕','🌸','🐣','🌹','💛','⛱️','🌻','🍂','🎃','🍂','🎄'];
+    document.querySelector('.comm-emoji').textContent = emojis[(data.month-1)] || '🌸';
+    document.getElementById('comm-overlay').classList.remove('hidden');
+  } catch {}
+}
+
+function closeCommem() {
+  document.getElementById('comm-overlay').classList.add('hidden');
+}
+
+// Admin
+async function renderCommem() {
+  const el = document.getElementById('commem-list');
+  if(!el) return;
+  el.innerHTML = '<div style="color:var(--text-light);font-size:12px">Carregando...</div>';
+  try {
+    const list = await GET('/api/commemorative/all');
+    if (!list.length) { el.innerHTML='<div style="color:var(--text-light);font-size:13px">Nenhuma data cadastrada.</div>'; return; }
+    el.innerHTML = list.map(d => `
+      <div style="background:${d.is_active?'var(--rose-light)':'var(--cream)'};border:1.5px solid ${d.is_active?'var(--rose)':'var(--border)'};border-radius:var(--r-md);padding:14px 16px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:600;color:var(--dark)">${d.title}</div>
+            <div style="font-size:12px;color:var(--text-light);margin-top:2px">📅 ${d.day} de ${MONTH_NAMES[d.month-1]}</div>
+            <div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.6">${d.message}</div>
+            <span class="badge ${d.is_active?'badge-ok':'badge-cancel'}" style="margin-top:8px">${d.is_active?'Ativa':'Inativa'}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            <button class="act-btn" onclick="toggleCommem(${d.id})">${d.is_active?'Cancelar':'Reativar'}</button>
+            ${!d.is_active?`<button class="act-btn danger" onclick="deleteCommem(${d.id})" style="color:var(--error);border-color:var(--error)">🗑 Excluir</button>`:''}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { el.innerHTML=`<div style="color:var(--error);font-size:12px">Erro: ${e.message}</div>`; }
+}
+
+async function createCommem() {
+  const day  = parseInt(document.getElementById('cd-day').value);
+  const month= parseInt(document.getElementById('cd-month').value);
+  const title= document.getElementById('cd-title').value.trim();
+  const msg  = document.getElementById('cd-msg').value.trim();
+  if(!day||!month||!title||!msg){showToast('Preencha todos os campos','error');return}
+  try {
+    await POST('/api/commemorative',{day,month,title,message:msg});
+    document.getElementById('cd-day').value='';
+    document.getElementById('cd-title').value='';
+    document.getElementById('cd-msg').value='';
+    document.getElementById('cd-chars').textContent='(0/300)';
+    showToast('Data comemorativa cadastrada!','ok');
+    renderCommem();
+  } catch(e){showToast(e.message,'error')}
+}
+
+async function toggleCommem(id){
+  try{ await PATCH(`/api/commemorative/${id}/toggle`); renderCommem(); }
+  catch(e){showToast(e.message,'error')}
+}
+
+async function deleteCommem(id){
+  if(!confirm('Excluir esta data comemorativa?'))return;
+  try{ await DEL(`/api/commemorative/${id}`); showToast('Excluída','ok'); renderCommem(); }
+  catch(e){showToast(e.message,'error')}
+}
+
+// ══════════════════════════════════════════════════
+// CIDADES (ADMIN)
+// ══════════════════════════════════════════════════
+const DAY_LABELS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+async function renderCitiesAdmin() {
+  const el = document.getElementById('cities-list');
+  if(!el) return;
+  el.innerHTML = '<div style="padding:18px;color:var(--text-light)">Carregando...</div>';
+  try {
+    const list = await api('GET','/api/cities/all');
+    if(!list.length){el.innerHTML='<div style="padding:18px;color:var(--text-light);font-size:13px">Nenhuma cidade cadastrada.</div>';return}
+    el.innerHTML = list.map(c=>`
+      <div style="border-bottom:1px solid var(--border-light);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;${!c.is_active?'opacity:.6':''}">
+        <div>
+          <div style="font-weight:700;font-size:15px;color:var(--dark)">${c.name} - ${c.uf}</div>
+          <div style="font-size:12px;color:var(--rose)">${c.local_name}</div>
+          <div style="font-size:11px;color:var(--text-light);margin-top:3px">${c.address}, ${c.number}${c.complement?' — '+c.complement:''} · ${c.neighborhood} · CEP ${c.cep}</div>
+          <span class="badge ${c.is_active?'badge-ok':'badge-cancel'}" style="margin-top:6px">${c.is_active?'Ativa':'Inativa'}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <button class="act-btn" onclick="openCityModal(${c.id})">Editar</button>
+          <button class="act-btn" onclick="toggleCity(${c.id},${!c.is_active})">${c.is_active?'Desativar':'Reativar'}</button>
+          ${!c.is_active?`<button class="act-btn danger" onclick="deleteCity(${c.id})" style="color:var(--error);border-color:var(--error)">🗑 Excluir</button>`:''}
+        </div>
+      </div>
+    `).join('');
+  } catch(e){el.innerHTML=`<div style="padding:18px;color:var(--error)">Erro: ${e.message}</div>`}
+}
+
+async function openCityModal(cityId) {
+  const procs = await getProcs();
+  let city = null;
+  let cityProcs = {};
+  if (cityId) {
+    try {
+      const list = await api('GET','/api/cities/all');
+      city = list.find(c=>c.id===cityId);
+      const full = await GET('/api/cities');
+      const fc = full.find(c=>c.id===cityId);
+      if(fc && fc.procedures) fc.procedures.forEach(p=>cityProcs[p.id]=p.enabled!==false);
+    } catch{}
+  }
+  const procList = procs.map(p=>`
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--border-light)">
+      <input type="checkbox" name="cp-proc" value="${p.id}" ${!cityId||cityProcs[p.id]!==false?'checked':''} style="accent-color:var(--rose);width:16px;height:16px;flex-shrink:0">
+      <span>${p.name} <small style="color:var(--text-light)">${fmtDur(p.dur)} · ${fmtPrice(p)}</small></span>
+    </label>
+  `).join('');
+
+  document.getElementById('modal-card').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-ttl">${cityId?'Editar':'Nova'} Cidade</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 80px;gap:10px">
+      <div class="fg" style="margin-bottom:10px"><label>Cidade</label><input type="text" id="cy-name" value="${city?.name||''}" placeholder="Nome da cidade" style="width:100%"></div>
+      <div class="fg" style="margin-bottom:10px"><label>UF</label><input type="text" id="cy-uf" value="${city?.uf||''}" maxlength="2" placeholder="PR" style="width:100%;text-transform:uppercase"></div>
+    </div>
+    <div class="fg" style="margin-bottom:10px"><label>Nome do Local</label><input type="text" id="cy-local" value="${city?.local_name||''}" placeholder="Ex: Clínica Bela Essência" style="width:100%"></div>
+    <div style="display:grid;grid-template-columns:1fr 100px;gap:10px">
+      <div class="fg" style="margin-bottom:10px"><label>Endereço</label><input type="text" id="cy-addr" value="${city?.address||''}" placeholder="Rua / Praça / Av." style="width:100%"></div>
+      <div class="fg" style="margin-bottom:10px"><label>Número</label><input type="text" id="cy-num" value="${city?.number||''}" placeholder="123" style="width:100%"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg" style="margin-bottom:10px"><label>Complemento <small style="font-weight:400">(opcional)</small></label><input type="text" id="cy-comp" value="${city?.complement||''}" placeholder="2º andar, sala 5..." style="width:100%"></div>
+      <div class="fg" style="margin-bottom:10px"><label>Bairro</label><input type="text" id="cy-neigh" value="${city?.neighborhood||''}" placeholder="Centro" style="width:100%"></div>
+    </div>
+    <div class="fg" style="margin-bottom:14px"><label>CEP</label><input type="text" id="cy-cep" value="${city?.cep||''}" placeholder="00000-000" maxlength="9" style="width:160px"></div>
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--text-light);margin-bottom:8px">Procedimentos disponíveis nesta cidade</div>
+    <div style="max-height:200px;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:16px">${procList}</div>
+    <div style="display:flex;gap:9px">
+      <button class="btn btn-primary" onclick="saveCity(${cityId||'null'})" style="flex:1">Salvar</button>
+      <button class="btn btn-secondary" onclick="closeModal()" style="flex:1;width:auto">Cancelar</button>
+    </div>
+  `;
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+async function saveCity(cityId) {
+  const name  = document.getElementById('cy-name').value.trim();
+  const uf    = document.getElementById('cy-uf').value.trim().toUpperCase();
+  const local = document.getElementById('cy-local').value.trim();
+  const addr  = document.getElementById('cy-addr').value.trim();
+  const num   = document.getElementById('cy-num').value.trim();
+  const comp  = document.getElementById('cy-comp').value.trim().replace(/[^a-zA-Z0-9À-ú\s°ºª]/g,'');
+  const neigh = document.getElementById('cy-neigh').value.trim();
+  const cep   = document.getElementById('cy-cep').value.trim();
+  if(!name||!uf||!local||!addr||!num||!neigh||!cep){showToast('Preencha todos os campos obrigatórios','error');return}
+  const procOverrides = {};
+  document.querySelectorAll('input[name="cp-proc"]').forEach(el=>{
+    procOverrides[el.value] = el.checked;
+  });
+  try {
+    const body = {name,uf,local_name:local,address:addr,number:num,complement:comp,neighborhood:neigh,cep,proc_overrides:procOverrides};
+    if(cityId) await PUT(`/api/cities/${cityId}`, body);
+    else await POST('/api/cities', {...body, proc_ids: Object.keys(procOverrides).filter(k=>procOverrides[k]).map(Number)});
+    clearCitiesCache();
+    showToast('Cidade salva!','ok');
+    closeModal();
+    renderCitiesAdmin();
+  } catch(e){showToast(e.message,'error')}
+}
+
+async function toggleCity(id, active) {
+  try{ await PUT(`/api/cities/${id}`,{is_active:active}); clearCitiesCache(); renderCitiesAdmin(); }
+  catch(e){showToast(e.message,'error')}
+}
+
+async function deleteCity(id) {
+  if(!confirm('Excluir esta cidade? Os agendamentos existentes não serão afetados.'))return;
+  try{ await DEL(`/api/cities/${id}`); clearCitiesCache(); showToast('Cidade excluída','ok'); renderCitiesAdmin(); }
+  catch(e){showToast(e.message,'error')}
+}
+
+// ══════════════════════════════════════════════════
+// HORÁRIOS (ADMIN)
+// ══════════════════════════════════════════════════
+async function renderSchedules() {
+  const filter = document.getElementById('sch-city-filter')?.value;
+  const el = document.getElementById('schedules-body');
+  if(!el) return;
+
+  // Populate city filter dropdown
+  const sel = document.getElementById('sch-city-filter');
+  if(sel && sel.options.length <= 1) {
+    const cities = await api('GET','/api/cities/all');
+    cities.forEach(c=>{
+      const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; sel.appendChild(o);
+    });
+  }
+
+  el.innerHTML='<div style="color:var(--text-light);font-size:12px;padding:12px 0">Carregando...</div>';
+  try {
+    const configs = await GET('/api/work-configs');
+    let filtered = configs.filter(c=>c.scope==='city_day');
+    if(filter) filtered=filtered.filter(c=>String(c.city_id)===String(filter));
+
+    // Group by city
+    const byCityMap = {};
+    filtered.forEach(c=>{
+      if(!byCityMap[c.city_name]) byCityMap[c.city_name]={cityName:c.city_name,days:[]};
+      byCityMap[c.city_name].days.push(c);
+    });
+
+    if(!Object.keys(byCityMap).length){
+      el.innerHTML='<div style="color:var(--text-light);font-size:13px;padding:12px 0">Nenhuma configuração encontrada para o filtro selecionado.</div>';
+      return;
+    }
+
+    el.innerHTML = Object.values(byCityMap).map(cityGroup=>`
+      <div style="margin-bottom:20px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:var(--rose);margin-bottom:10px">${cityGroup.cityName}</div>
+        ${cityGroup.days.sort((a,b)=>a.day_of_week-b.day_of_week).map(cfg=>{
+          const brk = (cfg.breaks||[]).filter(Boolean);
+          const b0 = brk[0]||{s:'12:00:00',e:'13:00:00'};
+          return `
+            <div style="background:${cfg.is_active?'var(--cream)':'#F5F5F5'};border:1.5px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex-shrink:0;min-width:110px">
+                <input type="checkbox" ${cfg.is_active?'checked':''} onchange="updateScheduleActive(${cfg.id},this.checked)" style="accent-color:var(--rose);width:16px;height:16px">
+                <span style="font-weight:700;font-size:13px;color:var(--dark)">${DAY_LABELS[cfg.day_of_week]}</span>
+              </label>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;${!cfg.is_active?'opacity:.4;pointer-events:none':''}">
+                <div style="display:flex;align-items:center;gap:5px">
+                  <span style="font-size:11px;color:var(--text-light);font-weight:800;text-transform:uppercase">Início</span>
+                  <input type="time" value="${cfg.work_start?String(cfg.work_start).slice(0,5):'08:00'}" step="1800"
+                    onchange="updateScheduleTime(${cfg.id},'start',this.value)"
+                    style="border:1.5px solid var(--border);border-radius:var(--r-sm);padding:5px 8px;font-size:13px;font-family:'Nunito',sans-serif;background:white;outline:none">
+                </div>
+                <div style="display:flex;align-items:center;gap:5px">
+                  <span style="font-size:11px;color:var(--text-light);font-weight:800;text-transform:uppercase">Fim</span>
+                  <input type="time" value="${cfg.work_end?String(cfg.work_end).slice(0,5):'18:00'}" step="1800"
+                    onchange="updateScheduleTime(${cfg.id},'end',this.value)"
+                    style="border:1.5px solid var(--border);border-radius:var(--r-sm);padding:5px 8px;font-size:13px;font-family:'Nunito',sans-serif;background:white;outline:none">
+                </div>
+                <div style="display:flex;align-items:center;gap:5px">
+                  <span style="font-size:11px;color:var(--text-light);font-weight:800;text-transform:uppercase">Pausa</span>
+                  <input type="time" value="${String(b0.s).slice(0,5)}" step="1800"
+                    onchange="updateScheduleBreak(${cfg.id},'start',this.value)"
+                    style="border:1.5px solid var(--border);border-radius:var(--r-sm);padding:5px 8px;font-size:13px;font-family:'Nunito',sans-serif;background:white;outline:none">
+                  <span style="font-size:11px;color:var(--text-light)">até</span>
+                  <input type="time" value="${String(b0.e).slice(0,5)}" step="1800"
+                    onchange="updateScheduleBreak(${cfg.id},'end',this.value)"
+                    style="border:1.5px solid var(--border);border-radius:var(--r-sm);padding:5px 8px;font-size:13px;font-family:'Nunito',sans-serif;background:white;outline:none">
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `).join('');
+  } catch(e){el.innerHTML=`<div style="color:var(--error);font-size:12px;padding:12px 0">Erro: ${e.message}</div>`}
+}
+
+// Schedule update helpers (debounced save)
+const _schPendingSave = {};
+function scheduleDebounce(id, fn) {
+  clearTimeout(_schPendingSave[id]);
+  _schPendingSave[id] = setTimeout(fn, 800);
+}
+
+// Store pending changes locally
+const _schPending = {};
+function getSchPending(id) { if(!_schPending[id])_schPending[id]={}; return _schPending[id]; }
+
+function updateScheduleActive(id, active) {
+  getSchPending(id).is_active = active;
+  scheduleDebounce(id, ()=>flushScheduleSave(id));
+}
+function updateScheduleTime(id, type, val) {
+  const p = getSchPending(id);
+  if(type==='start') p.work_start = val; else p.work_end = val;
+  scheduleDebounce(id, ()=>flushScheduleSave(id));
+}
+function updateScheduleBreak(id, type, val) {
+  const p = getSchPending(id);
+  if(!p.breaks) p.breaks = [{s:'12:00',e:'13:00'}];
+  if(type==='start') p.breaks[0].s = val; else p.breaks[0].e = val;
+  scheduleDebounce(id, ()=>flushScheduleSave(id));
+}
+
+async function flushScheduleSave(id) {
+  const p = _schPending[id]; if(!p || !Object.keys(p).length) return;
+  delete _schPending[id];
+  // Get current values from DOM
+  const row = document.querySelector(`input[onchange*="updateScheduleActive(${id}"]`);
+  const inputs = document.querySelectorAll(`input[onchange*="${id},"]`);
+  const is_active = p.is_active !== undefined ? p.is_active : (row ? row.checked : true);
+  const times = [...inputs].map(i=>i.value);
+  const work_start = p.work_start || (times[0]||'08:00');
+  const work_end   = p.work_end   || (times[1]||'18:00');
+  const bs         = p.breaks?.[0]?.s || (times[2]||'12:00');
+  const be         = p.breaks?.[0]?.e || (times[3]||'13:00');
+  try {
+    await PUT(`/api/work-configs/${id}`, {
+      is_active, work_start, work_end,
+      breaks: is_active ? [{s:bs,e:be}] : []
+    });
+    showToast('Horário salvo','ok',2000);
+  } catch(e){ showToast('Erro ao salvar: '+e.message,'error'); }
+}
+
+// ══════════════════════════════════════════════════
+// PERFIL ADMIN
+// ══════════════════════════════════════════════════
+async function loadProfile() {
+  try {
+    const p = await GET('/api/admin/profile');
+    if(p.name)  document.getElementById('pf-name').value  = p.name;
+    if(p.phone) document.getElementById('pf-phone').value = p.phone;
+    if(p.email) document.getElementById('pf-email').value = p.email;
+  } catch(e){showToast('Erro ao carregar perfil','error')}
+}
+
+async function saveProfile() {
+  const name  = document.getElementById('pf-name').value.trim();
+  const phone = document.getElementById('pf-phone').value.trim();
+  const email = document.getElementById('pf-email').value.trim();
+  if(!name||!phone||!email){showToast('Preencha todos os campos','error');return}
+  try {
+    await PUT('/api/admin/profile',{name,phone,email});
+    showToast('Perfil atualizado!','ok');
+  } catch(e){showToast(e.message,'error')}
+}
+
+async function changePassword() {
+  const current = document.getElementById('pwd-current').value;
+  const newPass  = document.getElementById('pwd-new').value;
+  const confirm  = document.getElementById('pwd-confirm').value;
+  const msgEl   = document.getElementById('pwd-msg');
+  if(!current||!newPass||!confirm){showToast('Preencha todos os campos','error');return}
+  try {
+    await PUT('/api/admin/password',{current,newPass,confirm});
+    msgEl.className='notice ok'; msgEl.textContent='✓ Senha alterada com sucesso!'; msgEl.classList.remove('hidden');
+    document.getElementById('pwd-current').value='';
+    document.getElementById('pwd-new').value='';
+    document.getElementById('pwd-confirm').value='';
+    setTimeout(()=>msgEl.classList.add('hidden'),4000);
+  } catch(e){
+    msgEl.className='notice err'; msgEl.textContent='✗ '+e.message; msgEl.classList.remove('hidden');
+  }
+}
+
 // ── MODAL ─────────────────────────────────────────
 function closeModal(){document.getElementById('modal-bg').classList.add('hidden')}
 
@@ -1812,16 +2334,18 @@ if ('serviceWorker' in navigator) {
 // INIT
 // ══════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
-  renderFooters();  // Renderiza versão/copyright em todos os rodapés
-  renderCities();
+  renderFooters();
+  renderCities(); // async — carrega do banco
 
-  // Esconde loader e mostra o app
   setTimeout(() => {
     document.getElementById('page-loader').classList.add('hidden');
     document.getElementById('booking-app').classList.remove('hidden');
   }, 600);
 
-  // PWA prompt após 3 segundos (somente para novos usuários)
+  // Verifica data comemorativa e exibe popup
+  setTimeout(checkCommemorative, 1200);
+
+  // PWA prompt após 3 segundos
   setTimeout(showPWABanner, 3000);
 });
 </script>
