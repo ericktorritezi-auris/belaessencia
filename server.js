@@ -123,15 +123,20 @@ async function initDB() {
     // Tabela de promoções
     await client.query(`
       CREATE TABLE IF NOT EXISTS promotions (
-        id          SERIAL       PRIMARY KEY,
-        name        VARCHAR(200) NOT NULL,
-        start_date  DATE         NOT NULL,
-        end_date    DATE         NOT NULL,
-        discount    NUMERIC(5,2) NOT NULL CHECK (discount > 0 AND discount <= 100),
-        active      BOOLEAN      NOT NULL DEFAULT TRUE,
-        created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+        id           SERIAL       PRIMARY KEY,
+        name         VARCHAR(200) NOT NULL,
+        start_date   DATE         NOT NULL,
+        end_date     DATE         NOT NULL,
+        discount     NUMERIC(5,2) NOT NULL CHECK (discount > 0 AND discount <= 100),
+        apply_to_all BOOLEAN      NOT NULL DEFAULT TRUE,
+        proc_ids     INTEGER[]    NOT NULL DEFAULT '{}',
+        active       BOOLEAN      NOT NULL DEFAULT TRUE,
+        created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
       );
     `);
+    // Migração segura: adiciona colunas se não existirem (clientes vindos de v1.4.0)
+    await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS apply_to_all BOOLEAN NOT NULL DEFAULT TRUE`);
+    await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS proc_ids INTEGER[] NOT NULL DEFAULT '{}'`);
 
     // Tabela de horários específicos bloqueados (agendamentos manuais / ausências parciais)
     await client.query(`
@@ -557,7 +562,7 @@ app.get('/api/promotions', requireAdmin, async (req, res) => {
 
 // Admin: criar promoção
 app.post('/api/promotions', requireAdmin, async (req, res) => {
-  const { name, start_date, end_date, discount } = req.body;
+  const { name, start_date, end_date, discount, apply_to_all, proc_ids } = req.body;
   if (!name || !start_date || !end_date || !discount) {
     return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
   }
@@ -567,23 +572,34 @@ app.post('/api/promotions', requireAdmin, async (req, res) => {
   if (Number(discount) <= 0 || Number(discount) > 100) {
     return res.status(400).json({ error: 'Desconto deve ser entre 1% e 100%' });
   }
+  const allProcs = apply_to_all !== false;
+  const ids = allProcs ? [] : (Array.isArray(proc_ids) ? proc_ids.map(Number) : []);
+  if (!allProcs && ids.length === 0) {
+    return res.status(400).json({ error: 'Selecione ao menos um procedimento' });
+  }
   try {
     const { rows } = await pool.query(
-      `INSERT INTO promotions (name, start_date, end_date, discount)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [name, start_date, end_date, Number(discount)]
+      `INSERT INTO promotions (name, start_date, end_date, discount, apply_to_all, proc_ids)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [name, start_date, end_date, Number(discount), allProcs, ids]
     );
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Admin: desativar promoção
+// Admin: desativar promoção (soft delete)
+app.patch('/api/promotions/:id/deactivate', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('UPDATE promotions SET active = FALSE WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Admin: excluir promoção definitivamente (hard delete)
 app.delete('/api/promotions/:id', requireAdmin, async (req, res) => {
   try {
-    await pool.query(
-      'UPDATE promotions SET active = FALSE WHERE id = $1',
-      [req.params.id]
-    );
+    const { rowCount } = await pool.query('DELETE FROM promotions WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Promoção não encontrada' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
