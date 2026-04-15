@@ -156,6 +156,11 @@ h1,h2,h3,h4{font-family:'Cormorant Garamond',serif}
 .skel{background:linear-gradient(90deg,var(--border) 25%,var(--border-light) 50%,var(--border) 75%);background-size:200% 100%;animation:skel 1.2s ease infinite;border-radius:var(--r-sm);height:56px}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
 
+/* ── AGENDA MANUAL STEPS ── */
+.man-step{padding:9px 14px;font-size:11.5px;font-weight:700;color:var(--text-light);border-bottom:2.5px solid transparent;cursor:default;white-space:nowrap;transition:var(--tr)}
+.man-step.active{color:var(--rose);border-bottom-color:var(--rose)}
+.man-step.done{color:var(--rose-mid);border-bottom-color:var(--rose-mid)}
+
 /* ── COMMEMORATIVE POPUP ── */
 .comm-overlay{position:fixed;inset:0;background:rgba(26,18,20,.72);z-index:9998;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeIn .35s ease}
 .comm-card{background:white;border-radius:var(--r-lg);padding:0;max-width:360px;width:100%;box-shadow:var(--sh-lg);overflow:hidden;animation:fsUp .4s ease}
@@ -460,6 +465,7 @@ tr:hover td{background:#FAF3F6}
         <div>
           <div class="nav-sec-ttl">Agenda</div>
           <div class="nav-item active" id="nav-agenda" onclick="showSec('agenda')"><span class="nav-icon">📅</span> Agenda</div>
+          <div class="nav-item" id="nav-manual" onclick="showSec('manual')"><span class="nav-icon">✏️</span> Agenda Manual</div>
           <div class="nav-item" id="nav-blocked" onclick="showSec('blocked')"><span class="nav-icon">🚫</span> Bloquear Datas</div>
         </div>
         <div style="margin-top:2px">
@@ -505,6 +511,70 @@ tr:hover td{background:#FAF3F6}
               <div class="appt-cards" id="appt-cards"></div>
             </div>
           </div>
+          <!-- SEC: AGENDA MANUAL -->
+          <div id="sec-manual" class="hidden">
+            <div class="tbl-wrap">
+              <div style="padding:20px 20px 0">
+                <div class="tbl-ttl" style="margin-bottom:4px">Agenda Manual</div>
+                <p style="font-size:12px;color:var(--text-light);margin-bottom:18px;line-height:1.7">
+                  Cadastre um agendamento em nome do cliente. Apenas horários disponíveis são exibidos.
+                </p>
+              </div>
+
+              <!-- Step indicator -->
+              <div id="man-steps" style="display:flex;gap:0;border-bottom:1px solid var(--border);margin:0 20px 20px;overflow-x:auto">
+                <div class="man-step active" id="mstep-1">1. Cidade</div>
+                <div class="man-step" id="mstep-2">2. Procedimento</div>
+                <div class="man-step" id="mstep-3">3. Data & Hora</div>
+                <div class="man-step" id="mstep-4">4. Cliente</div>
+              </div>
+
+              <div style="padding:0 20px 24px">
+
+                <!-- Step 1: Cidade -->
+                <div id="man-s1">
+                  <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--text-light);margin-bottom:10px">Selecione a cidade</div>
+                  <div id="man-city-list" style="display:grid;gap:9px"></div>
+                </div>
+
+                <!-- Step 2: Procedimento -->
+                <div id="man-s2" class="hidden">
+                  <button class="btn-back" onclick="manGoStep(1)">← Voltar</button>
+                  <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--text-light);margin-bottom:10px">Selecione o procedimento</div>
+                  <div id="man-proc-list" style="display:grid;gap:8px"></div>
+                </div>
+
+                <!-- Step 3: Data e Hora -->
+                <div id="man-s3" class="hidden">
+                  <button class="btn-back" onclick="manGoStep(2)">← Voltar</button>
+                  <div id="man-proc-bar" style="background:linear-gradient(135deg,var(--rose),var(--rose-deep));border-radius:var(--r-md);padding:14px 18px;color:white;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center"></div>
+                  <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--text-light);margin-bottom:10px">Selecione a data</div>
+                  <div id="man-cal" style="border:1.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;margin-bottom:18px"></div>
+                  <div id="man-slots-wrap" class="hidden">
+                    <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--text-light);margin-bottom:10px">Horários disponíveis</div>
+                    <div id="man-slots" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+                  </div>
+                  <div class="btn-actions hidden" id="man-s3-next" style="margin-top:16px">
+                    <button class="btn btn-primary" onclick="manGoStep4()">Continuar →</button>
+                  </div>
+                </div>
+
+                <!-- Step 4: Dados do cliente -->
+                <div id="man-s4" class="hidden">
+                  <button class="btn-back" onclick="manGoStep(3)">← Voltar</button>
+                  <div id="man-summary" style="background:var(--rose-light);border-radius:var(--r-md);padding:14px 16px;margin-bottom:18px;font-size:13px;color:var(--rose)"></div>
+                  <div class="fg"><label>Nome do cliente</label><input type="text" id="man-name" placeholder="Nome completo" style="width:100%"></div>
+                  <div class="fg"><label>WhatsApp (com DDD)</label><input type="tel" id="man-phone" placeholder="(43) 99999-9999" style="width:100%"></div>
+                  <div class="notice info" style="margin-top:4px">ℹ️ O cliente será informado por WhatsApp ou pessoalmente pela profissional.</div>
+                  <div class="btn-actions" style="margin-top:18px">
+                    <button class="btn btn-primary" id="man-save-btn" onclick="manSave()">✓ Confirmar Agendamento</button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
           <div id="sec-blocked" class="hidden">
             <div class="tbl-wrap" style="margin-bottom:16px">
               <div style="padding:18px 18px 0">
@@ -758,7 +828,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.5.5';
+const APP_VERSION  = '1.6.0';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -1341,12 +1411,12 @@ async function initAdmin() {
 }
 
 const SEC_TITLES={
-  agenda:'Agenda',blocked:'Bloquear Datas',revenue:'Receita',
+  agenda:'Agenda',manual:'Agenda Manual',blocked:'Bloquear Datas',revenue:'Receita',
   promos:'Promoções',commem:'Datas Comemorativas',
   cities:'Cidades',schedules:'Configuração de Horários',
   procs:'Procedimentos',profile:'Perfil & Senha',backup:'Backup'
 };
-const ALL_SECS = ['agenda','blocked','revenue','promos','commem','cities','schedules','procs','profile','backup'];
+const ALL_SECS = ['agenda','manual','blocked','revenue','promos','commem','cities','schedules','procs','profile','backup'];
 
 function showSec(name){
   ALL_SECS.forEach(s=>{
@@ -1355,6 +1425,7 @@ function showSec(name){
   });
   document.getElementById('adm-ttl').textContent=SEC_TITLES[name]||name;
   if(name==='agenda'){renderStats();renderAgenda()}
+  if(name==='manual') initManualBooking();
   if(name==='blocked'){renderBlocked();renderBlockedSlots()}
   if(name==='revenue'){renderRevCards();renderRevTable()}
   if(name==='promos') renderPromos();
@@ -2319,6 +2390,218 @@ async function changePassword() {
     setTimeout(()=>msgEl.classList.add('hidden'),4000);
   } catch(e){
     msgEl.className='notice err'; msgEl.textContent='✗ '+e.message; msgEl.classList.remove('hidden');
+  }
+}
+
+// ══════════════════════════════════════════════════
+// AGENDA MANUAL (ADMIN)
+// ══════════════════════════════════════════════════
+let MAN = { cityId:null, cityName:'', procId:null, procData:null, date:null, time:null };
+let MAN_CAL = { y:null, mo:null };
+
+function manReset() {
+  MAN = { cityId:null, cityName:'', procId:null, procData:null, date:null, time:null };
+  document.getElementById('man-name').value = '';
+  document.getElementById('man-phone').value = '';
+}
+
+function manGoStep(n) {
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById(`man-s${i}`);
+    if(el) el.classList.toggle('hidden', i!==n);
+    const st = document.getElementById(`mstep-${i}`);
+    if(st) {
+      st.classList.toggle('active', i===n);
+      st.classList.toggle('done', i<n);
+    }
+  });
+  if(n===3) manRenderCal();
+}
+
+async function initManualBooking() {
+  manReset();
+  manGoStep(1);
+  // Render city list
+  await loadCities();
+  const cityList = document.getElementById('man-city-list');
+  cityList.innerHTML = CITIES.map(c => `
+    <div class="city-card" onclick="manSelCity(${c.id},'${c.short.replace(/'/g,"\'")}')">
+      <div>
+        <div class="cn">${c.short}</div>
+        <div class="cd">${c.days.map(d=>DAY_NAMES_SHORT[d]).join(' · ')}</div>
+      </div>
+      <div class="ci">📍</div>
+    </div>
+  `).join('');
+}
+
+async function manSelCity(id, name) {
+  MAN.cityId = id; MAN.cityName = name;
+  MAN.procId = null; MAN.procData = null; MAN.date = null; MAN.time = null;
+  // Load procedures for this city
+  const allProcs = await getProcs();
+  const city = CITIES.find(c => Number(c.id) === Number(id));
+  let procs;
+  if (city && city.procedures && city.procedures.length > 0) {
+    const ids = new Set(city.procedures.map(p => Number(p.id)));
+    procs = allProcs.filter(p => ids.has(Number(p.id)));
+  } else { procs = allProcs; }
+
+  document.getElementById('man-proc-list').innerHTML = procs.map(p => `
+    <div class="proc-item" onclick="manSelProc(${p.id})">
+      <div>
+        <div class="pn">${p.name}</div>
+        <div class="proc-meta">
+          <span class="badge-dur">⏱ ${fmtDur(p.dur)}</span>
+          ${p.pt!=='none' ? `<span class="badge-price">${fmtPrice(p)}</span>` : ''}
+        </div>
+      </div>
+      <div class="proc-arr">›</div>
+    </div>
+  `).join('');
+  manGoStep(2);
+}
+
+async function manSelProc(id) {
+  const procs = await getProcs();
+  const p = procs.find(x => Number(x.id) === Number(id));
+  if(!p) return;
+  MAN.procId = id; MAN.procData = p; MAN.date = null; MAN.time = null;
+  document.getElementById('man-proc-bar').innerHTML = `
+    <div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:600">${p.name}</div>
+      <div style="font-size:12px;opacity:.8;margin-top:2px">⏱ ${fmtDur(p.dur)} · ${MAN.cityName}</div>
+    </div>
+    ${p.pt!=='none' ? `<div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:var(--gold-light)">${fmtPrice(p)}</div>` : ''}
+  `;
+  const now = new Date();
+  MAN_CAL = { y: now.getFullYear(), mo: now.getMonth() };
+  manGoStep(3);
+}
+
+function manRenderCal() {
+  const {y, mo} = MAN_CAL;
+  const first = new Date(y, mo, 1).getDay();
+  const dim   = new Date(y, mo+1, 0).getDate();
+  const today = todayStr();
+  const now   = new Date();
+  const canPrev = y > now.getFullYear() || (y===now.getFullYear() && mo>now.getMonth());
+
+  let html = `
+    <div class="cal-head">
+      <button class="cal-nav" onclick="manCalNav(-1)" ${!canPrev?'disabled':''}>‹</button>
+      <div class="cal-month">${MONTHS[mo]} ${y}</div>
+      <button class="cal-nav" onclick="manCalNav(1)">›</button>
+    </div>
+    <div class="cal-wd"><span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span></div>
+    <div class="cal-days">
+  `;
+  for(let i=0; i<first; i++) html += `<div class="cal-d emp"></div>`;
+  for(let d=1; d<=dim; d++) {
+    const ds = `${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isPast = ds < today;
+    // Admin can book on any valid weekday (no restriction to city days — intentional for manual)
+    const dis = isPast;
+    const cls = 'cal-d' + (dis?' dis':'') + (ds===today&&!dis?' today':'') + (ds===MAN.date?' sel':'');
+    html += `<div class="${cls}" ${!dis?`onclick="manSelDate('${ds}')"`:''}>${d}</div>`;
+  }
+  html += `</div>`;
+  document.getElementById('man-cal').innerHTML = html;
+}
+
+function manCalNav(dir) {
+  MAN_CAL.mo += dir;
+  if(MAN_CAL.mo>11){ MAN_CAL.mo=0; MAN_CAL.y++; }
+  if(MAN_CAL.mo<0) { MAN_CAL.mo=11; MAN_CAL.y--; }
+  manRenderCal();
+}
+
+async function manSelDate(ds) {
+  MAN.date = ds; MAN.time = null;
+  manRenderCal();
+  // Load available slots
+  const slotsWrap = document.getElementById('man-slots-wrap');
+  const slotsEl   = document.getElementById('man-slots');
+  const nextBtn   = document.getElementById('man-s3-next');
+  slotsWrap.classList.remove('hidden');
+  slotsEl.innerHTML = '<div class="skel" style="height:36px;grid-column:1/-1"></div>';
+  nextBtn.classList.add('hidden');
+  try {
+    const slots = await GET(`/api/availability?date=${ds}&procId=${MAN.procId}&cityId=${MAN.cityId}`);
+    if(!slots.length) {
+      slotsEl.innerHTML = '<div style="color:var(--text-light);font-size:13px;grid-column:1/-1;padding:12px 0">Sem horários disponíveis nesta data.</div>';
+      return;
+    }
+    slotsEl.innerHTML = slots.map(t => `
+      <div class="ts ${MAN.time===t?'sel':''}" id="mts-${t.replace(':','')}"
+           onclick="manSelTime('${t}')" style="font-size:13px;padding:9px 4px">${t}</div>
+    `).join('');
+    if(MAN.time) nextBtn.classList.remove('hidden');
+  } catch(e) {
+    slotsEl.innerHTML = `<div style="color:var(--error);font-size:12px;grid-column:1/-1">Erro: ${e.message}</div>`;
+  }
+}
+
+function manSelTime(t) {
+  MAN.time = t;
+  document.querySelectorAll('#man-slots .ts').forEach(el => el.classList.remove('sel'));
+  const el = document.getElementById(`mts-${t.replace(':','')}`);
+  if(el) el.classList.add('sel');
+  document.getElementById('man-s3-next').classList.remove('hidden');
+}
+
+function manGoStep4() {
+  const p = MAN.procData;
+  const et = m2t(t2m(MAN.time) + Number(p.dur));
+  document.getElementById('man-summary').innerHTML = `
+    <strong>${MAN.cityName}</strong> · ${p.name}<br>
+    <strong>${fmtDateLong(MAN.date)}</strong> · ${MAN.time} – ${et}
+    ${p.pt!=='none' ? ` · <span style="color:var(--gold)">${fmtPrice(p)}</span>` : ''}
+  `;
+  manGoStep(4);
+}
+
+async function manSave() {
+  const name  = document.getElementById('man-name').value.trim();
+  const phone = document.getElementById('man-phone').value.trim();
+  if(!name || name.length < 2) { showToast('Informe o nome do cliente','error'); return; }
+  if(phone.replace(/\D/g,'').length < 10) { showToast('Informe um WhatsApp válido','error'); return; }
+
+  const btn = document.getElementById('man-save-btn');
+  btn.textContent = 'Salvando...'; btn.disabled = true;
+
+  const p  = MAN.procData;
+  const c  = CITIES.find(x => Number(x.id) === Number(MAN.cityId));
+  const et = m2t(t2m(MAN.time) + Number(p.dur));
+
+  // Apply active promo if applicable
+  const promo = await getActivePromo();
+  let effectivePrice = p.price ? Number(p.price) : null;
+  if(promo && p.pt==='fixed' && effectivePrice && promoAppliesToProc(promo, p.id)) {
+    effectivePrice = calcDiscounted(effectivePrice, Number(promo.discount));
+  }
+
+  try {
+    await POST('/api/appointments', {
+      cityId:   Number(MAN.cityId),
+      cityName: c.name,
+      procId:   Number(MAN.procId),
+      procName: p.name,
+      date:     MAN.date,
+      st:       MAN.time,
+      et,
+      name, phone,
+      price: effectivePrice,
+      pt:    p.pt || 'fixed',
+    });
+    showToast(`✓ Agendamento de ${name} confirmado!`, 'ok', 5000);
+    // Reset and go back to agenda
+    manReset();
+    setTimeout(() => showSec('agenda'), 1200);
+  } catch(e) {
+    showToast(e.message || 'Erro ao salvar. Tente novamente.', 'error');
+    btn.textContent = '✓ Confirmar Agendamento';
+    btn.disabled = false;
   }
 }
 
