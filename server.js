@@ -883,18 +883,26 @@ app.get('/api/cities', async (req, res) => {
     const { rows } = await pool.query(
       'SELECT * FROM cities WHERE is_active=TRUE ORDER BY id'
     );
-    // Attach enabled procedures per city
     for (const city of rows) {
+      // Check if this city has ANY city_procedures rows
+      const cpCount = await pool.query(
+        'SELECT COUNT(*) FROM city_procedures WHERE city_id=$1', [city.id]
+      );
+      const hasOverrides = parseInt(cpCount.rows[0].count) > 0;
+
       const pr = await pool.query(
         `SELECT p.id, p.name, p.dur, p.price, p.pt,
-                COALESCE(cp.enabled, TRUE) as enabled
+                CASE
+                  WHEN $2 THEN COALESCE(cp.enabled, TRUE)
+                  ELSE TRUE
+                END as enabled
          FROM procedures p
          LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$1
          WHERE p.active=TRUE ORDER BY p.id`,
-        [city.id]
+        [city.id, hasOverrides]
       );
-      city.procedures = pr.rows;
-      // Active days from work_configs
+      // Only return enabled procedures for client-facing API
+      city.procedures = pr.rows.filter(p => p.enabled);
       const wd = await pool.query(
         `SELECT day_of_week, is_active FROM work_configs
          WHERE scope='city_day' AND city_id=$1 ORDER BY day_of_week`,
@@ -961,12 +969,12 @@ app.put('/api/cities/:id', requireAdmin, async (req, res) => {
       [name,uf,local_name,address,number,complement,neighborhood,cep,mapsUrl,is_active,req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Cidade não encontrada' });
-    // Update procedure overrides
-    if (proc_overrides) {
+    // Always upsert procedure overrides (delete old + reinsert ensures clean state)
+    if (proc_overrides && Object.keys(proc_overrides).length > 0) {
+      await pool.query('DELETE FROM city_procedures WHERE city_id=$1', [req.params.id]);
       for (const [procId, enabled] of Object.entries(proc_overrides)) {
         await pool.query(
-          `INSERT INTO city_procedures (city_id,proc_id,enabled) VALUES ($1,$2,$3)
-           ON CONFLICT (city_id,proc_id) DO UPDATE SET enabled=EXCLUDED.enabled`,
+          `INSERT INTO city_procedures (city_id,proc_id,enabled) VALUES ($1,$2,$3)`,
           [req.params.id, procId, enabled]
         );
       }
