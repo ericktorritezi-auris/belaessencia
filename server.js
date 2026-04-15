@@ -1057,6 +1057,16 @@ app.put('/api/work-configs/:id', requireAdmin, async (req, res) => {
 });
 
 // ── Admin Profile ─────────────────────────────────────────────────────────────
+// Público: expõe apenas nome e telefone para o frontend do cliente
+app.get('/api/admin/profile/public', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT name, phone FROM admin_profile LIMIT 1'
+    );
+    res.json(rows[0] || { name: 'Profissional', phone: '' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/admin/profile', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
