@@ -157,16 +157,16 @@ h1,h2,h3,h4{font-family:'Cormorant Garamond',serif}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
 
 /* ── COMMEMORATIVE POPUP ── */
-.comm-overlay{position:fixed;inset:0;background:rgba(26,18,20,.72);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .35s ease}
+.comm-overlay{position:fixed;inset:0;background:rgba(26,18,20,.72);z-index:9998;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeIn .35s ease}
 .comm-card{background:white;border-radius:var(--r-lg);padding:0;max-width:360px;width:100%;box-shadow:var(--sh-lg);overflow:hidden;animation:fsUp .4s ease}
-.comm-top{background:linear-gradient(145deg,var(--rose-deep),var(--rose));padding:36px 28px 30px;text-align:center;color:white;position:relative}
-.comm-top::after{content:'';position:absolute;bottom:0;left:0;right:0;height:40px;background:white;border-radius:50% 50% 0 0/30px 30px 0 0}
-.comm-title{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:600;line-height:1.2;position:relative;z-index:1}
-.comm-subtitle{font-size:12px;opacity:.8;margin-top:6px;letter-spacing:.08em;font-weight:600;text-transform:uppercase;position:relative;z-index:1}
-.comm-body{padding:16px 28px 30px;text-align:center}
-.comm-divider{width:48px;height:3px;background:linear-gradient(90deg,var(--rose),var(--gold));border-radius:2px;margin:0 auto 18px}
-.comm-msg{font-size:14px;color:var(--text);line-height:1.9;margin-bottom:24px}
-.comm-btn{background:var(--rose);color:white;border:none;padding:13px 34px;border-radius:var(--r-xl);font-family:'Nunito',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:var(--tr);box-shadow:0 4px 14px rgba(155,77,106,.3);letter-spacing:.02em}
+.comm-top{background:linear-gradient(145deg,var(--rose-deep),var(--rose));padding:38px 28px 24px;text-align:center;color:white}
+.comm-title{font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:600;line-height:1.25}
+.comm-subtitle{font-size:11px;opacity:.75;margin-top:8px;letter-spacing:.12em;font-weight:700;text-transform:uppercase}
+.comm-wave{display:block;width:100%;margin-bottom:-2px}
+.comm-body{padding:24px 28px 30px;text-align:center}
+.comm-divider{width:44px;height:3px;background:linear-gradient(90deg,var(--rose),var(--gold));border-radius:2px;margin:0 auto 20px}
+.comm-msg{font-size:14px;color:var(--text);line-height:1.9;margin-bottom:26px}
+.comm-btn{background:var(--rose);color:white;border:none;padding:13px 36px;border-radius:var(--r-xl);font-family:'Nunito',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:var(--tr);box-shadow:0 4px 14px rgba(155,77,106,.3);letter-spacing:.02em}
 .comm-btn:hover{background:var(--rose-deep);transform:translateY(-1px);box-shadow:0 6px 18px rgba(155,77,106,.4)}
 
 /* ── PROMO BANNER ── */
@@ -733,8 +733,11 @@ tr:hover td{background:#FAF3F6}
   <div class="comm-card">
     <div class="comm-top">
       <div class="comm-title" id="comm-title">Feliz Dia!</div>
-      <div class="comm-subtitle" id="comm-subtitle">Bela Essência</div>
+      <div class="comm-subtitle" id="comm-subtitle">Uma mensagem especial para você</div>
     </div>
+    <svg viewBox="0 0 360 28" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="display:block;width:100%;height:28px;background:#9B4D6A">
+      <path d="M0,0 C90,28 270,28 360,0 L360,28 L0,28 Z" fill="white"/>
+    </svg>
     <div class="comm-body">
       <div class="comm-divider"></div>
       <div class="comm-msg" id="comm-msg"></div>
@@ -755,7 +758,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.5.2';
+const APP_VERSION  = '1.5.3';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -1904,7 +1907,7 @@ async function checkCommemorative() {
     const key  = `${data.id}_${new Date().toISOString().slice(0,10)}`;
     if (seen === key) return; // já exibiu hoje
     document.getElementById('comm-title').textContent    = data.title;
-    document.getElementById('comm-subtitle').textContent = 'Uma mensagem especial para você';
+    document.getElementById('comm-subtitle').textContent = 'Uma mensagem especial para você ✨';
     document.getElementById('comm-msg').textContent      = data.message;
     document.getElementById('comm-overlay').classList.remove('hidden');
     sessionStorage.setItem('be_commem_seen', key); // não exibe de novo na mesma sessão
@@ -2008,14 +2011,18 @@ async function openCityModal(cityId) {
     try {
       const list = await api('GET','/api/cities/all');
       city = list.find(c=>c.id===cityId);
-      const full = await GET('/api/cities');
-      const fc = full.find(c=>c.id===cityId);
-      if(fc && fc.procedures) fc.procedures.forEach(p=>cityProcs[p.id]=p.enabled!==false);
-    } catch{}
+      // Use dedicated endpoint that returns ALL procs with correct enabled status
+      const cityProcList = await api('GET',`/api/cities/${cityId}/procedures`);
+      cityProcList.forEach(p => { cityProcs[p.id] = p.enabled; });
+    } catch(e){ console.error('Error loading city procs:', e); }
   }
   const procList = procs.map(p=>`
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--border-light)">
-      <input type="checkbox" name="cp-proc" value="${p.id}" ${!cityId||cityProcs[p.id]!==false?'checked':''} style="accent-color:var(--rose);width:16px;height:16px;flex-shrink:0">
+      <input type="checkbox" name="cp-proc" value="${p.id}"
+        ${cityId
+          ? (cityProcs[p.id] !== false && cityProcs[p.id] !== undefined ? 'checked' : (cityProcs[p.id] === undefined ? 'checked' : ''))
+          : 'checked'}
+        style="accent-color:var(--rose);width:16px;height:16px;flex-shrink:0">
       <span>${p.name} <small style="color:var(--text-light)">${fmtDur(p.dur)} · ${fmtPrice(p)}</small></span>
     </label>
   `).join('');
@@ -2132,7 +2139,7 @@ async function renderSchedules() {
                 <input type="checkbox" ${cfg.is_active?'checked':''} onchange="updateScheduleActive(${cfg.id},this.checked)" style="accent-color:var(--rose);width:16px;height:16px">
                 <span style="font-weight:700;font-size:13px;color:var(--dark)">${DAY_LABELS[cfg.day_of_week]}</span>
               </label>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;${!cfg.is_active?'opacity:.4;pointer-events:none':''}">
+              <div class="sch-time-wrap" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;${!cfg.is_active?'opacity:.4;pointer-events:none':''}">
                 <div style="display:flex;align-items:center;gap:5px">
                   <span style="font-size:11px;color:var(--text-light);font-weight:800;text-transform:uppercase">Início</span>
                   <input type="time" value="${cfg.work_start?String(cfg.work_start).slice(0,5):'08:00'}" step="1800"
@@ -2177,6 +2184,16 @@ function getSchPending(id) { if(!_schPending[id])_schPending[id]={}; return _sch
 
 function updateScheduleActive(id, active) {
   getSchPending(id).is_active = active;
+  // Update DOM immediately so user gets visual feedback
+  const rowEl = document.querySelector(`[data-cfg-id="${id}"]`);
+  if (rowEl) {
+    rowEl.style.background = active ? 'var(--cream)' : '#F5F5F5';
+    const wrap = rowEl.querySelector('.sch-time-wrap');
+    if (wrap) {
+      wrap.style.opacity = active ? '1' : '.4';
+      wrap.style.pointerEvents = active ? '' : 'none';
+    }
+  }
   scheduleDebounce(id, ()=>flushScheduleSave(id));
 }
 function updateScheduleTime(id, type, val) {
