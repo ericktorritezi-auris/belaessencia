@@ -479,6 +479,7 @@ tr:hover td{background:#FAF3F6}
           <div class="nav-sec-ttl">Marketing</div>
           <div class="nav-item" id="nav-promos" onclick="showSec('promos')"><span class="nav-icon">🏷</span> Promoções</div>
           <div class="nav-item" id="nav-commem" onclick="showSec('commem')"><span class="nav-icon">🎉</span> Datas Comemorativas</div>
+          <div class="nav-item" id="nav-webpush" onclick="showSec('webpush')"><span class="nav-icon">🔔</span> Web Push</div>
         </div>
         <div style="margin-top:2px">
           <div class="nav-sec-ttl">Configurações</div>
@@ -785,6 +786,43 @@ tr:hover td{background:#FAF3F6}
             </div>
           </div>
 
+          <!-- SEC: WEB PUSH -->
+          <div id="sec-webpush" class="hidden">
+            <!-- Subscribers count -->
+            <div class="stats-grid" id="push-stats" style="margin-bottom:16px"></div>
+
+            <!-- Create / broadcast -->
+            <div class="tbl-wrap" style="margin-bottom:16px">
+              <div style="padding:20px">
+                <div class="tbl-ttl" style="margin-bottom:6px">Criar e Disparar Push</div>
+                <p style="font-size:12px;color:var(--text-light);margin-bottom:16px;line-height:1.7">
+                  Crie uma mensagem e envie imediatamente para <strong>todos</strong> os usuários com o app instalado e notificações ativas.
+                </p>
+                <div class="fg"><label>Título <small style="font-weight:400">(máx. 200 chars)</small></label><input type="text" id="wp-title" maxlength="200" placeholder="Ex: Promoção especial este fim de semana!" style="width:100%"></div>
+                <div class="fg">
+                  <label>Mensagem <span id="wp-chars" style="font-weight:400;color:var(--text-light)">(0/500)</span></label>
+                  <textarea id="wp-body" maxlength="500" rows="3"
+                    oninput="document.getElementById('wp-chars').textContent='('+this.value.length+'/500)'"
+                    style="width:100%;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--r-sm);padding:13px 15px;font-family:'Nunito',sans-serif;font-size:14px;color:var(--dark);outline:none;resize:vertical;transition:var(--tr)"
+                    placeholder="Texto da notificação que o usuário vai receber..."></textarea>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
+                  <button class="btn btn-primary" onclick="sendBroadcast()" style="width:auto;padding:10px 24px">🔔 Disparar para Todos</button>
+                  <button class="btn btn-secondary" onclick="saveTemplate()" style="width:auto;padding:10px 20px">💾 Salvar como template</button>
+                </div>
+                <div id="wp-result" class="hidden" style="margin-top:12px"></div>
+              </div>
+            </div>
+
+            <!-- Templates list -->
+            <div class="tbl-wrap">
+              <div style="padding:18px">
+                <div class="tbl-ttl" style="margin-bottom:14px">Templates Cadastrados</div>
+                <div id="push-templates-list"></div>
+              </div>
+            </div>
+          </div>
+
           <!-- SEC: BACKUP (desktop only) -->
           <div id="sec-backup" class="hidden desktop-only">
             <div class="tbl-wrap" style="margin-bottom:16px">
@@ -839,7 +877,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.7.2';
+const APP_VERSION  = '1.8.0';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -1427,11 +1465,11 @@ async function initAdmin() {
 
 const SEC_TITLES={
   agenda:'Agenda',manual:'Agenda Manual',blocked:'Bloquear Datas',revenue:'Receita',
-  promos:'Promoções',commem:'Datas Comemorativas',
+  promos:'Promoções',commem:'Datas Comemorativas',webpush:'Web Push',
   cities:'Cidades',schedules:'Configuração de Horários',
   procs:'Procedimentos',profile:'Perfil & Senha',backup:'Backup'
 };
-const ALL_SECS = ['agenda','manual','blocked','revenue','promos','commem','cities','schedules','procs','profile','backup'];
+const ALL_SECS = ['agenda','manual','blocked','revenue','promos','commem','webpush','cities','schedules','procs','profile','backup'];
 
 function showSec(name){
   ALL_SECS.forEach(s=>{
@@ -1445,6 +1483,7 @@ function showSec(name){
   if(name==='revenue'){renderRevCards();renderRevTable()}
   if(name==='promos') renderPromos();
   if(name==='commem') renderCommem();
+  if(name==='webpush') initWebPush();
   if(name==='cities') renderCitiesAdmin();
   if(name==='schedules') renderSchedules();
   if(name==='procs') renderProcsAdmin();
@@ -2667,6 +2706,138 @@ async function manSave() {
     btn.textContent = '✓ Confirmar Agendamento';
     btn.disabled = false;
   }
+}
+
+// ══════════════════════════════════════════════════
+// WEB PUSH MANAGER (ADMIN)
+// ══════════════════════════════════════════════════
+async function initWebPush() {
+  await Promise.all([loadPushStats(), loadPushTemplates()]);
+}
+
+async function loadPushStats() {
+  try {
+    const s = await GET('/api/push/subscribers/count');
+    document.getElementById('push-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-lbl">📱 Total Inscritos</div><div class="stat-val">${s.total}</div><div class="stat-sub">com app instalado</div></div>
+      <div class="stat-card"><div class="stat-lbl">👤 Clientes</div><div class="stat-val">${s.client||0}</div><div class="stat-sub">inscrições ativas</div></div>
+      <div class="stat-card"><div class="stat-lbl">🔑 Admin</div><div class="stat-val">${s.admin||0}</div><div class="stat-sub">dispositivos</div></div>
+    `;
+  } catch{}
+}
+
+async function loadPushTemplates() {
+  const el = document.getElementById('push-templates-list');
+  if(!el) return;
+  el.innerHTML = '<div style="color:var(--text-light);font-size:12px">Carregando...</div>';
+  try {
+    const list = await api('GET', '/api/push/templates');
+    if(!list.length) { el.innerHTML='<div style="color:var(--text-light);font-size:13px">Nenhum template cadastrado.</div>'; return; }
+    el.innerHTML = list.map(t => `
+      <div style="background:${t.is_system?'var(--cream)':'white'};border:1.5px solid ${t.is_system?'var(--border)':'var(--rose-light)'};border-radius:var(--r-md);padding:14px 16px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+          <div style="flex:1">
+            ${t.is_system ? '<span style="font-size:9px;background:var(--gold-light);color:var(--gold-deep);padding:2px 8px;border-radius:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em">Sistema</span><br>' : ''}
+            <div style="font-weight:700;font-size:14px;color:var(--dark);margin-top:${t.is_system?'5px':'0'}">${t.title}</div>
+            <div style="font-size:12px;color:var(--text-light);margin-top:4px;line-height:1.6">${t.body}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            <button class="act-btn" onclick="useTemplate(${t.id})">Usar</button>
+            ${!t.is_system ? `
+              <button class="act-btn" onclick="editTemplate(${t.id})">Editar</button>
+              <button class="act-btn danger" onclick="deleteTemplate(${t.id})" style="color:var(--error);border-color:var(--error)">🗑</button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { el.innerHTML=`<div style="color:var(--error);font-size:12px">Erro: ${e.message}</div>`; }
+}
+
+function useTemplate(id) {
+  // Pre-fill the create form with this template's content
+  api('GET', '/api/push/templates').then(list => {
+    const t = list.find(x=>x.id===id); if(!t) return;
+    document.getElementById('wp-title').value = t.title;
+    document.getElementById('wp-body').value  = t.body;
+    document.getElementById('wp-chars').textContent = `(${t.body.length}/500)`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast('Template carregado — revise e dispare!', '', 3000);
+  });
+}
+
+async function sendBroadcast() {
+  const title = document.getElementById('wp-title').value.trim();
+  const body  = document.getElementById('wp-body').value.trim();
+  if(!title || !body) { showToast('Preencha título e mensagem','error'); return; }
+  const resultEl = document.getElementById('wp-result');
+  if(!confirm(`Disparar push para TODOS os usuários inscritos?
+
+Título: ${title}`)) return;
+  try {
+    const r = await POST('/api/push/broadcast', { title, body });
+    resultEl.className = 'notice ok';
+    resultEl.textContent = `✓ Push disparado para ${r.total} dispositivo${r.total!==1?'s':''}!`;
+    resultEl.classList.remove('hidden');
+    setTimeout(()=>resultEl.classList.add('hidden'), 5000);
+    loadPushStats();
+  } catch(e) {
+    resultEl.className = 'notice err';
+    resultEl.textContent = '✗ Erro: ' + e.message;
+    resultEl.classList.remove('hidden');
+  }
+}
+
+async function saveTemplate() {
+  const title = document.getElementById('wp-title').value.trim();
+  const body  = document.getElementById('wp-body').value.trim();
+  if(!title || !body) { showToast('Preencha título e mensagem para salvar','error'); return; }
+  try {
+    await POST('/api/push/templates', { title, body });
+    showToast('Template salvo!', 'ok');
+    loadPushTemplates();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+function editTemplate(id) {
+  api('GET', '/api/push/templates').then(list => {
+    const t = list.find(x=>x.id===id); if(!t) return;
+    document.getElementById('modal-card').innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="modal-ttl">Editar Template</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="fg"><label>Título</label><input type="text" id="et-title" value="${t.title}" maxlength="200" style="width:100%"></div>
+      <div class="fg">
+        <label>Mensagem</label>
+        <textarea id="et-body" maxlength="500" rows="3" style="width:100%;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--r-sm);padding:13px 15px;font-family:'Nunito',sans-serif;font-size:14px;color:var(--dark);outline:none;resize:vertical">${t.body}</textarea>
+      </div>
+      <div style="display:flex;gap:9px;margin-top:8px">
+        <button class="btn btn-primary" onclick="saveEditTemplate(${id})" style="flex:1">Salvar</button>
+        <button class="btn btn-secondary" onclick="closeModal()" style="flex:1;width:auto">Cancelar</button>
+      </div>
+    `;
+    document.getElementById('modal-bg').classList.remove('hidden');
+  });
+}
+
+async function saveEditTemplate(id) {
+  const title = document.getElementById('et-title').value.trim();
+  const body  = document.getElementById('et-body').value.trim();
+  if(!title||!body){showToast('Preencha os campos','error');return}
+  try {
+    await PUT(`/api/push/templates/${id}`,{title,body});
+    showToast('Template atualizado!','ok');
+    closeModal(); loadPushTemplates();
+  } catch(e){showToast(e.message,'error')}
+}
+
+async function deleteTemplate(id) {
+  if(!confirm('Excluir este template?')) return;
+  try {
+    await DEL(`/api/push/templates/${id}`);
+    showToast('Template excluído','ok'); loadPushTemplates();
+  } catch(e){showToast(e.message,'error')}
 }
 
 // ── MODAL ─────────────────────────────────────────
