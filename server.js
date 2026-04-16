@@ -286,7 +286,7 @@ async function initDB() {
         ['✅ Agendamento confirmado!',     'Seu agendamento foi confirmado. Estamos te esperando!'],
         ['📅 Agendamento alterado',        'Seu agendamento teve o horário alterado. Verifique os detalhes.'],
         ['❌ Agendamento cancelado',       'Seu agendamento foi cancelado. Entre em contato para reagendar.'],
-        ['💖 Obrigada pela sua visita!',   'Seu procedimento foi realizado com sucesso. Até a próxima!'],
+        ['💖 Obrigada pela sua visita!',     'Seu procedimento foi realizado com sucesso. Até a próxima!'],
       ];
       for (const [title, body] of systemTemplates) {
         await client.query(
