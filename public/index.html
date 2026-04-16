@@ -376,7 +376,7 @@ tr:hover td{background:#FAF3F6}
       <div class="dot"></div><div class="dot"></div><div class="dot"></div>
     </div>
     <div id="s1" class="step-card">
-      <h2 class="step-ttl">Olá! <em>Seja bem-vinda</em></h2>
+      <h2 class="step-ttl">Olá! <em>Seja bem-vinda(o)</em></h2>
       <p class="step-sub">Selecione a cidade de atendimento</p>
       <div class="city-grid" id="city-grid"></div>
     </div>
@@ -449,10 +449,10 @@ tr:hover td{background:#FAF3F6}
     <div id="s7" class="step-card hidden">
       <div class="succ-card">
         <div class="succ-icon">✓</div>
-        <h2>Agendado <em style="color:var(--rose)">com sucesso</em>!</h2>
+        <h2>Agendado <em style="color:var(--rose)">com sucesso</em>! 🎉</h2>
         <p id="succ-txt"></p>
         <div id="succ-location"></div>
-        <a id="wa-link" href="#" target="_blank" class="btn btn-wa" style="margin:0 auto 14px"><span id="wa-link-label">💬 Falar com Ana Paula</span></a>
+        <a id="wa-link" href="#" target="_blank" class="btn btn-wa" style="margin:0 auto 14px"><span id="wa-link-label"><span id="wa-link-label">💬 Falar com Ana Paula Silva</span></span></a>
         <button class="btn btn-secondary" onclick="resetBooking()">Fazer outro agendamento</button>
       </div>
     </div>
@@ -872,7 +872,7 @@ tr:hover td{background:#FAF3F6}
   <div class="welcome-card">
     <div class="welcome-top">
       <div class="welcome-icon">🥂</div>
-      <div class="welcome-title" id="welcome-title">Olá, seja bem-vinda!</div>
+      <div class="welcome-title" id="welcome-title">Olá, seja bem-vinda(o)!</div>
       <div class="welcome-subtitle" id="welcome-subtitle">Agenda Online</div>
     </div>
     <svg viewBox="0 0 360 28" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="display:block;width:100%;height:28px;background:var(--rose)">
@@ -884,13 +884,13 @@ tr:hover td{background:#FAF3F6}
         <span class="welcome-install-icon">📲</span>
         <div class="welcome-install-text">
           <strong>Instale o app grátis</strong>
-          <span>Receba notificações dos seus agendamentos e acesse com 1 toque</span>
+          <span>Receba notificações dos seus agendamentos e acesse com 1 toque da tela inicial</span>
         </div>
       </div>
       <button class="welcome-btn-install" id="welcome-btn-install" onclick="welcomeInstall()">
         Adicionar à tela inicial
       </button>
-      <button class="welcome-btn-skip" onclick="closeWelcome()">Agora não</button>
+      <button class="welcome-btn-skip" onclick="closeWelcome()">Agora não, obrigada(o)</button>
     </div>
   </div>
 </div>
@@ -925,7 +925,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.8.3';
+const APP_VERSION  = '1.8.4';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -2995,7 +2995,7 @@ function showWelcomePopup() {
 
   // Preenche com o nome do profissional (já carregado em PROF)
   const profName = PROF.name || 'nossa profissional';
-  document.getElementById('welcome-title').textContent  = `Olá, seja bem-vinda!`;
+  document.getElementById('welcome-title').textContent  = `Olá, seja bem-vinda(o)!`;
   document.getElementById('welcome-subtitle').textContent = `Agenda de ${profName}`;
   document.getElementById('welcome-msg').innerHTML =
     `Você está na agenda online de <strong>${profName}</strong>.<br><br>` +
@@ -3101,7 +3101,7 @@ function showPWABanner() {
       </div>
       <div class="pwa-actions">
         <button class="pwa-btn-install" onclick="installPWA()">Instalar</button>
-        <button class="pwa-btn-dismiss" onclick="dismissPWA(document.getElementById('pwa-banner'))">Agora não</button>
+        <button class="pwa-btn-dismiss" onclick="dismissPWA(document.getElementById('pwa-banner'))">Agora não, obrigada(o)</button>
       </div>
     `;
     document.body.appendChild(banner);
