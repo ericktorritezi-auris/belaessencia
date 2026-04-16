@@ -500,8 +500,25 @@ app.post('/api/appointments', async (req, res) => {
   }
 });
 
+// Auto-marca confirmados passados como "realizado" (fuso Brasília)
+async function autoCompleteAppointments() {
+  try {
+    await pool.query(`
+      UPDATE appointments
+      SET status = 'realizado', updated_at = NOW()
+      WHERE status = 'confirmed'
+        AND (date + et) AT TIME ZONE 'America/Sao_Paulo'
+              < NOW() AT TIME ZONE 'America/Sao_Paulo'
+    `);
+  } catch (err) {
+    console.error('[autoComplete] Erro:', err.message);
+  }
+}
+
 // Admin: listar agendamentos com filtros
 app.get('/api/appointments', requireAdmin, async (req, res) => {
+  // Atualiza status antes de listar — marca passados como "realizado"
+  await autoCompleteAppointments();
   const { date, city, status } = req.query;
   let sql = 'SELECT * FROM appointments WHERE 1=1';
   const params = [];
@@ -740,6 +757,7 @@ app.get('/api/availability', async (req, res) => {
 
 // ── Resumo de receita (admin) ─────────────────────────────────────────────────
 app.get('/api/revenue/summary', requireAdmin, async (req, res) => {
+  await autoCompleteAppointments();
   try {
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
