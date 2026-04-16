@@ -544,7 +544,7 @@ app.get('/api/appointments/month/:month', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT * FROM appointments
-       WHERE to_char(date,'YYYY-MM') = $1 AND status = 'confirmed'
+       WHERE to_char(date,'YYYY-MM') = $1 AND status IN ('confirmed','realizado')
        ORDER BY date, st`,
       [req.params.month]
     );
@@ -772,10 +772,10 @@ app.get('/api/revenue/summary', requireAdmin, async (req, res) => {
     // COUNT(*) conta TODOS os confirmados; SUM(price) ignora NULL naturalmente
     const q = (sql, p) => pool.query(sql, p).then(r => r.rows[0]);
     const [todayRow, weekRow, monthRow, yearRow] = await Promise.all([
-      q(`SELECT COALESCE(SUM(price),0) as total, COUNT(*) as cnt FROM appointments WHERE date=$1 AND status='confirmed'`, [today]),
-      q(`SELECT COALESCE(SUM(price),0) as total, COUNT(*) as cnt FROM appointments WHERE date>=$1 AND status='confirmed'`, [ws]),
-      q(`SELECT COALESCE(SUM(price),0) as total, COUNT(*) as cnt FROM appointments WHERE to_char(date,'YYYY-MM')=$1 AND status='confirmed'`, [month]),
-      q(`SELECT COALESCE(SUM(price),0) as total, COUNT(*) as cnt FROM appointments WHERE to_char(date,'YYYY')=$1 AND status='confirmed'`, [year]),
+      q(`SELECT COALESCE(SUM(price),0) as total, COUNT(*) as cnt FROM appointments WHERE date=$1 AND status IN ('confirmed','realizado')`, [today]),
+      q(`SELECT COALESCE(SUM(price),0) as total, COUNT(*) as cnt FROM appointments WHERE date>=$1 AND status IN ('confirmed','realizado')`, [ws]),
+      q(`SELECT COALESCE(SUM(price),0) as total, COUNT(*) as cnt FROM appointments WHERE to_char(date,'YYYY-MM')=$1 AND status IN ('confirmed','realizado')`, [month]),
+      q(`SELECT COALESCE(SUM(price),0) as total, COUNT(*) as cnt FROM appointments WHERE to_char(date,'YYYY')=$1 AND status IN ('confirmed','realizado')`, [year]),
     ]);
     res.json({ today: todayRow, week: weekRow, month: monthRow, year: yearRow });
   } catch (err) {
