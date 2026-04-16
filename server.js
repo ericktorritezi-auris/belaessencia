@@ -268,6 +268,35 @@ async function initDB() {
       );
     `);
 
+    // ── PUSH TEMPLATES ────────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS push_templates (
+        id          SERIAL       PRIMARY KEY,
+        title       VARCHAR(200) NOT NULL,
+        body        VARCHAR(500) NOT NULL,
+        is_system   BOOLEAN      NOT NULL DEFAULT FALSE,
+        created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    // Seed: templates do sistema pré-cadastrados
+    const { rowCount: ptCount } = await client.query('SELECT 1 FROM push_templates WHERE is_system=TRUE LIMIT 1');
+    if (ptCount === 0) {
+      const systemTemplates = [
+        ['✅ Agendamento confirmado!',     'Seu agendamento foi confirmado. Estamos te esperando!'],
+        ['📅 Agendamento alterado',        'Seu agendamento teve o horário alterado. Verifique os detalhes.'],
+        ['❌ Agendamento cancelado',       'Seu agendamento foi cancelado. Entre em contato para reagendar.'],
+        ['💖 Obrigada pela sua visita!',   'Seu procedimento foi realizado com sucesso. Até a próxima!'],
+      ];
+      for (const [title, body] of systemTemplates) {
+        await client.query(
+          `INSERT INTO push_templates (title, body, is_system) VALUES ($1, $2, TRUE)`,
+          [title, body]
+        );
+      }
+      console.log('[DB] Push templates pré-cadastrados.');
+    }
+
     // ── APP SETTINGS (chave-valor genérico para configurações do sistema) ───────
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_settings (
@@ -663,7 +692,17 @@ app.patch('/api/appointments/:id/cancel', requireAdmin, async (req, res) => {
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Agendamento não encontrado' });
-    res.json(rows[0]);
+    const appt = rows[0];
+    // Notifica o cliente sobre o cancelamento
+    getSubsByAuth(appt.push_auth).then(subs => {
+      if (!subs.length) return;
+      sendPush(subs,
+        '❌ Agendamento cancelado',
+        `Seu agendamento de ${appt.proc_name} em ${String(appt.date).slice(0,10)} às ${String(appt.st).slice(0,5)} foi cancelado. Entre em contato para reagendar.`,
+        { type: 'cancelled' }
+      ).catch(e => console.error('[Push] notifyClientCancelled:', e.message));
+    });
+    res.json(appt);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1412,6 +1451,85 @@ app.post('/api/push/subscribe/client', async (req, res) => {
     console.error('[Push] Erro subscribe/client:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Push Templates (Web Push Manager) ────────────────────────────────────────
+
+// Listar todos os templates
+app.get('/api/push/templates', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM push_templates ORDER BY is_system DESC, id');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Criar template customizado
+app.post('/api/push/templates', requireAdmin, async (req, res) => {
+  const { title, body } = req.body;
+  if (!title || !body) return res.status(400).json({ error: 'Título e mensagem são obrigatórios' });
+  if (title.length > 200) return res.status(400).json({ error: 'Título máx. 200 caracteres' });
+  if (body.length > 500)  return res.status(400).json({ error: 'Mensagem máx. 500 caracteres' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO push_templates (title, body, is_system) VALUES ($1, $2, FALSE) RETURNING *`,
+      [title, body]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Editar template (só customizados — sistema protegido)
+app.put('/api/push/templates/:id', requireAdmin, async (req, res) => {
+  const { title, body } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE push_templates SET title=$1, body=$2
+       WHERE id=$3 AND is_system=FALSE RETURNING *`,
+      [title, body, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Template não encontrado ou é do sistema' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Excluir template (só customizados)
+app.delete('/api/push/templates/:id', requireAdmin, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM push_templates WHERE id=$1 AND is_system=FALSE`,
+      [req.params.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Template não encontrado ou protegido' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Disparar push em massa para TODOS os subscribers (admin + client)
+app.post('/api/push/broadcast', requireAdmin, async (req, res) => {
+  const { title, body } = req.body;
+  if (!title || !body) return res.status(400).json({ error: 'Título e mensagem obrigatórios' });
+  try {
+    const { rows: allSubs } = await pool.query(
+      'SELECT endpoint, p256dh, auth FROM push_subscriptions'
+    );
+    console.log(`[Push/broadcast] Disparando para ${allSubs.length} subscribers...`);
+    // Não await — dispara async e responde imediatamente
+    sendPush(allSubs, title, body, { type: 'broadcast' })
+      .catch(e => console.error('[Push/broadcast] Erro:', e.message));
+    res.json({ ok: true, total: allSubs.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Contar subscribers ativos
+app.get('/api/push/subscribers/count', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT role, COUNT(*) as cnt FROM push_subscriptions GROUP BY role`
+    );
+    const result = { total: 0, admin: 0, client: 0 };
+    rows.forEach(r => { result[r.role] = parseInt(r.cnt); result.total += parseInt(r.cnt); });
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Admin: testar push manualmente
