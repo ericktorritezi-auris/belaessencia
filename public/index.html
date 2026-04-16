@@ -161,6 +161,26 @@ h1,h2,h3,h4{font-family:'Cormorant Garamond',serif}
 .man-step.active{color:var(--rose);border-bottom-color:var(--rose)}
 .man-step.done{color:var(--rose-mid);border-bottom-color:var(--rose-mid)}
 
+/* ── WELCOME POPUP ── */
+.welcome-overlay{position:fixed;inset:0;background:rgba(26,18,20,.65);z-index:9997;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .4s ease}
+.welcome-card{background:white;border-radius:var(--r-lg);max-width:360px;width:100%;box-shadow:var(--sh-lg);overflow:hidden;animation:fsUp .45s ease}
+.welcome-top{background:linear-gradient(145deg,var(--rose-deep),var(--rose));padding:32px 26px 22px;text-align:center;color:white}
+.welcome-icon{font-size:52px;margin-bottom:10px;animation:bounce .8s ease infinite alternate}
+@keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-8px)}}
+.welcome-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;line-height:1.25}
+.welcome-subtitle{font-size:11px;opacity:.8;margin-top:6px;letter-spacing:.1em;text-transform:uppercase;font-weight:700}
+.welcome-wave{display:block;width:100%;height:28px;background:var(--rose);margin-bottom:-1px}
+.welcome-body{padding:20px 26px 28px;text-align:center}
+.welcome-msg{font-size:13.5px;color:var(--text);line-height:1.85;margin-bottom:20px}
+.welcome-install-box{background:linear-gradient(135deg,var(--gold-light),#EDE4CE);border-radius:var(--r-md);padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px;text-align:left}
+.welcome-install-icon{font-size:26px;flex-shrink:0}
+.welcome-install-text strong{display:block;font-size:13px;font-weight:800;color:var(--dark);margin-bottom:2px}
+.welcome-install-text span{font-size:11.5px;color:var(--text-light);line-height:1.5}
+.welcome-btn-install{background:var(--rose);color:white;border:none;width:100%;padding:13px;border-radius:var(--r-xl);font-family:'Nunito',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:var(--tr);box-shadow:0 4px 14px rgba(155,77,106,.3);margin-bottom:10px}
+.welcome-btn-install:hover{background:var(--rose-deep);transform:translateY(-1px)}
+.welcome-btn-skip{background:none;border:none;color:var(--text-light);font-size:12px;font-family:'Nunito',sans-serif;cursor:pointer;padding:4px;transition:var(--tr);font-weight:600}
+.welcome-btn-skip:hover{color:var(--rose)}
+
 /* ── COMMEMORATIVE POPUP ── */
 .comm-overlay{position:fixed;inset:0;background:rgba(26,18,20,.72);z-index:9998;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeIn .35s ease}
 .comm-card{background:white;border-radius:var(--r-lg);padding:0;max-width:360px;width:100%;box-shadow:var(--sh-lg);overflow:hidden;animation:fsUp .4s ease}
@@ -847,6 +867,34 @@ tr:hover td{background:#FAF3F6}
   </div>
 </div>
 
+<!-- WELCOME / PWA INSTALL POPUP -->
+<div id="welcome-overlay" class="welcome-overlay hidden">
+  <div class="welcome-card">
+    <div class="welcome-top">
+      <div class="welcome-icon">🥂</div>
+      <div class="welcome-title" id="welcome-title">Olá, seja bem-vinda!</div>
+      <div class="welcome-subtitle" id="welcome-subtitle">Agenda Online</div>
+    </div>
+    <svg viewBox="0 0 360 28" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="display:block;width:100%;height:28px;background:var(--rose)">
+      <path d="M0,0 C90,28 270,28 360,0 L360,28 L0,28 Z" fill="white"/>
+    </svg>
+    <div class="welcome-body">
+      <p class="welcome-msg" id="welcome-msg"></p>
+      <div class="welcome-install-box">
+        <span class="welcome-install-icon">📲</span>
+        <div class="welcome-install-text">
+          <strong>Instale o app grátis</strong>
+          <span>Receba notificações dos seus agendamentos e acesse com 1 toque</span>
+        </div>
+      </div>
+      <button class="welcome-btn-install" id="welcome-btn-install" onclick="welcomeInstall()">
+        Adicionar à tela inicial
+      </button>
+      <button class="welcome-btn-skip" onclick="closeWelcome()">Agora não</button>
+    </div>
+  </div>
+</div>
+
 <!-- COMMEMORATIVE POPUP -->
 <div id="comm-overlay" class="comm-overlay hidden">
   <div class="comm-card">
@@ -877,7 +925,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.8.2';
+const APP_VERSION  = '1.8.3';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -2936,6 +2984,62 @@ async function subscribePush(role, appointmentId = null) {
   }
 }
 
+// ══════════════════════════════════════════════════
+// WELCOME / PWA INSTALL POPUP
+// ══════════════════════════════════════════════════
+function showWelcomePopup() {
+  // Não mostra se o app já está instalado (modo standalone)
+  const isInstalled = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  if (isInstalled) return;
+
+  // Preenche com o nome do profissional (já carregado em PROF)
+  const profName = PROF.name || 'nossa profissional';
+  document.getElementById('welcome-title').textContent  = `Olá, seja bem-vinda!`;
+  document.getElementById('welcome-subtitle').textContent = `Agenda de ${profName}`;
+  document.getElementById('welcome-msg').innerHTML =
+    `Você está na agenda online de <strong>${profName}</strong>.<br><br>` +
+    `Para uma experiência ainda melhor, adicione este app à sua tela inicial e receba ` +
+    `notificações sobre seus agendamentos diretamente no seu celular. 🌸`;
+
+  // Ajusta botão conforme contexto (Android nativo vs iOS manual)
+  const btn = document.getElementById('welcome-btn-install');
+  if (isIOS()) {
+    btn.textContent = 'Como instalar no iPhone';
+    btn.onclick = welcomeInstallIOS;
+  } else if (deferredInstallPrompt) {
+    btn.textContent = '📲 Adicionar à tela inicial';
+  } else {
+    // Sem prompt disponível — mostra instrução genérica
+    btn.textContent = 'Como instalar';
+    btn.onclick = welcomeInstallGeneric;
+  }
+
+  document.getElementById('welcome-overlay').classList.remove('hidden');
+}
+
+async function welcomeInstall() {
+  if (deferredInstallPrompt) {
+    await installPWA();
+  }
+  closeWelcome();
+}
+
+function welcomeInstallIOS() {
+  closeWelcome();
+  // Mostra dica do iOS (já existe no sistema)
+  setTimeout(showPWABanner, 300);
+}
+
+function welcomeInstallGeneric() {
+  closeWelcome();
+  showToast('Use o menu do navegador → "Adicionar à tela inicial"', '', 5000);
+}
+
+function closeWelcome() {
+  document.getElementById('welcome-overlay').classList.add('hidden');
+}
+
 // Re-inscreve silenciosamente se a permissão de notificação já foi concedida.
 // Corrige subscriptions com encoding incorreto salvas antes da v1.7.2.
 async function resubscribeIfPermitted() {
@@ -3045,11 +3149,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('booking-app').classList.remove('hidden');
   }, 600);
 
-  // Verifica data comemorativa e exibe popup
-  setTimeout(checkCommemorative, 1200);
+  // Exibe welcome popup após 1s se app não estiver instalado
+  setTimeout(async () => {
+    // Aguarda o perfil carregar para ter o nome do profissional
+    await loadProfProfile();
+    showWelcomePopup();
+  }, 1000);
 
-  // PWA prompt após 3 segundos
-  setTimeout(showPWABanner, 3000);
+  // Verifica data comemorativa e exibe popup (só se welcome não estiver visível)
+  setTimeout(() => {
+    const welcomeVisible = !document.getElementById('welcome-overlay').classList.contains('hidden');
+    if (!welcomeVisible) checkCommemorative();
+  }, 1200);
+
+  // PWA banner nativo — não exibe se welcome já está visível
+  setTimeout(() => {
+    const welcomeVisible = !document.getElementById('welcome-overlay').classList.contains('hidden');
+    if (!welcomeVisible) showPWABanner();
+  }, 3000);
 });
 </script>
 </body>
