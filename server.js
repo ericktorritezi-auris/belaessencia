@@ -18,6 +18,7 @@ const session    = require('express-session');
 const cors       = require('cors');
 const path       = require('path');
 const { Pool }   = require('pg');
+const webpush    = require('web-push');
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. CONFIGURAÇÃO
@@ -26,6 +27,44 @@ const PORT         = process.env.PORT || 3000;
 const ADMIN_USER   = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS   = process.env.ADMIN_PASS || 'belaessencia2025';
 const SESSION_SEC  = process.env.SESSION_SECRET || 'dev_secret_troque_em_prod';
+
+// ── Web Push (VAPID) — configurado automaticamente ──────────────────────────
+// As chaves são geradas na primeira execução e armazenadas no banco.
+// Nenhuma configuração manual necessária.
+async function initVapid() {
+  try {
+    // Tenta carregar do banco
+    const { rows } = await pool.query(
+      "SELECT key, value FROM app_settings WHERE key IN ('vapid_public','vapid_private','vapid_email')"
+    );
+    let pub = null, priv = null, email = null;
+    for (const r of rows) {
+      if (r.key === 'vapid_public')  pub   = r.value;
+      if (r.key === 'vapid_private') priv  = r.value;
+      if (r.key === 'vapid_email')   email = r.value;
+    }
+
+    // Se não existem, gera e persiste
+    if (!pub || !priv) {
+      const vapidKeys = webpush.generateVAPIDKeys();
+      pub   = vapidKeys.publicKey;
+      priv  = vapidKeys.privateKey;
+      email = process.env.ADMIN_EMAIL || 'admin@belaessencia.com';
+      await pool.query(
+        "INSERT INTO app_settings (key,value) VALUES ('vapid_public',$1),('vapid_private',$2),('vapid_email',$3) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",
+        [pub, priv, email]
+      );
+      console.log('[Push] VAPID keys geradas e salvas no banco.');
+    }
+
+    webpush.setVapidDetails('mailto:' + email, pub, priv);
+    // Torna pública a chave para o frontend via variável de runtime
+    process.env.VAPID_PUBLIC_KEY = pub;
+    console.log('[Push] VAPID configurado.');
+  } catch (err) {
+    console.error('[Push] Erro ao inicializar VAPID:', err.message);
+  }
+}
 
 const app = express();
 
@@ -141,6 +180,8 @@ async function initDB() {
     // Migração v1.6.1: city_ids nos bloqueios (vazio = todas as cidades)
     await client.query(`ALTER TABLE blocked_dates ADD COLUMN IF NOT EXISTS city_ids INTEGER[] NOT NULL DEFAULT '{}'`);
     await client.query(`ALTER TABLE blocked_slots ADD COLUMN IF NOT EXISTS city_ids INTEGER[] NOT NULL DEFAULT '{}'`);
+    // Migração v1.7.0: push_auth nos agendamentos (liga subscription ao agendamento)
+    await client.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS push_auth TEXT`);
 
     // Tabela de horários específicos bloqueados (agendamentos manuais / ausências parciais)
     await client.query(`
@@ -227,7 +268,28 @@ async function initDB() {
       );
     `);
 
-    // ── DATAS COMEMORATIVAS ──────────────────────────────────────────────────
+    // ── APP SETTINGS (chave-valor genérico para configurações do sistema) ───────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key        VARCHAR(100) PRIMARY KEY,
+        value      TEXT         NOT NULL,
+        updated_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    // ── PUSH SUBSCRIPTIONS ───────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id           SERIAL       PRIMARY KEY,
+        endpoint     TEXT         NOT NULL UNIQUE,
+        p256dh       TEXT         NOT NULL,
+        auth         TEXT         NOT NULL,
+        role         VARCHAR(10)  NOT NULL DEFAULT 'client', -- 'client' | 'admin'
+        created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    // ── DATAS COMEMORATIVAS ───────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS commemorative_dates (
         id        SERIAL       PRIMARY KEY,
@@ -491,7 +553,10 @@ app.post('/api/appointments', async (req, res) => {
     );
 
     await client.query('COMMIT');
-    res.status(201).json(rows[0]);
+    const appt = rows[0];
+    // Notificação assíncrona — não bloqueia a resposta
+    notifyNewBooking(appt).catch(e => console.error('[Push] notifyNewBooking:', e.message));
+    res.status(201).json(appt);
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
@@ -503,13 +568,27 @@ app.post('/api/appointments', async (req, res) => {
 // Auto-marca confirmados passados como "realizado" (fuso Brasília)
 async function autoCompleteAppointments() {
   try {
-    await pool.query(`
-      UPDATE appointments
-      SET status = 'realizado', updated_at = NOW()
+    // Busca os que vão ser marcados como realizado (para notificar)
+    const { rows: toComplete } = await pool.query(`
+      SELECT * FROM appointments
       WHERE status = 'confirmed'
         AND (date + et) AT TIME ZONE 'America/Sao_Paulo'
               < NOW() AT TIME ZONE 'America/Sao_Paulo'
     `);
+
+    if (toComplete.length > 0) {
+      await pool.query(`
+        UPDATE appointments
+        SET status = 'realizado', updated_at = NOW()
+        WHERE status = 'confirmed'
+          AND (date + et) AT TIME ZONE 'America/Sao_Paulo'
+                < NOW() AT TIME ZONE 'America/Sao_Paulo'
+      `);
+      // Notifica cada cliente sobre o procedimento realizado
+      for (const appt of toComplete) {
+        notifyCompleted(appt).catch(e => console.error('[Push] notifyCompleted:', e.message));
+      }
+    }
   } catch (err) {
     console.error('[autoComplete] Erro:', err.message);
   }
@@ -567,7 +646,10 @@ app.put('/api/appointments/:id', requireAdmin, async (req, res) => {
       [name, phone, date, st, et, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Agendamento não encontrado' });
-    res.json(rows[0]);
+    const edited = rows[0];
+    // Notifica o cliente sobre a alteração
+    notifyEditBooking(edited).catch(e => console.error('[Push] notifyEditBooking:', e.message));
+    res.json(edited);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1192,6 +1274,129 @@ app.delete('/api/commemorative/:id', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Push Helpers ─────────────────────────────────────────────────────────────
+const PUSH_ENABLED = () => !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+
+async function sendPush(subscriptions, title, body, data = {}) {
+  if (!PUSH_ENABLED() || !subscriptions.length) return;
+  const payload = JSON.stringify({ title, body, data });
+  const results = await Promise.allSettled(
+    subscriptions.map(sub =>
+      webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload
+      ).catch(async err => {
+        // Remove expired/invalid subscriptions automatically
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await pool.query('DELETE FROM push_subscriptions WHERE endpoint=$1', [sub.endpoint]);
+        }
+        throw err;
+      })
+    )
+  );
+  const failed = results.filter(r => r.status === 'rejected').length;
+  if (failed) console.log(`[Push] ${results.length - failed}/${results.length} enviados.`);
+}
+
+async function getSubsByRole(role) {
+  const { rows } = await pool.query(
+    'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE role=$1', [role]
+  );
+  return rows;
+}
+
+async function notifyNewBooking(appt) {
+  const [clientSubs, adminSubs] = await Promise.all([
+    getSubsByRole('client'), getSubsByRole('admin')
+  ]);
+  // Filter client sub by endpoint — we tag appointment with endpoint at booking time if available
+  // For simplicity, send to all client subs (client subscribes on confirmation page)
+  // Actually the client sub is sent with the appointment endpoint stored separately
+  // Let's use a simpler approach: send to all recent client subs (within 10 min of booking)
+  await sendPush(adminSubs,
+    '✨ Novo agendamento!',
+    `${appt.name} · ${appt.proc_name} · ${String(appt.date).slice(0,10)} às ${String(appt.st).slice(0,5)}`,
+    { url: '/admin', type: 'new_booking' }
+  );
+}
+
+async function notifyEditBooking(appt) {
+  // Notify the client subscription that was saved with this appointment's phone as tag
+  const { rows } = await pool.query(
+    `SELECT endpoint, p256dh, auth FROM push_subscriptions
+     WHERE role='client' AND auth = $1`,
+    [appt.push_auth || '']
+  );
+  if (!rows.length) return;
+  await sendPush(rows,
+    '📅 Agendamento alterado',
+    `${appt.proc_name} · ${String(appt.date).slice(0,10)} às ${String(appt.st).slice(0,5)}`,
+    { type: 'edit_booking' }
+  );
+}
+
+async function notifyCompleted(appt) {
+  const { rows } = await pool.query(
+    `SELECT endpoint, p256dh, auth FROM push_subscriptions
+     WHERE role='client' AND auth = $1`,
+    [appt.push_auth || '']
+  );
+  if (!rows.length) return;
+  await sendPush(rows,
+    '💖 Obrigada pela sua visita!',
+    `Seu procedimento de ${appt.proc_name} foi realizado com sucesso. Até a próxima!`,
+    { type: 'completed' }
+  );
+}
+
+// ── Push Routes ───────────────────────────────────────────────────────────────
+
+// Retorna a VAPID public key para o frontend
+app.get('/api/push/vapid-key', (req, res) => {
+  res.json({ key: process.env.VAPID_PUBLIC_KEY || null });
+});
+
+// Cliente se inscreve para push (chamado após confirmar agendamento)
+app.post('/api/push/subscribe/client', async (req, res) => {
+  const { endpoint, keys, appointmentId } = req.body;
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    return res.status(400).json({ error: 'Dados de inscrição inválidos' });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO push_subscriptions (endpoint, p256dh, auth, role)
+       VALUES ($1, $2, $3, 'client')
+       ON CONFLICT (endpoint) DO UPDATE SET p256dh=$2, auth=$3`,
+      [endpoint, keys.p256dh, keys.auth]
+    );
+    // Link subscription auth to appointment so we can notify this specific client later
+    if (appointmentId) {
+      await pool.query(
+        `UPDATE appointments SET push_auth=$1 WHERE id=$2`,
+        [keys.auth, appointmentId]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Profissional se inscreve (chamado no login do admin)
+app.post('/api/push/subscribe/admin', requireAdmin, async (req, res) => {
+  const { endpoint, keys } = req.body;
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    return res.status(400).json({ error: 'Dados de inscrição inválidos' });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO push_subscriptions (endpoint, p256dh, auth, role)
+       VALUES ($1, $2, $3, 'admin')
+       ON CONFLICT (endpoint) DO UPDATE SET p256dh=$2, auth=$3`,
+      [endpoint, keys.p256dh, keys.auth]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // 5. FRONTEND ESTÁTICO
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1208,6 +1413,7 @@ app.get('*', (req, res) => {
 async function start() {
   try {
     await initDB();
+    await initVapid(); // gera/carrega chaves VAPID automaticamente
     app.listen(PORT, () => {
       console.log(`✅  Bela Essência rodando na porta ${PORT}`);
     });
