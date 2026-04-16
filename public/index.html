@@ -586,21 +586,29 @@ tr:hover td{background:#FAF3F6}
               </div>
               <!-- TAB: Dia inteiro -->
               <div id="bpanel-day" style="padding:0 18px 18px">
-                <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Bloqueia o dia inteiro em <strong>todas as cidades</strong>. Use para folgas, feriados ou viagens.</p>
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Bloqueia o dia inteiro. Use para folgas, feriados ou viagens.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
                   <input type="date" class="fi" id="bl-date" style="flex:1;min-width:140px">
                   <input type="text" class="fi" id="bl-reason" placeholder="Motivo (opcional)" style="flex:2;min-width:180px">
-                  <button class="btn btn-primary" onclick="addBlock()" style="width:auto;padding:8px 18px">Bloquear dia</button>
                 </div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--text-light);margin-bottom:7px">Cidades afetadas</div>
+                  <div id="bl-cities" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+                </div>
+                <button class="btn btn-primary" onclick="addBlock()" style="width:auto;padding:8px 18px">Bloquear dia</button>
               </div>
               <!-- TAB: Horário específico -->
               <div id="bpanel-slot" class="hidden" style="padding:0 18px 18px">
-                <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Bloqueia um horário específico. Use para agendamentos feitos diretamente com a profissional.</p>
+                <p style="font-size:12px;color:var(--text-light);margin-bottom:12px">Bloqueia um horário específico. Use para atendimentos feitos diretamente.</p>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
                   <input type="date" class="fi" id="bs-date" placeholder="Data">
                   <input type="text" class="fi" id="bs-reason" placeholder="Motivo (ex: Atendimento presencial)">
                   <input type="time" class="fi" id="bs-st" step="1800" placeholder="Início">
                   <input type="time" class="fi" id="bs-et" step="1800" placeholder="Fim">
+                </div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--text-light);margin-bottom:7px">Cidades afetadas</div>
+                  <div id="bs-cities" style="display:flex;flex-wrap:wrap;gap:8px"></div>
                 </div>
                 <button class="btn btn-primary" onclick="addBlockSlot()" style="width:auto;padding:8px 18px">Bloquear horário</button>
               </div>
@@ -828,7 +836,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.6.0';
+const APP_VERSION  = '1.6.1';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -1426,7 +1434,7 @@ function showSec(name){
   document.getElementById('adm-ttl').textContent=SEC_TITLES[name]||name;
   if(name==='agenda'){renderStats();renderAgenda()}
   if(name==='manual') initManualBooking();
-  if(name==='blocked'){renderBlocked();renderBlockedSlots()}
+  if(name==='blocked'){renderBlocked();renderBlockedSlots();renderBlockCityCheckboxes()}
   if(name==='revenue'){renderRevCards();renderRevTable()}
   if(name==='promos') renderPromos();
   if(name==='commem') renderCommem();
@@ -1444,6 +1452,25 @@ function switchBTab(tab){
   document.getElementById('bpanel-slot').classList.toggle('hidden', tab!=='slot');
   document.getElementById('btab-day').classList.toggle('active', tab==='day');
   document.getElementById('btab-slot').classList.toggle('active', tab==='slot');
+  renderBlockCityCheckboxes();
+}
+
+function renderBlockCityCheckboxes() {
+  const cityCheckHtml = CITIES.map(c => `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--r-sm);padding:6px 11px;font-size:12px;font-weight:600;color:var(--dark);transition:var(--tr)">
+      <input type="checkbox" name="blk-city" value="${c.id}" checked style="accent-color:var(--rose);width:14px;height:14px">
+      ${c.short}
+    </label>
+  `).join('');
+  const d1 = document.getElementById('bl-cities');
+  const d2 = document.getElementById('bs-cities');
+  if(d1) d1.innerHTML = cityCheckHtml;
+  if(d2) d2.innerHTML = cityCheckHtml;
+}
+
+function getCheckedCityIds(containerId) {
+  return [...document.querySelectorAll(`#${containerId} input[name="blk-city"]:checked`)]
+    .map(el => Number(el.value));
 }
 
 // ── STATS ────────────────────────────────────────
@@ -1634,20 +1661,28 @@ async function renderBlocked() {
   try {
     const list=await GET('/api/blocked');
     if(!list.length){el.innerHTML='<div style="color:var(--text-light);font-size:12px">Nenhuma data bloqueada</div>';return}
-    el.innerHTML=[...list].sort((a,b)=>a.date<b.date?-1:1).map(b=>`
-      <div class="bl-chip">
-        🚫 ${fmtDate(b.date)}${b.reason?` · ${b.reason}`:''}
-        <button onclick="removeBlock('${b.date}')">✕</button>
-      </div>
-    `).join('');
+    el.innerHTML=[...list].sort((a,b)=>a.date<b.date?-1:1).map(b=>{
+      const cityTag = b.city_ids && b.city_ids.length > 0
+        ? b.city_ids.map(id => CITIES.find(c=>c.id===id)?.short||'').filter(Boolean).join(', ')
+        : 'Todas as cidades';
+      return `
+        <div class="bl-chip">
+          🚫 ${fmtDate(b.date)}${b.reason?` · ${b.reason}`:''} <em style="font-weight:400;font-style:normal;opacity:.75">(${cityTag})</em>
+          <button onclick="removeBlock('${b.date}')">✕</button>
+        </div>
+      `;
+    }).join('');
   } catch{}
 }
 async function addBlock() {
   const date=document.getElementById('bl-date').value;
   const reason=document.getElementById('bl-reason').value.trim();
   if(!date){showToast('Selecione uma data','error');return}
+  const city_ids = getCheckedCityIds('bl-cities');
+  if(!city_ids.length){showToast('Selecione ao menos uma cidade','error');return}
+  const allSelected = city_ids.length === CITIES.length;
   try {
-    await POST('/api/blocked',{date,reason});
+    await POST('/api/blocked',{date,reason,city_ids: allSelected ? [] : city_ids});
     document.getElementById('bl-date').value='';
     document.getElementById('bl-reason').value='';
     showToast('Data bloqueada','ok'); renderBlocked();
@@ -1669,16 +1704,21 @@ async function renderBlockedSlots() {
       el.innerHTML='<div style="color:var(--text-light);font-size:12px">Nenhum horário bloqueado</div>';
       return;
     }
-    el.innerHTML = [...list].sort((a,b)=>a.date<b.date?-1:1).map(s=>`
-      <div class="slot-chip">
-        <div class="slot-chip-info">
-          <div class="slot-chip-date">${fmtDate(s.date)}</div>
-          <div class="slot-chip-time">${String(s.st).slice(0,5)} – ${String(s.et).slice(0,5)}</div>
-          ${s.reason?`<div class="slot-chip-reason">${s.reason}</div>`:''}
+    el.innerHTML = [...list].sort((a,b)=>a.date<b.date?-1:1).map(s=>{
+      const cityTag = s.city_ids && s.city_ids.length > 0
+        ? s.city_ids.map(id => CITIES.find(c=>c.id===id)?.short||'').filter(Boolean).join(', ')
+        : 'Todas as cidades';
+      return `
+        <div class="slot-chip">
+          <div class="slot-chip-info">
+            <div class="slot-chip-date">${fmtDate(s.date)}</div>
+            <div class="slot-chip-time">${String(s.st).slice(0,5)} – ${String(s.et).slice(0,5)}</div>
+            <div class="slot-chip-reason">${cityTag}${s.reason?' · '+s.reason:''}</div>
+          </div>
+          <button class="slot-chip-del" onclick="removeBlockSlot(${s.id})" title="Remover bloqueio">✕</button>
         </div>
-        <button class="slot-chip-del" onclick="removeBlockSlot(${s.id})" title="Remover bloqueio">✕</button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   } catch(e){ el.innerHTML=`<div style="color:var(--error);font-size:12px">Erro: ${e.message}</div>`; }
 }
 
@@ -1689,8 +1729,11 @@ async function addBlockSlot() {
   const reason = document.getElementById('bs-reason').value.trim();
   if (!date || !st || !et) { showToast('Preencha data, início e fim','error'); return; }
   if (st >= et) { showToast('Horário de início deve ser antes do fim','error'); return; }
+  const city_ids = getCheckedCityIds('bs-cities');
+  if(!city_ids.length){showToast('Selecione ao menos uma cidade','error');return}
+  const allSelected = city_ids.length === CITIES.length;
   try {
-    await POST('/api/blocked-slots', { date, st, et, reason });
+    await POST('/api/blocked-slots', { date, st, et, reason, city_ids: allSelected ? [] : city_ids });
     document.getElementById('bs-date').value='';
     document.getElementById('bs-st').value='';
     document.getElementById('bs-et').value='';
