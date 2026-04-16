@@ -268,6 +268,21 @@ async function initDB() {
       );
     `);
 
+    // ── NPS RESPONSES ────────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS nps_responses (
+        id          SERIAL        PRIMARY KEY,
+        phone       VARCHAR(30)   NOT NULL,
+        phone_norm  VARCHAR(20)   NOT NULL,  -- apenas dígitos, para busca
+        appt_id     VARCHAR(30),             -- agendamento de referência
+        score       SMALLINT      NOT NULL CHECK (score BETWEEN 0 AND 10),
+        comment     VARCHAR(300),
+        category    VARCHAR(10)   NOT NULL,  -- 'promoter' | 'neutral' | 'detractor'
+        created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_nps_phone ON nps_responses(phone_norm)`);
+
     // ── PUSH TEMPLATES ────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS push_templates (
@@ -1321,6 +1336,110 @@ app.delete('/api/commemorative/:id', requireAdmin, async (req, res) => {
     await pool.query('DELETE FROM commemorative_dates WHERE id=$1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── NPS ──────────────────────────────────────────────────────────────────────
+
+function normalizePhone(phone) {
+  const digits = String(phone).replace(/\D/g, '');
+  // Remove country code 55 se tiver 13 dígitos
+  return digits.length === 13 && digits.startsWith('55') ? digits.slice(2) : digits;
+}
+
+function npsCategory(score) {
+  if (score >= 9) return 'promoter';
+  if (score >= 7) return 'neutral';
+  return 'detractor';
+}
+
+// Público: verifica se cliente tem procedimento realizado sem NPS (por telefone)
+app.get('/api/nps/check', async (req, res) => {
+  const { phone } = req.query;
+  if (!phone) return res.json({ eligible: false });
+
+  const norm = normalizePhone(phone);
+  if (norm.length < 10) return res.json({ eligible: false });
+
+  try {
+    // Último procedimento realizado deste telefone
+    const apptRes = await pool.query(
+      `SELECT id, proc_name, date FROM appointments
+       WHERE regexp_replace(phone, '[^0-9]', '', 'g') LIKE $1
+         AND status = 'realizado'
+       ORDER BY date DESC, et DESC LIMIT 1`,
+      [`%${norm.slice(-8)}`]  // busca pelos últimos 8 dígitos (mais tolerante)
+    );
+    if (!apptRes.rowCount) return res.json({ eligible: false });
+    const appt = apptRes.rows[0];
+
+    // Verificar cooldown: última resposta NPS deste telefone
+    const lastRes = await pool.query(
+      `SELECT created_at FROM nps_responses
+       WHERE phone_norm LIKE $1
+       ORDER BY created_at DESC LIMIT 1`,
+      [`%${norm.slice(-8)}`]
+    );
+    if (lastRes.rowCount) {
+      const lastDate = new Date(lastRes.rows[0].created_at);
+      const daysSince = (Date.now() - lastDate) / (1000 * 60 * 60 * 24);
+      if (daysSince < 30) return res.json({ eligible: false, cooldown: true });
+    }
+
+    res.json({ eligible: true, appt_id: appt.id, proc_name: appt.proc_name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Público: salvar resposta NPS
+app.post('/api/nps', async (req, res) => {
+  const { phone, appt_id, score, comment } = req.body;
+  if (!phone || score === undefined || score === null) {
+    return res.status(400).json({ error: 'phone e score são obrigatórios' });
+  }
+  const s = parseInt(score);
+  if (isNaN(s) || s < 0 || s > 10) return res.status(400).json({ error: 'Score deve ser entre 0 e 10' });
+  if (comment && comment.length > 300) return res.status(400).json({ error: 'Comentário máx. 300 caracteres' });
+
+  const norm = normalizePhone(phone);
+  const category = npsCategory(s);
+  try {
+    await pool.query(
+      `INSERT INTO nps_responses (phone, phone_norm, appt_id, score, comment, category)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [phone, norm, appt_id || null, s, comment || null, category]
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin: painel NPS completo
+app.get('/api/nps/dashboard', requireAdmin, async (req, res) => {
+  try {
+    const { rows: all } = await pool.query(
+      `SELECT score, category, comment, phone, created_at FROM nps_responses ORDER BY created_at DESC`
+    );
+    if (!all.length) return res.json({ score: null, total: 0, promoters: 0, neutrals: 0, detractors: 0, responses: [] });
+
+    const total      = all.length;
+    const promoters  = all.filter(r => r.category === 'promoter').length;
+    const neutrals   = all.filter(r => r.category === 'neutral').length;
+    const detractors = all.filter(r => r.category === 'detractor').length;
+    const nps        = Math.round(((promoters - detractors) / total) * 100);
+    const avg        = (all.reduce((s,r) => s + r.score, 0) / total).toFixed(1);
+
+    // Distribuição por nota (0-10)
+    const distribution = Array.from({length: 11}, (_, i) => ({
+      score: i,
+      count: all.filter(r => r.score === i).length
+    }));
+
+    res.json({ nps, avg, total, promoters, neutrals, detractors, distribution, responses: all });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Push Helpers ─────────────────────────────────────────────────────────────
