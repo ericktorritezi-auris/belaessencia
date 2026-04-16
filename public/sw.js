@@ -4,7 +4,7 @@
 //   API (/api/*)       → Network Only  (nunca cacheia dados)
 //   Assets estáticos   → Cache First   (ícones, manifest)
 
-const CACHE_VERSION = 'bela-essencia-1.8.1';
+const CACHE_VERSION = 'bela-essencia-1.8.2';
 const STATIC_ASSETS = ['/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 
 // ── Install: cacheia só assets estáticos ──────────────────────────
@@ -87,13 +87,14 @@ self.addEventListener('push', (e) => {
   try { data = e.data.json(); } catch { return; }
 
   const options = {
-    body:    data.body || '',
-    icon:    '/icons/icon-192.png',
-    badge:   '/icons/icon-192.png',
-    vibrate: [200, 100, 200],
-    tag:     data.data?.type || 'bela-essencia',
-    renotify: true,
-    data:    data.data || {},
+    body:             data.body || '',
+    icon:             '/icons/icon-192.png',
+    badge:            '/icons/icon-192.png',
+    vibrate:          [200, 100, 200],
+    tag:              data.data?.type || 'bela-essencia',
+    renotify:         true,
+    requireInteraction: true,  // Persiste até o usuário dispensar manualmente
+    data:             data.data || {},
   };
 
   e.waitUntil(
