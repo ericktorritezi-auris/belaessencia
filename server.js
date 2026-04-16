@@ -555,7 +555,7 @@ app.post('/api/appointments', async (req, res) => {
     await client.query('COMMIT');
     const appt = rows[0];
     // Notificação assíncrona — não bloqueia a resposta
-    notifyNewBooking(appt).catch(e => console.error('[Push] notifyNewBooking:', e.message));
+    notifyAdminNewBooking(appt).catch(e => console.error('[Push] notifyAdminNewBooking:', e.message));
     res.status(201).json(appt);
   } catch (err) {
     await client.query('ROLLBACK');
@@ -586,7 +586,7 @@ async function autoCompleteAppointments() {
       `);
       // Notifica cada cliente sobre o procedimento realizado
       for (const appt of toComplete) {
-        notifyCompleted(appt).catch(e => console.error('[Push] notifyCompleted:', e.message));
+        notifyClientCompleted(appt).catch(e => console.error('[Push] notifyClientCompleted:', e.message));
       }
     }
   } catch (err) {
@@ -648,7 +648,7 @@ app.put('/api/appointments/:id', requireAdmin, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Agendamento não encontrado' });
     const edited = rows[0];
     // Notifica o cliente sobre a alteração
-    notifyEditBooking(edited).catch(e => console.error('[Push] notifyEditBooking:', e.message));
+    notifyClientEdit(edited).catch(e => console.error('[Push] notifyClientEdit:', e.message));
     res.json(edited);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1275,27 +1275,44 @@ app.delete('/api/commemorative/:id', requireAdmin, async (req, res) => {
 });
 
 // ── Push Helpers ─────────────────────────────────────────────────────────────
-const PUSH_ENABLED = () => !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+const PUSH_ENABLED = () => !!(process.env.VAPID_PUBLIC_KEY);
 
 async function sendPush(subscriptions, title, body, data = {}) {
-  if (!PUSH_ENABLED() || !subscriptions.length) return;
+  if (!PUSH_ENABLED()) {
+    console.log('[Push] VAPID não configurado, skip.');
+    return;
+  }
+  if (!subscriptions || !subscriptions.length) {
+    console.log('[Push] Nenhuma subscription para enviar.');
+    return;
+  }
+
   const payload = JSON.stringify({ title, body, data });
+  console.log(`[Push] Enviando "${title}" para ${subscriptions.length} subscription(s)...`);
+
   const results = await Promise.allSettled(
-    subscriptions.map(sub =>
-      webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        payload
-      ).catch(async err => {
-        // Remove expired/invalid subscriptions automatically
+    subscriptions.map(async sub => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          payload,
+          { TTL: 86400 }
+        );
+        console.log('[Push] Enviado com sucesso:', sub.endpoint.slice(-30));
+      } catch (err) {
+        console.error('[Push] Erro ao enviar:', err.statusCode, err.message);
+        // Remove subscriptions inválidas/expiradas
         if (err.statusCode === 410 || err.statusCode === 404) {
           await pool.query('DELETE FROM push_subscriptions WHERE endpoint=$1', [sub.endpoint]);
+          console.log('[Push] Subscription removida (expirada).');
         }
         throw err;
-      })
-    )
+      }
+    })
   );
-  const failed = results.filter(r => r.status === 'rejected').length;
-  if (failed) console.log(`[Push] ${results.length - failed}/${results.length} enviados.`);
+
+  const ok = results.filter(r => r.status === 'fulfilled').length;
+  console.log(`[Push] Resultado: ${ok}/${results.length} enviados com sucesso.`);
 }
 
 async function getSubsByRole(role) {
@@ -1305,44 +1322,40 @@ async function getSubsByRole(role) {
   return rows;
 }
 
-async function notifyNewBooking(appt) {
-  const [clientSubs, adminSubs] = await Promise.all([
-    getSubsByRole('client'), getSubsByRole('admin')
-  ]);
-  // Filter client sub by endpoint — we tag appointment with endpoint at booking time if available
-  // For simplicity, send to all client subs (client subscribes on confirmation page)
-  // Actually the client sub is sent with the appointment endpoint stored separately
-  // Let's use a simpler approach: send to all recent client subs (within 10 min of booking)
-  await sendPush(adminSubs,
+async function getSubsByAuth(authKey) {
+  if (!authKey) return [];
+  const { rows } = await pool.query(
+    `SELECT endpoint, p256dh, auth FROM push_subscriptions
+     WHERE role='client' AND auth=$1`,
+    [authKey]
+  );
+  return rows;
+}
+
+// Notifica admin sobre novo agendamento
+async function notifyAdminNewBooking(appt) {
+  const subs = await getSubsByRole('admin');
+  await sendPush(subs,
     '✨ Novo agendamento!',
     `${appt.name} · ${appt.proc_name} · ${String(appt.date).slice(0,10)} às ${String(appt.st).slice(0,5)}`,
-    { url: '/admin', type: 'new_booking' }
+    { url: '/#admin', type: 'new_booking' }
   );
 }
 
-async function notifyEditBooking(appt) {
-  // Notify the client subscription that was saved with this appointment's phone as tag
-  const { rows } = await pool.query(
-    `SELECT endpoint, p256dh, auth FROM push_subscriptions
-     WHERE role='client' AND auth = $1`,
-    [appt.push_auth || '']
-  );
-  if (!rows.length) return;
-  await sendPush(rows,
+// Notifica cliente específico sobre alteração
+async function notifyClientEdit(appt) {
+  const subs = await getSubsByAuth(appt.push_auth);
+  await sendPush(subs,
     '📅 Agendamento alterado',
     `${appt.proc_name} · ${String(appt.date).slice(0,10)} às ${String(appt.st).slice(0,5)}`,
     { type: 'edit_booking' }
   );
 }
 
-async function notifyCompleted(appt) {
-  const { rows } = await pool.query(
-    `SELECT endpoint, p256dh, auth FROM push_subscriptions
-     WHERE role='client' AND auth = $1`,
-    [appt.push_auth || '']
-  );
-  if (!rows.length) return;
-  await sendPush(rows,
+// Notifica cliente específico sobre procedimento realizado
+async function notifyClientCompleted(appt) {
+  const subs = await getSubsByAuth(appt.push_auth);
+  await sendPush(subs,
     '💖 Obrigada pela sua visita!',
     `Seu procedimento de ${appt.proc_name} foi realizado com sucesso. Até a próxima!`,
     { type: 'completed' }
@@ -1356,12 +1369,13 @@ app.get('/api/push/vapid-key', (req, res) => {
   res.json({ key: process.env.VAPID_PUBLIC_KEY || null });
 });
 
-// Cliente se inscreve para push (chamado após confirmar agendamento)
+// Cliente se inscreve para push — salva subscription e envia confirmação imediata
 app.post('/api/push/subscribe/client', async (req, res) => {
   const { endpoint, keys, appointmentId } = req.body;
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
     return res.status(400).json({ error: 'Dados de inscrição inválidos' });
   }
+  console.log('[Push] Nova subscription cliente, appointmentId:', appointmentId);
   try {
     await pool.query(
       `INSERT INTO push_subscriptions (endpoint, p256dh, auth, role)
@@ -1369,14 +1383,50 @@ app.post('/api/push/subscribe/client', async (req, res) => {
        ON CONFLICT (endpoint) DO UPDATE SET p256dh=$2, auth=$3`,
       [endpoint, keys.p256dh, keys.auth]
     );
-    // Link subscription auth to appointment so we can notify this specific client later
+
+    // Liga a subscription ao agendamento para notificações futuras
     if (appointmentId) {
       await pool.query(
         `UPDATE appointments SET push_auth=$1 WHERE id=$2`,
         [keys.auth, appointmentId]
       );
     }
+
     res.json({ ok: true });
+
+    // Envia confirmação push imediatamente após inscrição
+    // (resolve o race condition — subscription existe ANTES de enviar)
+    if (appointmentId) {
+      const { rows } = await pool.query('SELECT * FROM appointments WHERE id=$1', [appointmentId]);
+      if (rows.length) {
+        const appt = rows[0];
+        const sub = { endpoint, p256dh: keys.p256dh, auth: keys.auth };
+        sendPush([sub],
+          '✅ Agendamento confirmado!',
+          `${appt.proc_name} · ${String(appt.date).slice(0,10)} às ${String(appt.st).slice(0,5)}`,
+          { type: 'confirmed' }
+        ).catch(e => console.error('[Push] confirmação cliente:', e.message));
+      }
+    }
+  } catch (err) {
+    console.error('[Push] Erro subscribe/client:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin: testar push manualmente
+app.post('/api/push/test', requireAdmin, async (req, res) => {
+  try {
+    const adminSubs = await getSubsByRole('admin');
+    const clientSubs = await getSubsByRole('client');
+    console.log(`[Push/test] admin subs: ${adminSubs.length}, client subs: ${clientSubs.length}`);
+    if (adminSubs.length) {
+      await sendPush(adminSubs, '🔔 Teste Push Admin', 'Se você está vendo isso, o push está funcionando!', { type: 'test' });
+    }
+    if (clientSubs.length) {
+      await sendPush(clientSubs, '🔔 Teste Push Cliente', 'Se você está vendo isso, o push está funcionando!', { type: 'test' });
+    }
+    res.json({ ok: true, adminSubs: adminSubs.length, clientSubs: clientSubs.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
