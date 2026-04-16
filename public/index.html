@@ -839,7 +839,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.6.3';
+const APP_VERSION  = '1.6.4';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -1493,35 +1493,31 @@ async function renderStats() {
   try {
     const s=await GET('/api/revenue/summary');
     document.getElementById('today-stats').innerHTML=`
-      <div class="stat-card"><div class="stat-lbl">📅 Hoje</div><div class="stat-val">${s.today.cnt}</div><div class="stat-sub">agendamentos</div></div>
-      <div class="stat-card"><div class="stat-lbl">💰 Receita Hoje</div><div class="stat-val" style="font-size:22px">${fmtCurr(s.today.total)}</div><div class="stat-sub">confirmados</div></div>
+      <div class="stat-card"><div class="stat-lbl">📅 Hoje</div><div class="stat-val">${s.today.cnt}</div><div class="stat-sub">confirmados + realizados</div></div>
+      <div class="stat-card"><div class="stat-lbl">💰 Receita Hoje</div><div class="stat-val" style="font-size:22px">${fmtCurr(s.today.total)}</div><div class="stat-sub">confirmados + realizados</div></div>
       <div class="stat-card"><div class="stat-lbl">📊 Semana</div><div class="stat-val">${s.week.cnt}</div><div class="stat-sub">${fmtCurr(s.week.total)}</div></div>
-      <div class="stat-card"><div class="stat-lbl">📆 Mês</div><div class="stat-val">${s.month.cnt}</div><div class="stat-sub">agendamentos</div></div>
+      <div class="stat-card"><div class="stat-lbl">📆 Mês</div><div class="stat-val">${s.month.cnt}</div><div class="stat-sub">${fmtCurr(s.month.total)}</div></div>
     `;
   } catch{}
 }
 
 // Stats calculados a partir de uma lista já filtrada (frontend)
+// Stats calculados a partir de uma lista já filtrada (frontend)
 function renderStatsFromList(list, filterLabel) {
-  const confirmed  = list.filter(a => a.status === 'confirmed');
-  const realizado  = list.filter(a => a.status === 'realizado');
-  const cancelled  = list.filter(a => a.status === 'cancelled');
-  const revenue    = [...confirmed,...realizado].reduce((s,a) => s + (Number(a.price)||0), 0);
+  const confirmed = list.filter(a => a.status === 'confirmed');
+  const realizado = list.filter(a => a.status === 'realizado');
+  const cancelled = list.filter(a => a.status === 'cancelled');
+  const revenue   = [...confirmed, ...realizado].reduce((s,a) => s + (Number(a.price)||0), 0);
   document.getElementById('today-stats').innerHTML=`
-    <div class="stat-card">
-      <div class="stat-lbl">📋 ${filterLabel}</div>
-      <div class="stat-val">${list.length}</div>
-      <div class="stat-sub">total no filtro</div>
-    </div>
     <div class="stat-card">
       <div class="stat-lbl" style="color:#1A56DB">✅ Confirmados</div>
       <div class="stat-val">${confirmed.length}</div>
-      <div class="stat-sub">${fmtCurr(revenue)}</div>
+      <div class="stat-sub">${fmtCurr(confirmed.reduce((s,a)=>s+Number(a.price||0),0))}</div>
     </div>
     <div class="stat-card">
       <div class="stat-lbl" style="color:var(--success)">✔ Realizados</div>
       <div class="stat-val">${realizado.length}</div>
-      <div class="stat-sub">no filtro</div>
+      <div class="stat-sub">${fmtCurr(realizado.reduce((s,a)=>s+Number(a.price||0),0))}</div>
     </div>
     <div class="stat-card">
       <div class="stat-lbl" style="color:var(--error)">❌ Cancelados</div>
@@ -1529,9 +1525,9 @@ function renderStatsFromList(list, filterLabel) {
       <div class="stat-sub">no filtro</div>
     </div>
     <div class="stat-card">
-      <div class="stat-lbl">💰 Receita</div>
-      <div class="stat-val" style="font-size:22px">${fmtCurr(revenue)}</div>
-      <div class="stat-sub">confirmados</div>
+      <div class="stat-lbl">💰 Receita Total</div>
+      <div class="stat-val" style="font-size:20px">${fmtCurr(revenue)}</div>
+      <div class="stat-sub">confirmados + realizados</div>
     </div>
   `;
 }
