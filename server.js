@@ -180,6 +180,35 @@ async function initDB() {
     // Migração v1.6.1: city_ids nos bloqueios (vazio = todas as cidades)
     await client.query(`ALTER TABLE blocked_dates ADD COLUMN IF NOT EXISTS city_ids INTEGER[] NOT NULL DEFAULT '{}'`);
     await client.query(`ALTER TABLE blocked_slots ADD COLUMN IF NOT EXISTS city_ids INTEGER[] NOT NULL DEFAULT '{}'`);
+
+    // v2.0.0: Liberação de datas (exceção para dias normalmente desabilitados)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS released_dates (
+        id          SERIAL      PRIMARY KEY,
+        date        DATE        NOT NULL,
+        city_ids    INTEGER[]   NOT NULL DEFAULT '{}',
+        work_start  TIME        NOT NULL DEFAULT '08:00',
+        work_end    TIME        NOT NULL DEFAULT '18:00',
+        break_start TIME,
+        break_end   TIME,
+        reason      TEXT,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_released_dates_date ON released_dates(date)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS released_slots (
+        id          SERIAL      PRIMARY KEY,
+        date        DATE        NOT NULL,
+        st          TIME        NOT NULL,
+        et          TIME        NOT NULL,
+        city_ids    INTEGER[]   NOT NULL DEFAULT '{}',
+        reason      TEXT,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_released_slots_date ON released_slots(date)`);
     // Migração v1.7.0: push_auth nos agendamentos (liga subscription ao agendamento)
     await client.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS push_auth TEXT`);
 
@@ -841,7 +870,7 @@ app.get('/api/availability', async (req, res) => {
   }
 
   try {
-    // Verifica data bloqueada (city_ids vazio = todas as cidades; senão, verifica se inclui esta cidade)
+    // 1. Verifica data bloqueada para esta cidade (city_ids vazio = todas)
     const blk = await pool.query(
       `SELECT 1 FROM blocked_dates
        WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`,
@@ -849,13 +878,98 @@ app.get('/api/availability', async (req, res) => {
     );
     if (blk.rowCount > 0) return res.json([]);
 
+    // 2. Exclusividade: outra cidade tem bloqueio ou liberação específica neste dia?
+    //    Se sim, a profissional está comprometida com aquela cidade → bloqueia esta.
+    const exclusiveClaim = await pool.query(
+      `SELECT 1 FROM (
+        SELECT city_ids FROM blocked_dates  WHERE date=$1 AND cardinality(city_ids)>0
+        UNION ALL
+        SELECT city_ids FROM released_dates WHERE date=$1 AND cardinality(city_ids)>0
+       ) t
+       WHERE NOT ($2 = ANY(city_ids))
+       LIMIT 1`,
+      [date, Number(cityId)]
+    );
+    if (exclusiveClaim.rowCount > 0) return res.json([]);
+
     // Resolve config de horário para esta cidade+dia
     const [y,m,d] = date.split('-').map(Number);
     const dayOfWeek = new Date(y, m-1, d).getDay();
     const cfg = await resolveWorkConfig(Number(cityId), dayOfWeek);
 
-    // Dia desabilitado na config
-    if (!cfg.is_active || !cfg.work_start || !cfg.work_end) return res.json([]);
+    // Dia desabilitado na config — verifica se há liberação para esta data/cidade
+    if (!cfg.is_active || !cfg.work_start || !cfg.work_end) {
+      // Tenta released_dates (dia inteiro liberado)
+      const relDay = await pool.query(
+        `SELECT * FROM released_dates
+         WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`,
+        [date, Number(cityId)]
+      );
+      if (!relDay.rowCount) {
+        // Tenta released_slots (horários específicos liberados)
+        const relSlots = await pool.query(
+          `SELECT st, et FROM released_slots
+           WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`,
+          [date, Number(cityId)]
+        );
+        if (!relSlots.rowCount) return res.json([]);
+        // Tem slots liberados — verifica procedimento e retorna esses horários
+        const pRes2 = await pool.query(
+          `SELECT p.dur FROM procedures p
+           LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$2
+           WHERE p.id=$1 AND p.active=TRUE AND (cp.enabled IS NULL OR cp.enabled=TRUE)`,
+          [procId, cityId]
+        );
+        if (!pRes2.rowCount) return res.json([]);
+        const dur2 = pRes2.rows[0].dur;
+        const [aRes2, bkSlots2] = await Promise.all([
+          excludeId
+            ? pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled' AND id!=$2`, [date, excludeId])
+            : pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]),
+          pool.query(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]),
+        ]);
+        const busy2 = [...aRes2.rows, ...bkSlots2.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
+        const freeSlots = [];
+        for (const row of relSlots.rows) {
+          const slotS = timeToMin(row.st);
+          const slotE = timeToMin(row.et);
+          for (let s = slotS; s + dur2 <= slotE; s += SLOT) {
+            const e = s + dur2;
+            if (!busy2.some(b => s < b.e && e > b.s)) freeSlots.push(minToTime(s));
+          }
+        }
+        return res.json(freeSlots);
+      }
+      // Dia inteiro liberado — usa os horários da liberação
+      const rel = relDay.rows[0];
+      const pRes3 = await pool.query(
+        `SELECT p.dur FROM procedures p
+         LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$2
+         WHERE p.id=$1 AND p.active=TRUE AND (cp.enabled IS NULL OR cp.enabled=TRUE)`,
+        [procId, cityId]
+      );
+      if (!pRes3.rowCount) return res.json([]);
+      const dur3 = pRes3.rows[0].dur;
+      const rStart = timeToMin(rel.work_start);
+      const rEnd   = timeToMin(rel.work_end);
+      const rBreaks = (rel.break_start && rel.break_end)
+        ? [{ s: timeToMin(rel.break_start), e: timeToMin(rel.break_end) }] : [];
+      const [aRes3, bkSlots3] = await Promise.all([
+        excludeId
+          ? pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled' AND id!=$2`, [date, excludeId])
+          : pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]),
+        pool.query(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]),
+      ]);
+      const busy3 = [...aRes3.rows, ...bkSlots3.rows, ...excSlots.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
+      const relFreeSlots = [];
+      for (let s = rStart; s <= rEnd; s += SLOT) {
+        const e = s + dur3;
+        if (isToday && s <= nowMinBRT) continue;
+        if (rBreaks.some(b => s < b.e && e > b.s)) continue;
+        if (!busy3.some(b => s < b.e && e > b.s)) relFreeSlots.push(minToTime(s));
+      }
+      return res.json(relFreeSlots);
+    }
 
     const wStart = timeToMin(cfg.work_start);
     const wEnd   = timeToMin(cfg.work_end);
@@ -875,17 +989,28 @@ app.get('/api/availability', async (req, res) => {
 
     // Agendamentos e horários bloqueados (exclui o próprio agendamento ao editar)
     const excludeId = req.query.excludeApptId ? Number(req.query.excludeApptId) : null;
-    const [aRes, sRes] = await Promise.all([
+    const [aRes, sRes, excSlots] = await Promise.all([
       excludeId
         ? pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled' AND id!=$2`, [date, excludeId])
         : pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]),
+      // Horários bloqueados para esta cidade (ou todas)
       pool.query(
         `SELECT st, et FROM blocked_slots
          WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`,
         [date, Number(cityId)]
       ),
+      // Horários exclusivos de OUTRAS cidades (bloqueados ou liberados especificamente para outra cidade)
+      pool.query(
+        `SELECT st, et FROM (
+           SELECT st, et, city_ids FROM blocked_slots  WHERE date=$1 AND cardinality(city_ids)>0
+           UNION ALL
+           SELECT st, et, city_ids FROM released_slots WHERE date=$1 AND cardinality(city_ids)>0
+         ) t
+         WHERE NOT ($2 = ANY(city_ids))`,
+        [date, Number(cityId)]
+      ),
     ]);
-    const busy = [...aRes.rows, ...sRes.rows].map(r => ({
+    const busy = [...aRes.rows, ...sRes.rows, ...excSlots.rows].map(r => ({
       s: timeToMin(r.st), e: timeToMin(r.et),
     }));
 
@@ -1462,6 +1587,67 @@ app.get('/api/nps/dashboard', requireAdmin, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Liberar Datas ────────────────────────────────────────────────────────────
+
+app.get('/api/released', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM released_dates ORDER BY date');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/released', requireAdmin, async (req, res) => {
+  const { date, city_ids, work_start, work_end, break_start, break_end, reason } = req.body;
+  if (!date || !work_start || !work_end) return res.status(400).json({ error: 'Data, início e fim são obrigatórios' });
+  const ids = Array.isArray(city_ids) ? city_ids.map(Number) : [];
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO released_dates (date, city_ids, work_start, work_end, break_start, break_end, reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (date) DO UPDATE
+         SET city_ids=$2, work_start=$3, work_end=$4, break_start=$5, break_end=$6, reason=$7
+       RETURNING *`,
+      [date, ids, work_start, work_end, break_start||null, break_end||null, reason||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/released/:date', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM released_dates WHERE date=$1', [req.params.date]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/released-slots', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM released_slots ORDER BY date, st');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/released-slots', requireAdmin, async (req, res) => {
+  const { date, st, et, city_ids, reason } = req.body;
+  if (!date || !st || !et) return res.status(400).json({ error: 'Data, início e fim são obrigatórios' });
+  if (timeToMin(st) >= timeToMin(et)) return res.status(400).json({ error: 'Início deve ser antes do fim' });
+  const ids = Array.isArray(city_ids) ? city_ids.map(Number) : [];
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO released_slots (date, st, et, city_ids, reason) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [date, st, et, ids, reason||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/released-slots/:id', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM released_slots WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Push Helpers ─────────────────────────────────────────────────────────────
