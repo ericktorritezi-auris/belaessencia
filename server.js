@@ -19,6 +19,8 @@ const cors       = require('cors');
 const path       = require('path');
 const { Pool }   = require('pg');
 const webpush    = require('web-push');
+const nodemailer = require('nodemailer');
+const cron       = require('node-cron');
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. CONFIGURAÇÃO
@@ -28,7 +30,45 @@ const ADMIN_USER   = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS   = process.env.ADMIN_PASS || 'belaessencia2025';
 const SESSION_SEC  = process.env.SESSION_SECRET || 'dev_secret_troque_em_prod';
 
-// ── Web Push (VAPID) — configurado automaticamente ──────────────────────────
+// ── Fuso Brasil (America/Sao_Paulo) ──────────────────────────────────────────
+// Retorna objeto Date ajustado para o fuso de Brasília
+function nowBrasilia() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+}
+
+// Retorna 'YYYY-MM-DD' no fuso de Brasília
+function todayBrasilia() {
+  const d = nowBrasilia();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+// Retorna 'YYYY-MM' no fuso de Brasília
+function monthBrasilia() { return todayBrasilia().slice(0,7); }
+
+// Retorna 'YYYY' no fuso de Brasília
+function yearBrasilia()  { return todayBrasilia().slice(0,4); }
+
+// Início e fim da semana (Seg–Dom) no fuso de Brasília
+function weekBrasilia() {
+  const d = nowBrasilia();
+  const dow = d.getDay(); // 0=Dom
+  const daysSinceMon = dow === 0 ? 6 : dow - 1;
+  const start = new Date(d);
+  start.setDate(d.getDate() - daysSinceMon);
+  start.setHours(0,0,0,0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const fmt = x => {
+    const y=x.getFullYear(), m=String(x.getMonth()+1).padStart(2,'0'), day=String(x.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  };
+  return { ws: fmt(start), we: fmt(end) };
+}
+
+// ── Web Push (VAPID) — configurado automaticamente ───────────────────────────
 // As chaves são geradas na primeira execução e armazenadas no banco.
 // Nenhuma configuração manual necessária.
 async function initVapid() {
@@ -1046,21 +1086,10 @@ app.get('/api/availability', async (req, res) => {
 app.get('/api/revenue/summary', requireAdmin, async (req, res) => {
   await autoCompleteAppointments();
   try {
-    const now = new Date();
-    const today = now.toISOString().slice(0, 10);
-    const month = today.slice(0, 7);
-    const year  = today.slice(0, 4);
-    // Semana começa na segunda e termina no domingo
-    // getDay(): 0=Dom, 1=Seg, 2=Ter ... 6=Sáb
-    const weekDay = now.getDay(); // 0-6
-    // Dias desde a última segunda-feira (se hoje é dom=0, são 6 dias atrás)
-    const daysSinceMon = weekDay === 0 ? 6 : weekDay - 1;
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - daysSinceMon);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6); // domingo
-    const ws  = weekStart.toISOString().slice(0, 10);
-    const we  = weekEnd.toISOString().slice(0, 10);
+    const today = todayBrasilia();
+    const month = monthBrasilia();
+    const year  = yearBrasilia();
+    const { ws, we } = weekBrasilia();
 
     // COUNT(*) conta TODOS os confirmados; SUM(price) ignora NULL naturalmente
     const q = (sql, p) => pool.query(sql, p).then(r => r.rows[0]);
@@ -1081,7 +1110,7 @@ app.get('/api/revenue/summary', requireAdmin, async (req, res) => {
 // Público: retorna promoção ativa agora (se existir)
 app.get('/api/promotions/active', async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayBrasilia();
     const { rows } = await pool.query(
       `SELECT * FROM promotions
        WHERE active = TRUE AND start_date <= $1 AND end_date >= $1
@@ -1187,7 +1216,7 @@ app.get('/api/backup/export', requireAdmin, async (req, res) => {
       pool.query('SELECT * FROM blocked_slots ORDER BY date, st'),
       pool.query('SELECT * FROM promotions ORDER BY start_date DESC'),
     ]);
-    const today = new Date().toISOString().slice(0,10);
+    const today = todayBrasilia();
     res.setHeader('Content-Disposition', `attachment; filename="bela-essencia-backup-${today}.json"`);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.json({
@@ -1436,11 +1465,11 @@ app.put('/api/admin/password', requireAdmin, async (req, res) => {
 // ── Datas Comemorativas ───────────────────────────────────────────────────────
 app.get('/api/commemorative', async (req, res) => {
   try {
-    const now = new Date();
+    const brtNow = nowBrasilia();
     const { rows } = await pool.query(
       `SELECT * FROM commemorative_dates
        WHERE is_active=TRUE AND day=$1 AND month=$2 LIMIT 1`,
-      [now.getDate(), now.getMonth() + 1]
+      [brtNow.getDate(), brtNow.getMonth() + 1]
     );
     res.json(rows[0] || null);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1915,12 +1944,147 @@ app.get('*', (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 6. INICIALIZAÇÃO
 // ══════════════════════════════════════════════════════════════════════════════
+// ── E-mail diário da agenda ──────────────────────────────────────────────────
+function createMailTransporter() {
+  const user = process.env.MAIL_USER;
+  const pass = process.env.MAIL_PASS;
+  if (!user || !pass) return null;
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user, pass },
+  });
+}
+
+async function sendDailyAgendaEmail() {
+  const transporter = createMailTransporter();
+  if (!transporter) {
+    console.log('[Email] MAIL_USER/MAIL_PASS não configurados. Pulando envio.');
+    return;
+  }
+
+  try {
+    // Dados do profissional
+    const { rows: profRows } = await pool.query(
+      'SELECT name, email FROM admin_profile LIMIT 1'
+    );
+    if (!profRows.length || !profRows[0].email) {
+      console.log('[Email] E-mail do profissional não cadastrado.');
+      return;
+    }
+    const prof = profRows[0];
+    const today = todayBrasilia();
+
+    // Agendamentos do dia
+    const { rows: appts } = await pool.query(
+      `SELECT a.*, c.name as city_display
+       FROM appointments a
+       LEFT JOIN cities c ON c.id = a.city_id
+       WHERE a.date = $1 AND a.status IN ('confirmed','realizado')
+       ORDER BY a.city_name, a.st`,
+      [today]
+    );
+
+    if (!appts.length) {
+      console.log('[Email] Nenhum agendamento hoje. Não enviando.');
+      return;
+    }
+
+    // Formata data em português
+    const months = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+    const d = new Date(today + 'T12:00:00');
+    const dateLabel = `${d.getDate()} de ${months[d.getMonth()]} de ${d.getFullYear()}`;
+
+    // Agrupa por cidade
+    const byCidade = {};
+    for (const a of appts) {
+      const city = a.city_name || a.city_display || 'Cidade não informada';
+      if (!byCidade[city]) byCidade[city] = [];
+      byCidade[city].push(a);
+    }
+
+    // Monta HTML do e-mail
+    const cityBlocks = Object.entries(byCidade).map(([city, items]) => {
+      const rows = items.map(a => {
+        const valor = a.price
+          ? `R$ ${Number(a.price).toLocaleString('pt-BR', {minimumFractionDigits:2})}`
+          : a.pt === 'eval' ? 'Sob avaliação' : '—';
+        const phone = a.phone || '—';
+        return `
+          <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;font-weight:600;color:#2d1a22">${a.name}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#666">${phone}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#2d1a22">${a.proc_name}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#2d1a22;white-space:nowrap">${String(a.st).slice(0,5)}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#9b4d6a;font-weight:700">${valor}</td>
+          </tr>`;
+      }).join('');
+      return `
+        <div style="margin-bottom:28px">
+          <div style="background:#9b4d6a;color:white;padding:10px 16px;border-radius:8px 8px 0 0;font-size:15px;font-weight:700">
+            📍 ${city}
+          </div>
+          <table style="width:100%;border-collapse:collapse;background:white;border-radius:0 0 8px 8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+            <thead>
+              <tr style="background:#fdf0f4">
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">Cliente</th>
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">WhatsApp</th>
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">Procedimento</th>
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">Horário</th>
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">Valor</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }).join('');
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;background:#fdf5f8;padding:24px">
+        <div style="text-align:center;margin-bottom:24px">
+          <div style="font-family:Georgia,serif;font-size:28px;color:#9b4d6a;font-style:italic">Bela Essência</div>
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#b07090;margin-top:4px">Agenda do Dia</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#9b4d6a,#7b3050);border-radius:12px;padding:20px 24px;margin-bottom:24px;color:white;text-align:center">
+          <div style="font-size:14px;opacity:.85;margin-bottom:6px">Sua programação para</div>
+          <div style="font-family:Georgia,serif;font-size:24px;font-weight:bold">${dateLabel}</div>
+          <div style="font-size:13px;margin-top:8px;opacity:.85">${appts.length} procedimento${appts.length!==1?'s':''} agendado${appts.length!==1?'s':''}</div>
+        </div>
+        ${cityBlocks}
+        <div style="text-align:center;margin-top:24px;font-size:11px;color:#aaa">
+          Bela Essência · Sistema de Agendamento Online<br>
+          Este e-mail é gerado automaticamente às 06h30 (horário de Brasília)
+        </div>
+      </div>`;
+
+    const firstName = prof.name.split(' ')[0];
+    await transporter.sendMail({
+      from:    `"Belle Planner" <${process.env.MAIL_USER}>`,
+      to:      prof.email,
+      subject: `${firstName}, veja sua agenda do dia! 📅`,
+      html,
+    });
+    console.log(`[Email] Agenda do dia enviada para ${prof.email}`);
+  } catch (err) {
+    console.error('[Email] Erro ao enviar:', err.message);
+  }
+}
+
+// Cron: todo dia às 06h30 horário de Brasília (= 09h30 UTC)
+// Railway está em UTC → 06h30 BRT = 09h30 UTC
+cron.schedule('30 9 * * *', () => {
+  console.log('[Cron] Disparando e-mail da agenda diária...');
+  sendDailyAgendaEmail();
+}, { timezone: 'UTC' });
+
 async function start() {
   try {
     await initDB();
     await initVapid(); // gera/carrega chaves VAPID automaticamente
     app.listen(PORT, () => {
       console.log(`✅  Bela Essência rodando na porta ${PORT}`);
+      // Disparo imediato no primeiro deploy — após isso segue o cron das 06h30
+      console.log('[Email] Disparando e-mail inicial de boas-vindas ao deploy...');
+      setTimeout(() => sendDailyAgendaEmail(), 5000); // aguarda 5s para o banco estar pronto
     });
   } catch (err) {
     console.error('❌  Falha ao iniciar servidor:', err.message);
