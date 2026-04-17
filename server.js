@@ -2069,6 +2069,19 @@ async function sendDailyAgendaEmail() {
   }
 }
 
+// Admin: disparar e-mail manualmente (para teste)
+app.post('/api/admin/send-daily-email', requireAdmin, async (req, res) => {
+  console.log('[Email] Disparo manual solicitado pelo admin...');
+  console.log('[Email] MAIL_USER:', process.env.MAIL_USER ? '✓ ' + process.env.MAIL_USER : '✗ NÃO configurado');
+  console.log('[Email] MAIL_PASS:', process.env.MAIL_PASS ? '✓ configurado' : '✗ NÃO configurado');
+  try {
+    await sendDailyAgendaEmail();
+    res.json({ ok: true, message: 'E-mail enviado. Verifique os logs do servidor.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Cron: todo dia às 06h30 horário de Brasília (= 09h30 UTC)
 // Railway está em UTC → 06h30 BRT = 09h30 UTC
 cron.schedule('30 9 * * *', () => {
@@ -2083,8 +2096,13 @@ async function start() {
     app.listen(PORT, () => {
       console.log(`✅  Bela Essência rodando na porta ${PORT}`);
       // Disparo imediato no primeiro deploy — após isso segue o cron das 06h30
-      console.log('[Email] Disparando e-mail inicial de boas-vindas ao deploy...');
-      setTimeout(() => sendDailyAgendaEmail(), 5000); // aguarda 5s para o banco estar pronto
+      console.log('[Email] Agendando e-mail inicial para 15s após start...');
+      setTimeout(async () => {
+        console.log('[Email] Iniciando disparo do e-mail de deploy...');
+        console.log('[Email] MAIL_USER:', process.env.MAIL_USER ? '✓ configurado' : '✗ NÃO configurado');
+        console.log('[Email] MAIL_PASS:', process.env.MAIL_PASS ? '✓ configurado' : '✗ NÃO configurado');
+        await sendDailyAgendaEmail();
+      }, 15000); // 15s para garantir que tudo está pronto
     });
   } catch (err) {
     console.error('❌  Falha ao iniciar servidor:', err.message);
