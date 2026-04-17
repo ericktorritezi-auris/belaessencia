@@ -680,21 +680,25 @@ app.post('/api/appointments', async (req, res) => {
 // Auto-marca confirmados passados como "realizado" (fuso Brasília)
 async function autoCompleteAppointments() {
   try {
+    // Compara no fuso de Brasília:
+    // date+et são valores "locais BRT" — usamos AT TIME ZONE para interpretá-los como BRT
+    // e comparamos com NOW() também em BRT
+    const brtQuery = `
+      (date::text || ' ' || et::text)::timestamp AT TIME ZONE 'America/Sao_Paulo'
+        < NOW()
+    `;
+
     // Busca os que vão ser marcados como realizado (para notificar)
     const { rows: toComplete } = await pool.query(`
       SELECT * FROM appointments
-      WHERE status = 'confirmed'
-        AND (date + et) AT TIME ZONE 'America/Sao_Paulo'
-              < NOW() AT TIME ZONE 'America/Sao_Paulo'
+      WHERE status = 'confirmed' AND ${brtQuery}
     `);
 
     if (toComplete.length > 0) {
       await pool.query(`
         UPDATE appointments
         SET status = 'realizado', updated_at = NOW()
-        WHERE status = 'confirmed'
-          AND (date + et) AT TIME ZONE 'America/Sao_Paulo'
-                < NOW() AT TIME ZONE 'America/Sao_Paulo'
+        WHERE status = 'confirmed' AND ${brtQuery}
       `);
       // Notifica cada cliente sobre o procedimento realizado
       for (const appt of toComplete) {
