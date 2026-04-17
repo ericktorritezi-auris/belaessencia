@@ -367,7 +367,7 @@ async function initDB() {
     if (ptCount === 0) {
       const systemTemplates = [
         ['✅ Agendamento confirmado!',     'Seu agendamento foi confirmado. Estamos te esperando!'],
-        ['📅 Agendamento alterado',        'Seu agendamento teve o horário alterado. Verifique os detalhes.'],
+        ['📅 Agendamento alterado',        'Seu agendamento sofreu alterações. Verifique os detalhes.'],
         ['❌ Agendamento cancelado',       'Seu agendamento foi cancelado. Entre em contato para reagendar.'],
         ['💖 Obrigada pela sua visita!',     'Seu procedimento foi realizado com sucesso. Até a próxima!'],
       ];
@@ -1775,7 +1775,7 @@ async function notifyClientEdit(appt) {
   const subs = await getSubsByAuth(appt.push_auth);
   await sendPush(subs,
     '📅 Agendamento alterado',
-    `${appt.proc_name} · ${String(appt.date).slice(0,10)} às ${String(appt.st).slice(0,5)}`,
+    `Seu agendamento sofreu alterações. Verifique os detalhes.`,
     { type: 'edit_booking' }
   );
 }
