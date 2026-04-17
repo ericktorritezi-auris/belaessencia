@@ -684,19 +684,23 @@ app.put('/api/appointments/:id', requireAdmin, async (req, res) => {
   const stMin = timeToMin(st);
   const et = etBody || minToTime(stMin + dur);
   try {
+    // price: null = não alterar; número = salvar; string vazia = salvar como null
+    const priceVal = (price !== undefined && price !== null && price !== '')
+      ? Number(price) : undefined;
+
     const { rows } = await pool.query(
       `UPDATE appointments
        SET name=$1, phone=$2, date=$3, st=$4, et=$5,
-           city_id=COALESCE($7, city_id),
+           city_id=COALESCE($7::integer, city_id),
            city_name=COALESCE($8, city_name),
-           proc_id=COALESCE($9, proc_id),
+           proc_id=COALESCE($9::integer, proc_id),
            proc_name=COALESCE($10, proc_name),
-           price=COALESCE($11::numeric, price),
+           price=${priceVal !== undefined ? '$11::numeric' : 'price'},
            updated_at=NOW()
        WHERE id=$6 RETURNING *`,
-      [name, phone, date, st, et, req.params.id,
-       cityId||null, cityName||null, procId||null, procName||null,
-       price!=null&&price!==''?price:null]
+      priceVal !== undefined
+        ? [name, phone, date, st, et, req.params.id, cityId||null, cityName||null, procId||null, procName||null, priceVal]
+        : [name, phone, date, st, et, req.params.id, cityId||null, cityName||null, procId||null, procName||null]
     );
     if (!rows.length) return res.status(404).json({ error: 'Agendamento não encontrado' });
     const edited = rows[0];
@@ -869,9 +873,12 @@ app.get('/api/availability', async (req, res) => {
     if (!pRes.rowCount) return res.json([]);
     const dur = pRes.rows[0].dur;
 
-    // Agendamentos e horários bloqueados
+    // Agendamentos e horários bloqueados (exclui o próprio agendamento ao editar)
+    const excludeId = req.query.excludeApptId ? Number(req.query.excludeApptId) : null;
     const [aRes, sRes] = await Promise.all([
-      pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]),
+      excludeId
+        ? pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled' AND id!=$2`, [date, excludeId])
+        : pool.query(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]),
       pool.query(
         `SELECT st, et FROM blocked_slots
          WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`,
