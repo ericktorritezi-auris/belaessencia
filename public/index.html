@@ -1079,7 +1079,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.9.2';
+const APP_VERSION  = '1.9.3';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -2047,7 +2047,7 @@ async function renderRevTable() {
 
 // ── PROCEDURES (ADMIN) ────────────────────────────
 async function renderProcsAdmin() {
-  clearProcsCache();
+  // Não limpa cache aqui — clearProcsCache() é chamado nos saves/deletes
   const tbody = document.getElementById('procs-body');
   const mobileCards = document.getElementById('proc-cards-mobile');
   tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-light)">Carregando...</td></tr>';
@@ -2083,7 +2083,9 @@ async function renderProcsAdmin() {
         </div>
       `).join('');
     }
-  } catch {}
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--error)">Erro ao carregar procedimentos: ${e.message}</td></tr>`;
+  }
 }
 function openProcModal(id) {
   document.getElementById('modal-card').innerHTML=`
