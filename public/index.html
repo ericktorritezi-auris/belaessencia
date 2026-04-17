@@ -361,11 +361,7 @@ tr:hover td{background:#FAF3F6}
 .proc-card-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .proc-card-actions{display:flex;gap:7px;border-top:1px solid var(--border-light);padding-top:10px}
 .proc-card-actions .act-btn{flex:1;text-align:center;padding:9px 6px;font-size:12px;margin:0}
-.proc-table-wrap{display:block}
-@media(max-width:768px){
-  .proc-table-wrap{display:none}
-  .proc-cards-wrap{display:block}
-}
+
 
 @media(max-width:768px){
   .adm-sidebar{transform:translateX(-100%)}
@@ -791,8 +787,8 @@ tr:hover td{background:#FAF3F6}
           <div id="sec-procs" class="hidden">
             <div class="tbl-wrap">
               <div class="tbl-head"><div class="tbl-ttl">Procedimentos</div><button class="btn btn-primary" onclick="openProcModal(null)" style="width:auto;padding:8px 16px">+ Novo</button></div>
-              <div class="proc-table-wrap" style="overflow-x:auto"><table><thead><tr><th>Procedimento</th><th>Duração</th><th>Valor</th><th>Ações</th></tr></thead><tbody id="procs-body"></tbody></table></div>
-              <div class="proc-cards-wrap" id="proc-cards-mobile" style="display:none;padding:4px 0"></div>
+              <div style="overflow-x:auto" id="procs-table-wrap"><table><thead><tr><th>Procedimento</th><th>Duração</th><th>Valor</th><th>Ações</th></tr></thead><tbody id="procs-body"></tbody></table></div>
+              <div id="proc-cards-mobile" style="padding:4px 0"></div>
             </div>
           </div>
           <!-- SEC: PROMOÇÕES -->
@@ -1079,7 +1075,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '1.9.3';
+const APP_VERSION  = '1.9.4';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -2047,29 +2043,44 @@ async function renderRevTable() {
 
 // ── PROCEDURES (ADMIN) ────────────────────────────
 async function renderProcsAdmin() {
-  // Não limpa cache aqui — clearProcsCache() é chamado nos saves/deletes
-  const tbody = document.getElementById('procs-body');
-  const mobileCards = document.getElementById('proc-cards-mobile');
-  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-light)">Carregando...</td></tr>';
+  clearProcsCache(); // sempre busca dados frescos do servidor
+  const isMobile    = window.innerWidth <= 768;
+  const tableWrap   = document.getElementById('procs-table-wrap');
+  const cardsWrap   = document.getElementById('proc-cards-mobile');
+  const tbody       = document.getElementById('procs-body');
+
+  // Mostra a área correta baseada no tamanho da tela (JS é mais confiável que CSS aqui)
+  if (tableWrap) tableWrap.style.display = isMobile ? 'none' : 'block';
+  if (cardsWrap) cardsWrap.style.display = isMobile ? 'block' : 'none';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-light)">Carregando...</td></tr>';
+
   try {
     const list = await getProcs();
 
-    // Desktop table
-    tbody.innerHTML = list.map(p => `
-      <tr>
-        <td style="font-weight:700">${p.name}</td>
-        <td>${fmtDur(p.dur)}</td>
-        <td style="color:var(--gold);font-weight:700">${fmtPrice(p)}</td>
-        <td>
-          <button class="act-btn" onclick="openProcModal(${p.id})">Editar</button>
-          <button class="act-btn danger" onclick="deleteProc(${p.id})">Remover</button>
-        </td>
-      </tr>
-    `).join('');
+    if (!list || list.length === 0) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-light)">Nenhum procedimento cadastrado.</td></tr>';
+      if (cardsWrap) cardsWrap.innerHTML = '<div style="padding:16px;color:var(--text-light);font-size:13px">Nenhum procedimento cadastrado.</div>';
+      return;
+    }
 
-    // Mobile cards
-    if (mobileCards) {
-      mobileCards.innerHTML = list.map(p => `
+    // Tabela desktop
+    if (tbody) {
+      tbody.innerHTML = list.map(p => `
+        <tr>
+          <td style="font-weight:700">${p.name}</td>
+          <td>${fmtDur(p.dur)}</td>
+          <td style="color:var(--gold);font-weight:700">${fmtPrice(p)}</td>
+          <td>
+            <button class="act-btn" onclick="openProcModal(${p.id})">Editar</button>
+            <button class="act-btn danger" onclick="deleteProc(${p.id})">Remover</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // Cards mobile
+    if (cardsWrap) {
+      cardsWrap.innerHTML = list.map(p => `
         <div class="proc-card">
           <div class="proc-card-name">${p.name}</div>
           <div class="proc-card-meta">
@@ -2084,7 +2095,9 @@ async function renderProcsAdmin() {
       `).join('');
     }
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--error)">Erro ao carregar procedimentos: ${e.message}</td></tr>`;
+    const msg = `Erro ao carregar: ${e.message}`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--error)">${msg}</td></tr>`;
+    if (cardsWrap) cardsWrap.innerHTML = `<div style="padding:16px;color:var(--error);font-size:13px">${msg}</div>`;
   }
 }
 function openProcModal(id) {
