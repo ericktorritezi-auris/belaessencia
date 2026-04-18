@@ -156,6 +156,12 @@ h1,h2,h3,h4{font-family:'Cormorant Garamond',serif}
 .skel{background:linear-gradient(90deg,var(--border) 25%,var(--border-light) 50%,var(--border) 75%);background-size:200% 100%;animation:skel 1.2s ease infinite;border-radius:var(--r-sm);height:56px}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
 
+/* ── TOGGLE VALORES ── */
+.eye-toggle{background:none;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:5px 10px;cursor:pointer;font-size:15px;transition:var(--tr);color:var(--text-light);display:flex;align-items:center;gap:5px;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700}
+.eye-toggle:hover{border-color:var(--rose);color:var(--rose)}
+.eye-toggle.visible{background:var(--rose-light);border-color:var(--rose);color:var(--rose)}
+.val-mask{color:var(--text-light);letter-spacing:2px;font-weight:600}
+
 /* ── PAGINAÇÃO ── */
 .pag-wrap{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-top:1px solid var(--border);flex-wrap:wrap;gap:8px}
 .pag-info{font-size:12px;color:var(--text-light);font-weight:600}
@@ -648,7 +654,12 @@ tr:hover td{background:#FAF3F6}
         <div class="adm-topbar">
           <button class="mob-menu" onclick="toggleSB()">☰</button>
           <div class="adm-ttl" id="adm-ttl">Agenda</div>
-          <div id="admin-prof-name" style="font-size:11px;color:var(--text-light)">Ana Paula Silva</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="eye-toggle" id="eye-toggle-btn" onclick="toggleValues()" title="Mostrar/ocultar valores e telefones">
+              <span id="eye-icon">🙈</span><span id="eye-label">Valores ocultos</span>
+            </button>
+            <div id="admin-prof-name" style="font-size:11px;color:var(--text-light)">Ana Paula Silva</div>
+          </div>
         </div>
         <div class="adm-content">
           <div id="sec-agenda">
@@ -1155,7 +1166,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '2.0.3';
+const APP_VERSION  = '2.0.4';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -1756,18 +1767,18 @@ function showSec(name){
     const el=document.getElementById(`nav-${s}`); if(el) el.classList.toggle('active',s===name);
   });
   document.getElementById('adm-ttl').textContent=SEC_TITLES[name]||name;
-  if(name==='agenda'){renderStats();renderAgenda();subscribePush('admin').catch(()=>{})}
+  if(name==='agenda'){resetValuesVisibility();renderStats();renderAgenda();subscribePush('admin').catch(()=>{})}
   if(name==='manual') initManualBooking();
   if(name==='released'){renderReleased();renderReleasedSlots();renderReleaseCityCheckboxes()}
   if(name==='nps') renderNPSDashboard();
   if(name==='blocked'){renderBlocked();renderBlockedSlots();renderBlockCityCheckboxes()}
-  if(name==='revenue'){renderRevCards();renderRevTable()}
+  if(name==='revenue'){resetValuesVisibility();renderRevCards();renderRevTable()}
   if(name==='promos') renderPromos();
   if(name==='commem') renderCommem();
   if(name==='webpush') initWebPush();
   if(name==='cities') renderCitiesAdmin();
   if(name==='schedules') renderSchedules();
-  if(name==='procs') renderProcsAdmin();
+  if(name==='procs'){resetValuesVisibility();renderProcsAdmin();}
   if(name==='profile') loadProfile();
   if(name==='backup') renderBackupSummary();
   if(window.innerWidth<=768) document.getElementById('adm-sb').classList.remove('open');
@@ -1798,6 +1809,49 @@ function renderBlockCityCheckboxes() {
 function getCheckedCityIds(containerId) {
   return [...document.querySelectorAll(`#${containerId} input[name="blk-city"]:checked`)]
     .map(el => Number(el.value));
+}
+
+// ══════════════════════════════════════════════════
+// TOGGLE GLOBAL DE VALORES
+// ══════════════════════════════════════════════════
+let _valuesVisible = false; // padrão: oculto
+
+const MASK_VALUE = '<span class="val-mask">••••••</span>';
+const MASK_PHONE = '<span class="val-mask">••• ••••-••••</span>';
+
+function maskedCurr(v)  { return _valuesVisible ? fmtCurr(v)  : MASK_VALUE; }
+function maskedPhone(p) { return _valuesVisible ? `<a href="${phoneToWA(p)}" target="_blank" style="font-size:11px;color:var(--rose);text-decoration:none">${fmtPhone(p)} 💬</a>` : MASK_PHONE; }
+function maskedPhoneCard(p) { return _valuesVisible ? `<a href="${phoneToWA(p)}" target="_blank" style="font-size:12px;color:var(--rose);text-decoration:none;font-weight:600">${fmtPhone(p)}</a>` : `<span class="val-mask">••• ••••-••••</span>`; }
+
+function toggleValues() {
+  _valuesVisible = !_valuesVisible;
+  const btn   = document.getElementById('eye-toggle-btn');
+  const icon  = document.getElementById('eye-icon');
+  const label = document.getElementById('eye-label');
+  if (_valuesVisible) {
+    btn.classList.add('visible');
+    icon.textContent  = '👁';
+    label.textContent = 'Valores visíveis';
+  } else {
+    btn.classList.remove('visible');
+    icon.textContent  = '🙈';
+    label.textContent = 'Valores ocultos';
+  }
+  // Re-renderiza a seção ativa para aplicar imediatamente
+  const activeSec = document.querySelector('.nav-item.active')?.id?.replace('nav-','');
+  if (activeSec === 'agenda')    renderAgendaPage(_agendaPage);
+  if (activeSec === 'revenue')   renderRevPage(_revPage);
+  if (activeSec === 'procs')     renderProcsAdmin();
+}
+
+function resetValuesVisibility() {
+  _valuesVisible = false;
+  const btn   = document.getElementById('eye-toggle-btn');
+  const icon  = document.getElementById('eye-icon');
+  const label = document.getElementById('eye-label');
+  if (btn) { btn.classList.remove('visible'); }
+  if (icon)  icon.textContent  = '🙈';
+  if (label) label.textContent = 'Valores ocultos';
 }
 
 // ── STATUS HELPERS ──────────────────────────────
@@ -1860,9 +1914,9 @@ async function renderStats() {
     const s=await GET('/api/revenue/summary');
     document.getElementById('today-stats').innerHTML=`
       <div class="stat-card"><div class="stat-lbl">📅 Hoje</div><div class="stat-val">${s.today.cnt}</div><div class="stat-sub">confirmados + realizados</div></div>
-      <div class="stat-card"><div class="stat-lbl">💰 Receita Hoje</div><div class="stat-val" style="font-size:22px">${fmtCurr(s.today.total)}</div><div class="stat-sub">confirmados + realizados</div></div>
-      <div class="stat-card"><div class="stat-lbl">📊 Semana</div><div class="stat-val">${s.week.cnt}</div><div class="stat-sub">${fmtCurr(s.week.total)}</div></div>
-      <div class="stat-card"><div class="stat-lbl">📆 Mês</div><div class="stat-val">${s.month.cnt}</div><div class="stat-sub">${fmtCurr(s.month.total)}</div></div>
+      <div class="stat-card"><div class="stat-lbl">💰 Receita Hoje</div><div class="stat-val" style="font-size:22px">${_valuesVisible?fmtCurr(s.today.total):'<span class="val-mask">••••••</span>'}</div><div class="stat-sub">confirmados + realizados</div></div>
+      <div class="stat-card"><div class="stat-lbl">📊 Semana</div><div class="stat-val">${s.week.cnt}</div><div class="stat-sub">${_valuesVisible?fmtCurr(s.week.total):'<span class="val-mask">••••</span>'}</div></div>
+      <div class="stat-card"><div class="stat-lbl">📆 Mês</div><div class="stat-val">${s.month.cnt}</div><div class="stat-sub">${_valuesVisible?fmtCurr(s.month.total):'<span class="val-mask">••••</span>'}</div></div>
     `;
   } catch{}
 }
@@ -1878,12 +1932,12 @@ function renderStatsFromList(list, filterLabel) {
     <div class="stat-card">
       <div class="stat-lbl" style="color:#1A56DB">✅ Confirmados</div>
       <div class="stat-val">${confirmed.length}</div>
-      <div class="stat-sub">${fmtCurr(confirmed.reduce((s,a)=>s+Number(a.price||0),0))}</div>
+      <div class="stat-sub">${_valuesVisible?fmtCurr(confirmed.reduce((s,a)=>s+Number(a.price||0),0)):'<span class="val-mask">••••</span>'}</div>
     </div>
     <div class="stat-card">
       <div class="stat-lbl" style="color:var(--success)">✔ Realizados</div>
       <div class="stat-val">${realizado.length}</div>
-      <div class="stat-sub">${fmtCurr(realizado.reduce((s,a)=>s+Number(a.price||0),0))}</div>
+      <div class="stat-sub">${_valuesVisible?fmtCurr(realizado.reduce((s,a)=>s+Number(a.price||0),0)):'<span class="val-mask">••••</span>'}</div>
     </div>
     <div class="stat-card">
       <div class="stat-lbl" style="color:var(--error)">❌ Cancelados</div>
@@ -1892,7 +1946,7 @@ function renderStatsFromList(list, filterLabel) {
     </div>
     <div class="stat-card">
       <div class="stat-lbl">💰 Receita Total</div>
-      <div class="stat-val" style="font-size:20px">${fmtCurr(revenue)}</div>
+      <div class="stat-val" style="font-size:20px">${_valuesVisible?fmtCurr(revenue):'<span class="val-mask">••••••</span>'}</div>
       <div class="stat-sub">confirmados + realizados</div>
     </div>
   `;
@@ -1919,10 +1973,10 @@ function renderAgendaPage(page) {
   tbody.innerHTML = paged.map(a=>`
       <tr>
         <td><div style="font-weight:700">${fmtDate(a.date)}</div><div style="font-size:11px;color:var(--text-light)">${String(a.st).slice(0,5)} – ${String(a.et).slice(0,5)}</div></td>
-        <td><div style="font-weight:700">${a.name}</div><a href="${phoneToWA(a.phone)}" target="_blank" style="font-size:11px;color:var(--rose);text-decoration:none">${fmtPhone(a.phone)} 💬</a></td>
+        <td><div style="font-weight:700">${a.name}</div>${maskedPhone(a.phone)}</td>
         <td style="max-width:160px">${a.proc_name}</td>
         <td style="font-size:11px">${CITIES.find(c=>c.id===a.city_id)?.short||a.city_name}</td>
-        <td style="color:var(--gold);font-weight:700">${a.price?fmtCurr(a.price):a.pt==='eval'?'Avaliação':'—'}</td>
+        <td style="color:var(--gold);font-weight:700">${a.price?maskedCurr(a.price):a.pt==='eval'?'Avaliação':'—'}</td>
         <td>${statusBadge(a.status)}</td>
         <td>
           <button class="act-btn" onclick="openEditModal('${a.id}')">Editar</button>
@@ -1949,10 +2003,10 @@ function renderAgendaPage(page) {
         </div>
         <div class="appt-card-body">
           <div><span class="appt-card-lbl">Cliente</span><span class="appt-card-val">${a.name}</span></div>
-          <div><span class="appt-card-lbl">WhatsApp</span><a href="${phoneToWA(a.phone)}" target="_blank" style="font-size:12px;color:var(--rose);text-decoration:none;font-weight:600">${fmtPhone(a.phone)}</a></div>
+          <div><span class="appt-card-lbl">WhatsApp</span>${maskedPhoneCard(a.phone)}</div>
           <div><span class="appt-card-lbl">Procedimento</span><span class="appt-card-val" style="font-size:11.5px">${a.proc_name}</span></div>
           <div><span class="appt-card-lbl">Cidade</span><span class="appt-card-val" style="font-size:11.5px">${city}</span></div>
-          <div><span class="appt-card-lbl">Valor</span><span class="appt-card-val" style="color:var(--gold)">${valor}</span></div>
+          <div><span class="appt-card-lbl">Valor</span><span class="appt-card-val" style="color:var(--gold)">${_valuesVisible ? valor : '<span class=\"val-mask\">••••••</span>'}</span></div>
         </div>
         <div class="appt-card-actions">
           <button class="act-btn" onclick="openEditModal('${a.id}')">Editar</button>
@@ -2295,10 +2349,10 @@ async function renderRevCards() {
   try {
     const s=await GET('/api/revenue/summary');
     document.getElementById('rev-cards').innerHTML=`
-      <div class="rc"><div class="rc-per">Hoje</div><div class="rc-val">${fmtCurr(s.today.total)}</div><div class="rc-cnt">${s.today.cnt} agendamento${s.today.cnt!=1?'s':''}</div></div>
-      <div class="rc"><div class="rc-per">Esta Semana</div><div class="rc-val">${fmtCurr(s.week.total)}</div><div class="rc-cnt">${s.week.cnt} agendamento${s.week.cnt!=1?'s':''}</div></div>
-      <div class="rc"><div class="rc-per">Este Mês</div><div class="rc-val">${fmtCurr(s.month.total)}</div><div class="rc-cnt">${s.month.cnt} agendamento${s.month.cnt!=1?'s':''}</div></div>
-      <div class="rc"><div class="rc-per">Este Ano</div><div class="rc-val">${fmtCurr(s.year.total)}</div><div class="rc-cnt">${s.year.cnt} agendamento${s.year.cnt!=1?'s':''}</div></div>
+      <div class="rc"><div class="rc-per">Hoje</div><div class="rc-val">${_valuesVisible?fmtCurr(s.today.total):'<span class="val-mask">••••••</span>'}</div><div class="rc-cnt">${s.today.cnt} agendamento${s.today.cnt!=1?'s':''}</div></div>
+      <div class="rc"><div class="rc-per">Esta Semana</div><div class="rc-val">${_valuesVisible?fmtCurr(s.week.total):'<span class="val-mask">••••••</span>'}</div><div class="rc-cnt">${s.week.cnt} agendamento${s.week.cnt!=1?'s':''}</div></div>
+      <div class="rc"><div class="rc-per">Este Mês</div><div class="rc-val">${_valuesVisible?fmtCurr(s.month.total):'<span class="val-mask">••••••</span>'}</div><div class="rc-cnt">${s.month.cnt} agendamento${s.month.cnt!=1?'s':''}</div></div>
+      <div class="rc"><div class="rc-per">Este Ano</div><div class="rc-val">${_valuesVisible?fmtCurr(s.year.total):'<span class="val-mask">••••••</span>'}</div><div class="rc-cnt">${s.year.cnt} agendamento${s.year.cnt!=1?'s':''}</div></div>
     `;
   } catch{}
 }
@@ -2318,7 +2372,7 @@ function renderRevPage(page) {
     <tr>
       <td><div style="font-weight:700">${fmtDate(a.date)}</div><div style="font-size:11px;color:var(--text-light)">${String(a.st).slice(0,5)}</div></td>
       <td>${a.name}</td><td>${a.proc_name}</td>
-      <td style="color:var(--gold);font-weight:700">${a.price?fmtCurr(a.price):a.pt==='eval'?'Sob avaliação':'—'}</td>
+      <td style="color:var(--gold);font-weight:700">${a.price?maskedCurr(a.price):a.pt==='eval'?'Sob avaliação':'—'}</td>
     </tr>
   `).join('');
   renderPagination('rev-pag', page, _revAllData.length, 'renderRevPage');
@@ -2364,7 +2418,7 @@ async function renderProcsAdmin() {
         <tr>
           <td style="font-weight:700">${p.name}</td>
           <td>${fmtDur(p.dur)}</td>
-          <td style="color:var(--gold);font-weight:700">${fmtPrice(p)}</td>
+          <td style="color:var(--gold);font-weight:700">${_valuesVisible ? fmtPrice(p) : '<span class="val-mask">••••••</span>'}</td>
           <td>
             <button class="act-btn" onclick="openProcModal(${p.id})">Editar</button>
             <button class="act-btn danger" onclick="deleteProc(${p.id})">Remover</button>
@@ -2380,7 +2434,7 @@ async function renderProcsAdmin() {
           <div class="proc-card-name">${p.name}</div>
           <div class="proc-card-meta">
             <span class="badge-dur">⏱ ${fmtDur(p.dur)}</span>
-            ${p.pt !== 'none' ? `<span class="badge-price">${fmtPrice(p)}</span>` : ''}
+            ${p.pt !== 'none' ? `<span class="badge-price">${_valuesVisible ? fmtPrice(p) : '••••••'}</span>` : ''}
           </div>
           <div class="proc-card-actions">
             <button class="act-btn" onclick="openProcModal(${p.id})">Editar</button>
