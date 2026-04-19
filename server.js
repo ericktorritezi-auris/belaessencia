@@ -251,6 +251,10 @@ async function initDB() {
     // Migração v1.7.0: push_auth nos agendamentos (liga subscription ao agendamento)
     await client.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS push_auth TEXT`);
 
+    // Migração: city_ids nas promoções
+    await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS apply_to_all_cities BOOLEAN NOT NULL DEFAULT TRUE`);
+    await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS city_ids_promo INTEGER[] NOT NULL DEFAULT '{}'`);
+
     // Migração: atualiza texto do template "Agendamento alterado" no banco
     await client.query(`
       UPDATE push_templates
@@ -1142,13 +1146,18 @@ app.get('/api/revenue/summary', requireAdmin, async (req, res) => {
 // Público: retorna promoção ativa agora (se existir)
 app.get('/api/promotions/active', async (req, res) => {
   try {
-    const today = todayBrasilia();
-    const { rows } = await pool.query(
-      `SELECT * FROM promotions
-       WHERE active = TRUE AND start_date <= $1 AND end_date >= $1
-       ORDER BY created_at DESC LIMIT 1`,
-      [today]
-    );
+    const today  = todayBrasilia();
+    const cityId = req.query.cityId ? Number(req.query.cityId) : null;
+    let query = `SELECT * FROM promotions
+       WHERE active = TRUE AND start_date <= $1 AND end_date >= $1`;
+    const params = [today];
+    // Filter by city if provided: apply_to_all_cities=true OR cityId in city_ids_promo
+    if (cityId) {
+      query += ` AND (apply_to_all_cities = TRUE OR $2 = ANY(city_ids_promo))`;
+      params.push(cityId);
+    }
+    query += ` ORDER BY created_at DESC LIMIT 1`;
+    const { rows } = await pool.query(query, params);
     res.json(rows[0] || null);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1180,11 +1189,16 @@ app.post('/api/promotions', requireAdmin, async (req, res) => {
   if (!allProcs && ids.length === 0) {
     return res.status(400).json({ error: 'Selecione ao menos um procedimento' });
   }
+  const allCities = req.body.apply_to_all_cities !== false;
+  const cityIds   = allCities ? [] : (Array.isArray(req.body.city_ids_promo) ? req.body.city_ids_promo.map(Number) : []);
+  if (!allCities && cityIds.length === 0) {
+    return res.status(400).json({ error: 'Selecione ao menos uma cidade' });
+  }
   try {
     const { rows } = await pool.query(
-      `INSERT INTO promotions (name, start_date, end_date, discount, apply_to_all, proc_ids)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [name, start_date, end_date, Number(discount), allProcs, ids]
+      `INSERT INTO promotions (name, start_date, end_date, discount, apply_to_all, proc_ids, apply_to_all_cities, city_ids_promo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [name, start_date, end_date, Number(discount), allProcs, ids, allCities, cityIds]
     );
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
