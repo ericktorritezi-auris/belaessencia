@@ -1873,7 +1873,23 @@ function toggleValues() {
   }
   // Re-renderiza a seção ativa para aplicar imediatamente
   const activeSec = document.querySelector('.nav-item.active')?.id?.replace('nav-','');
-  if (activeSec === 'agenda')  { renderAgendaPage(_agendaPage); renderStats(); }
+  if (activeSec === 'agenda')  {
+    renderAgendaPage(_agendaPage);
+    // Se há filtro ativo, re-renderiza cards filtrados; senão, cards globais
+    const fd = document.getElementById('fl-date')?.value;
+    const fc = document.getElementById('fl-city')?.value;
+    const fs = document.getElementById('fl-status')?.value;
+    const hasFilter = !!(fd || fc || fs);
+    if (hasFilter && _agendaAllData.length >= 0) {
+      const parts = [];
+      if (fd) parts.push(fmtDate(fd));
+      if (fc) parts.push(CITIES.find(c => String(c.id) === fc)?.short || '');
+      if (fs) parts.push(fs === 'confirmed' ? 'Confirmados' : 'Cancelados');
+      renderStatsFromList(_agendaAllData, parts.join(' · ') || 'Filtro');
+    } else {
+      renderStats();
+    }
+  }
   if (activeSec === 'revenue') { renderRevPage(_revPage); renderRevCards(); }
   if (activeSec === 'procs')   { renderProcsAdmin(); }
 }
