@@ -539,6 +539,12 @@ async function initDB() {
     // Migração v1.7.0: push_auth nos agendamentos (liga subscription ao agendamento)
     await client.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS push_auth TEXT`);
 
+    // Migração: mensalidade por tenant
+    await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS monthly_fee NUMERIC(8,2) NOT NULL DEFAULT 100.00`);
+    await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS setup_fee NUMERIC(8,2) NOT NULL DEFAULT 200.00`);
+    // Ana Paula: mensalidade 0 (cliente original)
+    await client.query(`UPDATE tenants SET monthly_fee=0, setup_fee=0 WHERE slug='bela-essencia' AND monthly_fee=100`);
+
     // Migração: city_ids nas promoções
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS apply_to_all_cities BOOLEAN NOT NULL DEFAULT TRUE`);
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS city_ids_promo INTEGER[] NOT NULL DEFAULT '{}'`);
@@ -1934,10 +1940,10 @@ app.get('/master/api/stats', requireMaster, async (req, res) => {
     const [tenantsRes, paymentsRes, expiringRes, blockedRes] = await Promise.all([
       pool.query(`SELECT COUNT(*) as total,
         SUM(CASE WHEN active=TRUE THEN 1 ELSE 0 END) as active,
-        SUM(CASE WHEN active=FALSE THEN 1 ELSE 0 END) as inactive
+        SUM(CASE WHEN active=FALSE THEN 1 ELSE 0 END) as inactive,
+        COALESCE(SUM(CASE WHEN active=TRUE THEN monthly_fee ELSE 0 END),0) as mrr
         FROM tenants`),
       pool.query(`SELECT
-        COALESCE(SUM(CASE WHEN type='monthly' AND status='paid' THEN amount END),0) as mrr,
         COALESCE(SUM(CASE WHEN type='setup' AND status='paid' THEN amount END),0) as setup_total,
         COALESCE(SUM(CASE WHEN status='paid' THEN amount END),0) as total_revenue
         FROM payments`),
@@ -1964,7 +1970,7 @@ app.get('/master/api/stats', requireMaster, async (req, res) => {
 
     res.json({
       tenants: tenantsRes.rows[0],
-      payments: paymentsRes.rows[0],
+      payments: { ...paymentsRes.rows[0], mrr: tenantsRes.rows[0].mrr },
       expiring: Number(expiringRes.rows[0].cnt),
       blocked:  Number(blockedRes.rows[0].cnt),
       chart:    chartRows,
@@ -1979,7 +1985,7 @@ app.get('/master/api/tenants', requireMaster, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT t.id, t.slug, t.name, t.owner_name, t.owner_email, t.owner_phone,
              t.domain_custom, t.subdomain, t.active, t.plan_expires_at, t.schema_name,
-             t.created_at,
+             t.monthly_fee, t.setup_fee, t.created_at,
              tc.primary_color, tc.secondary_color, tc.business_name,
              tc.tagline, tc.whatsapp_number, tc.resend_from_email, tc.admin_user,
              tc.logo_url,
@@ -2009,12 +2015,14 @@ app.post('/master/api/tenants', requireMaster, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const mFee = req.body.monthly_fee !== undefined ? Number(req.body.monthly_fee) : 100;
+    const sFee = req.body.setup_fee    !== undefined ? Number(req.body.setup_fee)    : 200;
     const { rows } = await client.query(
       `INSERT INTO tenants (slug,name,owner_name,owner_email,owner_phone,
-        domain_custom,subdomain,active,schema_name,plan_expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8,$9) RETURNING *`,
+        domain_custom,subdomain,active,schema_name,plan_expires_at,monthly_fee,setup_fee)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8,$9,$10,$11) RETURNING *`,
       [slug,name,owner_name,owner_email,owner_phone||null,
-       domain_custom||null,subdomain||null,schemaName,plan_expires_at||null]
+       domain_custom||null,subdomain||null,schemaName,plan_expires_at||null,mFee,sFee]
     );
     const tenant = rows[0];
     await client.query(
@@ -2053,11 +2061,16 @@ app.put('/master/api/tenants/:id', requireMaster, async (req, res) => {
           plan_expires_at, active, business_name, tagline, primary_color,
           secondary_color, logo_url, whatsapp_number, resend_from_email } = req.body;
   try {
+    const updMFee = req.body.monthly_fee !== undefined ? Number(req.body.monthly_fee) : null;
+    const updSFee = req.body.setup_fee    !== undefined ? Number(req.body.setup_fee)    : null;
     await pool.query(
       `UPDATE tenants SET name=$1,owner_name=$2,owner_email=$3,owner_phone=$4,
-         domain_custom=$5,subdomain=$6,plan_expires_at=$7,active=$8 WHERE id=$9`,
+         domain_custom=$5,subdomain=$6,plan_expires_at=$7,active=$8,
+         monthly_fee=COALESCE($10,monthly_fee),
+         setup_fee=COALESCE($11,setup_fee)
+       WHERE id=$9`,
       [name,owner_name,owner_email,owner_phone||null,domain_custom||null,
-       subdomain||null,plan_expires_at||null,active!==false,id]
+       subdomain||null,plan_expires_at||null,active!==false,id,updMFee,updSFee]
     );
     await pool.query(
       `UPDATE tenant_configs SET business_name=$1,tagline=$2,primary_color=$3,
