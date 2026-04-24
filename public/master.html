@@ -211,7 +211,7 @@
   <div class="login-card">
     <div class="login-logo">Belle <span>Planner</span></div>
     <div class="login-badge">Master Panel</div>
-    <input type="password" class="login-input" id="login-pass" placeholder="Senha master" onkeydown="if(event.key==='Enter')doLogin()">
+    <input type="password" class="login-input" id="login-pass" placeholder="Senha master" autocomplete="new-password" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="login-btn" onclick="doLogin()">Entrar</button>
     <div class="login-err hidden" id="login-err">Senha incorreta</div>
   </div>
@@ -453,7 +453,10 @@ let _editId   = null;
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
 async function doLogin() {
-  const pass = document.getElementById('login-pass').value;
+  const pass = document.getElementById('login-pass').value.trim();
+  if (!pass) return;
+  const btn = document.querySelector('.login-btn');
+  btn.textContent = 'Verificando...'; btn.disabled = true;
   try {
     await POST('/master/login', { pass });
     document.getElementById('login-screen').style.display = 'none';
@@ -462,7 +465,8 @@ async function doLogin() {
   } catch {
     const el = document.getElementById('login-err');
     el.classList.remove('hidden');
-    setTimeout(() => el.classList.add('hidden'), 3000);
+    btn.textContent = 'Entrar'; btn.disabled = false;
+    setTimeout(() => el.classList.add('hidden'), 4000);
   }
 }
 async function doLogout() {
@@ -929,7 +933,7 @@ document.getElementById('t-color2').addEventListener('input', function() {
   document.getElementById('t-color2-hex').value = this.value;
 });
 
-// Check if already logged in
+// Check if already logged in (silently)
 fetch('/master/api/stats', { credentials:'include' })
   .then(r => {
     if (r.ok) {
@@ -937,6 +941,7 @@ fetch('/master/api/stats', { credentials:'include' })
       document.getElementById('app').style.display = 'block';
       init();
     }
+    // 401 = not logged in, just show login screen (do nothing)
   }).catch(()=>{});
 </script>
 </body>
