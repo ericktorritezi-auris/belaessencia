@@ -29,6 +29,180 @@ const ADMIN_USER   = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS   = process.env.ADMIN_PASS || 'belaessencia2025';
 const SESSION_SEC  = process.env.SESSION_SECRET || 'dev_secret_troque_em_prod';
 
+// ── Multi-tenant: schema por tenant ──────────────────────────────────────────
+
+// Cache de tenants para evitar query a cada request
+const _tenantCache = new Map();
+
+async function getTenantByHost(host) {
+  if (_tenantCache.has(host)) return _tenantCache.get(host);
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.*, tc.primary_color, tc.secondary_color, tc.accent_color,
+              tc.logo_url, tc.favicon_url, tc.business_name, tc.tagline,
+              tc.whatsapp_number, tc.resend_from_email, tc.admin_user,
+              tc.admin_pass_hash, tc.timezone
+       FROM tenants t
+       LEFT JOIN tenant_configs tc ON tc.tenant_id = t.id
+       WHERE (t.domain_custom = $1 OR t.subdomain = $1 OR $1 LIKE '%.' || t.subdomain || '.%')
+         AND t.active = TRUE
+       LIMIT 1`,
+      [host]
+    );
+    const tenant = rows[0] || null;
+    if (tenant) _tenantCache.set(host, tenant);
+    return tenant;
+  } catch { return null; }
+}
+
+// Invalida cache de um tenant (após atualização de config)
+function invalidateTenantCache(host) { _tenantCache.delete(host); }
+
+// Cria o schema de um novo tenant com todas as tabelas
+async function createTenantSchema(schemaName) {
+  const client = await pool.connect();
+  try {
+    await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+    await client.query(`SET search_path TO "${schemaName}", public`);
+
+    // Cria todas as tabelas no schema do tenant (mesma estrutura do public)
+    const tables = [
+      `CREATE TABLE IF NOT EXISTS procedures (
+        id SERIAL PRIMARY KEY, name VARCHAR(200) NOT NULL, dur INTEGER NOT NULL,
+        price NUMERIC(10,2), pt VARCHAR(10) NOT NULL DEFAULT 'fixed',
+        active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS cities (
+        id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, short VARCHAR(50),
+        local_name VARCHAR(100), address VARCHAR(200), number VARCHAR(20),
+        complement VARCHAR(100), cep VARCHAR(10), maps_url TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS city_procedures (
+        city_id INTEGER NOT NULL, proc_id INTEGER NOT NULL, enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        PRIMARY KEY (city_id, proc_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS work_configs (
+        id SERIAL PRIMARY KEY, scope VARCHAR(20) NOT NULL DEFAULT 'city_day',
+        city_id INTEGER, day_of_week INTEGER, is_active BOOLEAN NOT NULL DEFAULT FALSE,
+        work_start TIME, work_end TIME, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS work_breaks (
+        id SERIAL PRIMARY KEY, config_id INTEGER NOT NULL, break_start TIME NOT NULL,
+        break_end TIME NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS appointments (
+        id VARCHAR(30) PRIMARY KEY, city_id INTEGER NOT NULL, city_name VARCHAR(100) NOT NULL,
+        proc_id INTEGER, proc_name VARCHAR(200) NOT NULL, date DATE NOT NULL,
+        st TIME NOT NULL, et TIME NOT NULL, name VARCHAR(200) NOT NULL,
+        phone VARCHAR(30) NOT NULL, price NUMERIC(10,2), pt VARCHAR(10),
+        status VARCHAR(20) NOT NULL DEFAULT 'confirmed', push_auth TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ
+      )`,
+      `CREATE TABLE IF NOT EXISTS blocked_dates (
+        date DATE PRIMARY KEY, reason VARCHAR(200), city_ids INTEGER[] NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS blocked_slots (
+        id SERIAL PRIMARY KEY, date DATE NOT NULL, st TIME NOT NULL, et TIME NOT NULL,
+        reason VARCHAR(200), city_ids INTEGER[] NOT NULL DEFAULT '{}'
+      )`,
+      `CREATE TABLE IF NOT EXISTS released_dates (
+        id SERIAL PRIMARY KEY, date DATE NOT NULL, city_ids INTEGER[] NOT NULL DEFAULT '{}',
+        work_start TIME NOT NULL DEFAULT '08:00', work_end TIME NOT NULL DEFAULT '18:00',
+        break_start TIME, break_end TIME, reason TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_released_dates_date_${schemaName.replace('-','_')} ON released_dates(date)`,
+      `CREATE TABLE IF NOT EXISTS released_slots (
+        id SERIAL PRIMARY KEY, date DATE NOT NULL, st TIME NOT NULL, et TIME NOT NULL,
+        city_ids INTEGER[] NOT NULL DEFAULT '{}', reason TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS promotions (
+        id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, start_date DATE NOT NULL,
+        end_date DATE NOT NULL, discount NUMERIC(5,2) NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE,
+        apply_to_all BOOLEAN NOT NULL DEFAULT TRUE, proc_ids INTEGER[] NOT NULL DEFAULT '{}',
+        apply_to_all_cities BOOLEAN NOT NULL DEFAULT TRUE, city_ids_promo INTEGER[] NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS commemorative_dates (
+        id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, day INTEGER NOT NULL,
+        month INTEGER NOT NULL, message VARCHAR(500), is_active BOOLEAN NOT NULL DEFAULT TRUE
+      )`,
+      `CREATE TABLE IF NOT EXISTS admin_profile (
+        id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL DEFAULT 'Profissional',
+        email VARCHAR(150), login VARCHAR(50) NOT NULL DEFAULT 'admin',
+        pass_hash TEXT NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY, endpoint TEXT NOT NULL UNIQUE, p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL, role VARCHAR(20) NOT NULL DEFAULT 'client',
+        appt_id VARCHAR(30), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS push_templates (
+        id SERIAL PRIMARY KEY, title VARCHAR(100) NOT NULL, body VARCHAR(300) NOT NULL,
+        is_system BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS app_settings (
+        key VARCHAR(50) PRIMARY KEY, value TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS nps_responses (
+        id SERIAL PRIMARY KEY, phone VARCHAR(30) NOT NULL, phone_norm VARCHAR(20) NOT NULL,
+        appt_id VARCHAR(30), score SMALLINT NOT NULL CHECK (score BETWEEN 0 AND 10),
+        comment VARCHAR(300), category VARCHAR(10) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    ];
+
+    for (const sql of tables) {
+      await client.query(sql);
+    }
+    console.log(`[DB] Schema "${schemaName}" criado com todas as tabelas.`);
+  } finally {
+    client.release();
+  }
+}
+
+// ── Middleware de tenant ───────────────────────────────────────────────────────
+// Detecta o tenant pelo hostname e injeta no request
+// FASE 1: Funciona em paralelo com o sistema atual (search_path seletivo)
+async function tenantMiddleware(req, res, next) {
+  const host = req.hostname;
+
+  // Rotas do master (painel Erick) — sem tenant
+  if (host === 'admin.belleplanner.com.br' || req.path.startsWith('/master')) {
+    req.isMaster = true;
+    return next();
+  }
+
+  try {
+    const tenant = await getTenantByHost(host);
+    if (tenant) {
+      req.tenant     = tenant;
+      req.schemaName = tenant.schema_name;
+      // Define o search_path para este request via pool query wrapper
+    }
+    // Se não encontrar tenant: sistema opera no schema public (compatibilidade Fase 1)
+  } catch (e) {
+    console.error('[Tenant] Erro ao detectar tenant:', e.message);
+  }
+  next();
+}
+
+// Pool query com schema do tenant
+// Uso futuro (Fase 4): pool.queryTenant(req, sql, params)
+pool.queryTenant = async function(req, sql, params) {
+  if (req.schemaName) {
+    const client = await this.connect();
+    try {
+      await client.query(`SET search_path TO "${req.schemaName}", public`);
+      const result = await client.query(sql, params);
+      return result;
+    } finally {
+      client.release();
+    }
+  }
+  return this.query(sql, params);
+};
+
 // ── Fuso Brasil (America/Sao_Paulo) ──────────────────────────────────────────
 // Retorna objeto Date ajustado para o fuso de Brasília
 function nowBrasilia() {
@@ -148,6 +322,91 @@ async function initDB() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // ── MASTER SCHEMA (público — compartilhado entre todos os tenants) ─────────
+    // Estas tabelas ficam no schema 'public' e são acessadas por todos
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tenants (
+        id              SERIAL        PRIMARY KEY,
+        slug            VARCHAR(50)   UNIQUE NOT NULL,
+        name            VARCHAR(100)  NOT NULL,
+        owner_name      VARCHAR(100),
+        owner_email     VARCHAR(150),
+        owner_phone     VARCHAR(30),
+        domain_custom   VARCHAR(150),
+        subdomain       VARCHAR(80),
+        active          BOOLEAN       NOT NULL DEFAULT TRUE,
+        plan_id         INTEGER,
+        plan_expires_at DATE,
+        schema_name     VARCHAR(50)   UNIQUE NOT NULL,
+        created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tenant_configs (
+        id                SERIAL        PRIMARY KEY,
+        tenant_id         INTEGER       NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        primary_color     VARCHAR(7)    NOT NULL DEFAULT '#9b4d6a',
+        secondary_color   VARCHAR(7)    NOT NULL DEFAULT '#C49A3C',
+        accent_color      VARCHAR(7),
+        logo_url          TEXT,
+        favicon_url       TEXT,
+        business_name     VARCHAR(100)  NOT NULL DEFAULT 'Bela Essência',
+        tagline           VARCHAR(200),
+        whatsapp_number   VARCHAR(30),
+        resend_from_email VARCHAR(150),
+        admin_user        VARCHAR(50)   NOT NULL DEFAULT 'admin',
+        admin_pass_hash   TEXT,
+        timezone          VARCHAR(50)   NOT NULL DEFAULT 'America/Sao_Paulo',
+        updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_configs_tenant_id ON tenant_configs(tenant_id)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plans (
+        id              SERIAL        PRIMARY KEY,
+        name            VARCHAR(50)   NOT NULL,
+        price           NUMERIC(8,2)  NOT NULL DEFAULT 100.00,
+        max_cities      INTEGER       NOT NULL DEFAULT 10,
+        max_procedures  INTEGER       NOT NULL DEFAULT 50,
+        features        JSONB         NOT NULL DEFAULT '{"push":true,"email":true,"nps":true,"promotions":true}',
+        active          BOOLEAN       NOT NULL DEFAULT TRUE,
+        created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    // Seed: plano padrão se ainda não existir
+    const planCheck = await client.query("SELECT 1 FROM plans WHERE name='Essencial' LIMIT 1");
+    if (!planCheck.rowCount) {
+      await client.query(
+        `INSERT INTO plans (name, price, max_cities, max_procedures, features)
+         VALUES ('Essencial', 100.00, 10, 50, '{"push":true,"email":true,"nps":true,"promotions":true}')`
+      );
+    }
+
+    // Seed: registra Ana Paula como tenant_001 se ainda não existir
+    const t1Check = await client.query("SELECT 1 FROM tenants WHERE slug='bela-essencia' LIMIT 1");
+    if (!t1Check.rowCount) {
+      const planRow = await client.query("SELECT id FROM plans WHERE name='Essencial' LIMIT 1");
+      const planId  = planRow.rows[0]?.id || 1;
+      await client.query(
+        `INSERT INTO tenants (slug, name, owner_name, owner_email, domain_custom, subdomain, active, plan_id, schema_name)
+         VALUES ('bela-essencia', 'Bela Essência', 'Ana Paula Silva', 'anapaulasilvanac@gmail.com',
+                 'belaessencia.app.br', 'belaessencia', TRUE, $1, 'tenant_001')`,
+        [planId]
+      );
+      const t1Row = await client.query("SELECT id FROM tenants WHERE slug='bela-essencia' LIMIT 1");
+      await client.query(
+        `INSERT INTO tenant_configs (tenant_id, primary_color, secondary_color, business_name, tagline, whatsapp_number, resend_from_email, admin_user)
+         VALUES ($1, '#9b4d6a', '#C49A3C', 'Bela Essência', 'Estética & Beleza · Ana Paula Silva', '', 'noreply@belaessencia.app.br', 'admin')`,
+        [t1Row.rows[0].id]
+      );
+      console.log('[DB] tenant_001 (Bela Essência / Ana Paula) registrado no master.');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Tabela de procedimentos
     await client.query(`
@@ -508,6 +767,9 @@ async function initDB() {
       console.log('[DB] Perfil admin pré-cadastrado.');
     }
 
+    // Fase 1: garante que o schema tenant_001 existe (Ana Paula)
+    await createTenantSchema('tenant_001');
+
     console.log('[DB] Schema inicializado com sucesso.');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -526,6 +788,9 @@ app.set('trust proxy', 1);
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+
+// Tenant middleware — detecta tenant por hostname (Fase 1 White Label)
+app.use(tenantMiddleware);
 
 // Suprimir warning de MemoryStore em produção (aceitável para 1 instância)
 const sessionStore = session.MemoryStore ? new session.MemoryStore() : undefined;
@@ -1584,6 +1849,36 @@ app.delete('/api/commemorative/:id', requireAdmin, async (req, res) => {
     if (rows[0].is_active) return res.status(400).json({ error: 'Cancele a data antes de excluir' });
     await pool.query('DELETE FROM commemorative_dates WHERE id=$1', [req.params.id]);
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Tenant Config (White Label) ───────────────────────────────────────────────
+app.get('/api/config', async (req, res) => {
+  try {
+    if (req.tenant) {
+      return res.json({
+        business_name:   req.tenant.business_name   || 'Bela Essência',
+        tagline:         req.tenant.tagline          || '',
+        primary_color:   req.tenant.primary_color    || '#9b4d6a',
+        secondary_color: req.tenant.secondary_color  || '#C49A3C',
+        accent_color:    req.tenant.accent_color     || '#7b3050',
+        logo_url:        req.tenant.logo_url         || null,
+        favicon_url:     req.tenant.favicon_url      || null,
+        whatsapp_number: req.tenant.whatsapp_number  || '',
+        timezone:        req.tenant.timezone         || 'America/Sao_Paulo',
+      });
+    }
+    res.json({
+      business_name:   'Bela Essência',
+      tagline:         'Estética & Beleza · Ana Paula Silva',
+      primary_color:   '#9b4d6a',
+      secondary_color: '#C49A3C',
+      accent_color:    '#7b3050',
+      logo_url:        null,
+      favicon_url:     null,
+      whatsapp_number: '',
+      timezone:        'America/Sao_Paulo',
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
