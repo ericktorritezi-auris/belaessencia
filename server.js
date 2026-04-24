@@ -1977,7 +1977,10 @@ app.get('/master/api/stats', requireMaster, async (req, res) => {
 app.get('/master/api/tenants', requireMaster, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT t.*, tc.primary_color, tc.secondary_color, tc.business_name,
+      SELECT t.id, t.slug, t.name, t.owner_name, t.owner_email, t.owner_phone,
+             t.domain_custom, t.subdomain, t.active, t.plan_expires_at, t.schema_name,
+             t.created_at,
+             tc.primary_color, tc.secondary_color, tc.business_name,
              tc.tagline, tc.whatsapp_number, tc.resend_from_email, tc.admin_user,
              tc.logo_url,
              (SELECT COUNT(*) FROM payments p WHERE p.tenant_id=t.id AND p.status='paid') as payment_count,
