@@ -419,9 +419,14 @@
 
 <script>
 // ── UTILS ──────────────────────────────────────────────────────────────────
+let _masterToken = sessionStorage.getItem('bp_master_token') || '';
+
 const API = (method, url, body) => fetch(url, {
   method, credentials: 'include',
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'x-master-token': _masterToken,
+  },
   body: body ? JSON.stringify(body) : undefined,
 }).then(async r => {
   const d = await r.json();
@@ -460,6 +465,8 @@ async function doLogin() {
   btn.textContent = 'Verificando...'; btn.disabled = true;
   try {
     await POST('/master/login', { pass });
+    _masterToken = pass;
+    sessionStorage.setItem('bp_master_token', pass);
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     init();
@@ -472,6 +479,8 @@ async function doLogin() {
 }
 async function doLogout() {
   await POST('/master/logout', {});
+  sessionStorage.removeItem('bp_master_token');
+  _masterToken = '';
   location.reload();
 }
 document.getElementById('login-pass').addEventListener('keydown', e => {
@@ -944,16 +953,25 @@ document.getElementById('t-color2').addEventListener('input', function() {
   document.getElementById('t-color2-hex').value = this.value;
 });
 
-// Check if already logged in (silently)
-fetch('/master/api/stats', { credentials:'include' })
-  .then(r => {
+// Check if already logged in (use saved token)
+if (_masterToken) {
+  fetch('/master/api/stats', {
+    credentials: 'include',
+    headers: { 'x-master-token': _masterToken }
+  }).then(r => {
     if (r.ok) {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app').style.display = 'block';
       init();
+    } else {
+      sessionStorage.removeItem('bp_master_token');
+      _masterToken = '';
     }
-    // 401 = not logged in, just show login screen (do nothing)
-  }).catch(()=>{});
+  }).catch(() => {
+    sessionStorage.removeItem('bp_master_token');
+    _masterToken = '';
+  });
+}
 </script>
 </body>
 </html>
