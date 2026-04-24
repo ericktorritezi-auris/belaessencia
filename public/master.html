@@ -1004,6 +1004,7 @@ async function loadHealth() {
           <th>URL</th>
           <th>Status</th>
           <th>Banco</th>
+          <th>Agendamentos 30d</th>
           <th>Latência</th>
           <th>Verificado</th>
         </tr></thead>
@@ -1022,9 +1023,10 @@ async function loadHealth() {
           const latColor = !r.latency_ms ? 'var(--muted)' : r.latency_ms < 500 ? 'var(--green)' : r.latency_ms < 1500 ? 'var(--yellow)' : 'var(--red)';
           return `<tr>
             <td style="font-weight:800;color:var(--text)">${r.business_name || r.slug}</td>
-            <td style="font-size:11px;color:var(--muted);font-family:monospace">${r.url}</td>
+            <td style="font-size:11px;color:var(--muted)">${r.url ? `<a href="${r.url}" target="_blank" style="color:var(--rose-l);text-decoration:none;font-family:monospace">${r.url}</a>` : '—'}</td>
             <td>${statusBadge}</td>
             <td>${dbBadge}</td>
+            <td style="color:var(--text);font-size:13px;font-weight:700">${r.recent_appts !== undefined ? r.recent_appts : '—'}</td>
             <td style="color:${latColor};font-weight:700;font-size:13px">${r.latency_ms ? r.latency_ms + 'ms' : '—'}</td>
             <td style="font-size:11px;color:var(--muted)">${r.checked_at ? new Date(r.checked_at).toLocaleTimeString('pt-BR') : '—'}</td>
           </tr>`;
