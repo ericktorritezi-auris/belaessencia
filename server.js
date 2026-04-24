@@ -545,6 +545,49 @@ async function initDB() {
     // Ana Paula: mensalidade 0 (cliente original)
     await client.query(`UPDATE tenants SET monthly_fee=0, setup_fee=0 WHERE slug='bela-essencia' AND monthly_fee=100`);
 
+    // Migração: preenche dados completos da Ana Paula (tenant_001)
+    await client.query(`
+      UPDATE tenants SET
+        owner_name    = 'Ana Paula Silva',
+        owner_email   = 'anapaulasilvanac@gmail.com',
+        owner_phone   = '',
+        domain_custom = 'belaessencia.app.br',
+        subdomain     = 'belaessencia',
+        plan_expires_at = NULL
+      WHERE slug = 'bela-essencia'
+        AND (owner_name IS NULL OR owner_name = '')
+    `);
+    await client.query(`
+      UPDATE tenant_configs SET
+        tagline           = 'Estética & Beleza · Ana Paula Silva',
+        whatsapp_number   = '',
+        resend_from_email = 'noreply@belaessencia.app.br',
+        admin_user        = 'admin'
+      WHERE tenant_id = (SELECT id FROM tenants WHERE slug = 'bela-essencia')
+        AND (tagline IS NULL OR tagline = '')
+    `);
+
+    // Migration: preenche dados completos da Ana Paula
+    await client.query(`
+      UPDATE tenants SET
+        owner_name    = 'Ana Paula Silva',
+        owner_email   = 'anapaulasilvanac@gmail.com',
+        owner_phone   = '',
+        domain_custom = 'belaessencia.app.br',
+        subdomain     = 'belaessencia',
+        plan_expires_at = NULL
+      WHERE slug = 'bela-essencia'
+        AND (owner_name IS NULL OR owner_name = '')
+    `);
+    await client.query(`
+      UPDATE tenant_configs SET
+        tagline           = 'Estética & Beleza · Ana Paula Silva',
+        whatsapp_number   = '',
+        resend_from_email = 'noreply@belaessencia.app.br'
+      WHERE tenant_id = (SELECT id FROM tenants WHERE slug = 'bela-essencia')
+        AND (tagline IS NULL OR tagline = '')
+    `);
+
     // Migração: city_ids nas promoções
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS apply_to_all_cities BOOLEAN NOT NULL DEFAULT TRUE`);
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS city_ids_promo INTEGER[] NOT NULL DEFAULT '{}'`);
