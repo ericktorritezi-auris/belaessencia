@@ -389,6 +389,33 @@ async function initDB() {
       );
     }
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id              SERIAL        PRIMARY KEY,
+        tenant_id       INTEGER       NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        type            VARCHAR(20)   NOT NULL CHECK (type IN ('setup','monthly')),
+        amount          NUMERIC(8,2)  NOT NULL,
+        status          VARCHAR(20)   NOT NULL DEFAULT 'paid' CHECK (status IN ('paid','pending')),
+        reference_month VARCHAR(7),
+        paid_at         DATE,
+        notes           TEXT,
+        created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS system_logs (
+        id          SERIAL        PRIMARY KEY,
+        tenant_id   INTEGER       REFERENCES tenants(id) ON DELETE CASCADE,
+        action      VARCHAR(100)  NOT NULL,
+        details     TEXT,
+        created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_logs_tenant ON system_logs(tenant_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_logs_created ON system_logs(created_at DESC)`);
+
     // Seed: registra Ana Paula como tenant_001 se ainda não existir
     const t1Check = await client.query("SELECT 1 FROM tenants WHERE slug='bela-essencia' LIMIT 1");
     if (!t1Check.rowCount) {
@@ -1852,6 +1879,363 @@ app.delete('/api/commemorative/:id', requireAdmin, async (req, res) => {
     await pool.query('DELETE FROM commemorative_dates WHERE id=$1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MASTER PANEL — Belle Planner (Erick only)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const MASTER_PASS = process.env.MASTER_PASS || 'belleplanner@master2026';
+
+function requireMaster(req, res, next) {
+  if (req.session?.isMaster) return next();
+  return res.status(401).json({ error: 'Não autorizado' });
+}
+
+async function logAction(tenantId, action, details) {
+  try {
+    await pool.query(
+      `INSERT INTO system_logs (tenant_id, action, details) VALUES ($1,$2,$3)`,
+      [tenantId || null, action, details || null]
+    );
+  } catch {}
+}
+
+// Master login
+app.post('/master/login', (req, res) => {
+  const { pass } = req.body;
+  if (pass === MASTER_PASS) {
+    req.session.isMaster = true;
+    res.json({ ok: true });
+  } else {
+    res.status(401).json({ error: 'Senha incorreta' });
+  }
+});
+
+app.post('/master/logout', (req, res) => {
+  req.session.destroy();
+  res.json({ ok: true });
+});
+
+// ── Dashboard stats ─────────────────────────────────────────────────────────
+app.get('/master/api/stats', requireMaster, async (req, res) => {
+  try {
+    const today = todayBrasilia();
+    const month = monthBrasilia();
+
+    const [tenantsRes, paymentsRes, expiringRes, blockedRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*) as total,
+        SUM(CASE WHEN active=TRUE THEN 1 ELSE 0 END) as active,
+        SUM(CASE WHEN active=FALSE THEN 1 ELSE 0 END) as inactive
+        FROM tenants`),
+      pool.query(`SELECT
+        COALESCE(SUM(CASE WHEN type='monthly' AND status='paid' THEN amount END),0) as mrr,
+        COALESCE(SUM(CASE WHEN type='setup' AND status='paid' THEN amount END),0) as setup_total,
+        COALESCE(SUM(CASE WHEN status='paid' THEN amount END),0) as total_revenue
+        FROM payments`),
+      pool.query(`SELECT COUNT(*) as cnt FROM tenants
+        WHERE active=TRUE AND plan_expires_at BETWEEN $1 AND ($1::date + interval '7 days')`,
+        [today]),
+      pool.query(`SELECT COUNT(*) as cnt FROM tenants WHERE active=FALSE AND plan_expires_at < $1`, [today]),
+    ]);
+
+    // Monthly revenue chart (last 6 months)
+    const { rows: chartRows } = await pool.query(`
+      SELECT TO_CHAR(created_at,'YYYY-MM') as month,
+             COALESCE(SUM(amount),0) as revenue
+      FROM payments WHERE status='paid' AND created_at >= NOW() - interval '6 months'
+      GROUP BY month ORDER BY month`);
+
+    // Top tenants by agendamentos (cross-schema count)
+    const { rows: tenantList } = await pool.query(
+      `SELECT t.id, t.slug, t.name, t.schema_name, t.active, t.plan_expires_at,
+              tc.business_name, tc.primary_color
+       FROM tenants t LEFT JOIN tenant_configs tc ON tc.tenant_id=t.id
+       ORDER BY t.created_at DESC`
+    );
+
+    res.json({
+      tenants: tenantsRes.rows[0],
+      payments: paymentsRes.rows[0],
+      expiring: Number(expiringRes.rows[0].cnt),
+      blocked:  Number(blockedRes.rows[0].cnt),
+      chart:    chartRows,
+      tenantList,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Tenants CRUD ─────────────────────────────────────────────────────────────
+app.get('/master/api/tenants', requireMaster, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT t.*, tc.primary_color, tc.secondary_color, tc.business_name,
+             tc.tagline, tc.whatsapp_number, tc.resend_from_email, tc.admin_user,
+             tc.logo_url,
+             (SELECT COUNT(*) FROM payments p WHERE p.tenant_id=t.id AND p.status='paid') as payment_count,
+             (SELECT COALESCE(SUM(amount),0) FROM payments p WHERE p.tenant_id=t.id AND p.status='paid') as total_paid
+      FROM tenants t LEFT JOIN tenant_configs tc ON tc.tenant_id=t.id
+      ORDER BY t.created_at DESC`);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/master/api/tenants', requireMaster, async (req, res) => {
+  const {
+    slug, name, owner_name, owner_email, owner_phone,
+    domain_custom, subdomain, plan_expires_at,
+    business_name, tagline, primary_color, secondary_color,
+    logo_url, whatsapp_number, resend_from_email, admin_user, admin_pass,
+    setup_amount
+  } = req.body;
+  if (!slug || !name || !owner_email) {
+    return res.status(400).json({ error: 'slug, name e owner_email são obrigatórios' });
+  }
+  const bcrypt = require('bcryptjs');
+  const schemaName = `tenant_${slug.replace(/[^a-z0-9]/gi,'_')}`;
+  const passHash   = admin_pass ? await bcrypt.hash(admin_pass, 10) : null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `INSERT INTO tenants (slug,name,owner_name,owner_email,owner_phone,
+        domain_custom,subdomain,active,schema_name,plan_expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8,$9) RETURNING *`,
+      [slug,name,owner_name,owner_email,owner_phone||null,
+       domain_custom||null,subdomain||null,schemaName,plan_expires_at||null]
+    );
+    const tenant = rows[0];
+    await client.query(
+      `INSERT INTO tenant_configs
+        (tenant_id,business_name,tagline,primary_color,secondary_color,
+         logo_url,whatsapp_number,resend_from_email,admin_user,admin_pass_hash)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [tenant.id, business_name||name, tagline||'',
+       primary_color||'#9b4d6a', secondary_color||'#C49A3C',
+       logo_url||null, whatsapp_number||'', resend_from_email||'',
+       admin_user||'admin', passHash]
+    );
+    // Registra pagamento de setup
+    if (setup_amount) {
+      await client.query(
+        `INSERT INTO payments (tenant_id,type,amount,status,paid_at) VALUES ($1,'setup',$2,'paid',$3)`,
+        [tenant.id, Number(setup_amount), todayBrasilia()]
+      );
+    }
+    await client.query('COMMIT');
+    // Provisiona schema do tenant
+    await createTenantSchema(schemaName);
+    await logAction(tenant.id, 'tenant_created', `Tenant ${slug} criado por master`);
+    // E-mail de boas-vindas
+    await sendTenantWelcomeEmail(tenant, { admin_user: admin_user||'admin', admin_pass, business_name: business_name||name });
+    res.status(201).json(tenant);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally { client.release(); }
+});
+
+app.put('/master/api/tenants/:id', requireMaster, async (req, res) => {
+  const { id } = req.params;
+  const { name, owner_name, owner_email, owner_phone, domain_custom, subdomain,
+          plan_expires_at, active, business_name, tagline, primary_color,
+          secondary_color, logo_url, whatsapp_number, resend_from_email } = req.body;
+  try {
+    await pool.query(
+      `UPDATE tenants SET name=$1,owner_name=$2,owner_email=$3,owner_phone=$4,
+         domain_custom=$5,subdomain=$6,plan_expires_at=$7,active=$8 WHERE id=$9`,
+      [name,owner_name,owner_email,owner_phone||null,domain_custom||null,
+       subdomain||null,plan_expires_at||null,active!==false,id]
+    );
+    await pool.query(
+      `UPDATE tenant_configs SET business_name=$1,tagline=$2,primary_color=$3,
+         secondary_color=$4,logo_url=$5,whatsapp_number=$6,resend_from_email=$7,
+         updated_at=NOW() WHERE tenant_id=$8`,
+      [business_name,tagline||'',primary_color,secondary_color,
+       logo_url||null,whatsapp_number||'',resend_from_email||'',id]
+    );
+    invalidateTenantCache(domain_custom || subdomain);
+    await logAction(id, 'tenant_updated', `Tenant ${id} atualizado`);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/master/api/tenants/:id/toggle', requireMaster, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tenants SET active = NOT active WHERE id=$1 RETURNING active, slug`,
+      [req.params.id]
+    );
+    await logAction(req.params.id, rows[0].active ? 'tenant_enabled' : 'tenant_disabled',
+      `Tenant ${rows[0].slug} ${rows[0].active ? 'ativado' : 'suspenso'}`);
+    _tenantCache.clear();
+    res.json({ active: rows[0].active });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Pagamentos ───────────────────────────────────────────────────────────────
+app.get('/master/api/payments', requireMaster, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT p.*, t.name as tenant_name, t.slug,
+             tc.business_name
+      FROM payments p
+      JOIN tenants t ON t.id=p.tenant_id
+      LEFT JOIN tenant_configs tc ON tc.tenant_id=t.id
+      ORDER BY p.created_at DESC LIMIT 200`);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/master/api/payments', requireMaster, async (req, res) => {
+  const { tenant_id, type, amount, status, reference_month, paid_at, notes } = req.body;
+  if (!tenant_id || !type || !amount) {
+    return res.status(400).json({ error: 'tenant_id, type e amount são obrigatórios' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO payments (tenant_id,type,amount,status,reference_month,paid_at,notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [tenant_id, type, Number(amount), status||'paid',
+       reference_month||null, paid_at||todayBrasilia(), notes||null]
+    );
+    // Se pagamento de mensalidade, reativa tenant se estava bloqueado e atualiza vencimento
+    if (type === 'monthly' && status === 'paid') {
+      const nextExpiry = new Date(paid_at || todayBrasilia());
+      nextExpiry.setMonth(nextExpiry.getMonth() + 1);
+      const expiryStr = nextExpiry.toISOString().slice(0,10);
+      await pool.query(
+        `UPDATE tenants SET active=TRUE, plan_expires_at=$1 WHERE id=$2`,
+        [expiryStr, tenant_id]
+      );
+      _tenantCache.clear();
+      await logAction(tenant_id, 'payment_registered', `Mensalidade paga. Novo vencimento: ${expiryStr}`);
+    }
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Logs ─────────────────────────────────────────────────────────────────────
+app.get('/master/api/logs', requireMaster, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT l.*, t.name as tenant_name
+      FROM system_logs l
+      LEFT JOIN tenants t ON t.id=l.tenant_id
+      ORDER BY l.created_at DESC LIMIT 100`);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── E-mail de boas-vindas ao novo tenant ────────────────────────────────────
+async function sendTenantWelcomeEmail(tenant, { admin_user, admin_pass, business_name }) {
+  if (!process.env.RESEND_API_KEY) return;
+  const url = tenant.domain_custom
+    ? `https://${tenant.domain_custom}`
+    : tenant.subdomain ? `https://${tenant.subdomain}.belleplanner.com.br` : '';
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;background:#fdf5f8;padding:24px">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-family:Georgia,serif;font-size:26px;color:#9b4d6a">Belle Planner</div>
+        <div style="font-size:12px;letter-spacing:.1em;color:#b07090;text-transform:uppercase">Sua agenda está no ar!</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#9b4d6a,#7b3050);border-radius:12px;padding:24px;color:white;text-align:center;margin-bottom:20px">
+        <div style="font-family:Georgia,serif;font-size:22px;margin-bottom:8px">Olá, ${tenant.owner_name || 'Profissional'}! 🎉</div>
+        <p style="opacity:.9;margin:0">Sua agenda <strong>${business_name}</strong> foi criada com sucesso.</p>
+      </div>
+      <div style="background:white;border-radius:10px;padding:20px;margin-bottom:16px">
+        <p style="font-weight:700;color:#2d1a22;margin-bottom:12px">Seus dados de acesso:</p>
+        <p>🌐 <strong>Endereço:</strong> ${url}</p>
+        <p>👤 <strong>Login:</strong> ${admin_user}</p>
+        ${admin_pass ? `<p>🔑 <strong>Senha:</strong> ${admin_pass}</p>` : ''}
+        <p style="margin-top:12px;font-size:12px;color:#8a6070">Acesse o painel pelo endereço acima e clique em "Área administrativa" no rodapé da página.</p>
+      </div>
+      <p style="text-align:center;font-size:11px;color:#aaa">Belle Planner · Sistema de Agendamento Online</p>
+    </div>`;
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from:    'Belle Planner <noreply@belleplanner.com.br>',
+        to:      [tenant.owner_email],
+        bcc:     ['erick.torritezi@gmail.com'],
+        subject: `${business_name} — sua agenda está no ar! 🎉`,
+        html,
+      }),
+    });
+    console.log(`[Master] E-mail de boas-vindas enviado para ${tenant.owner_email}`);
+  } catch (e) { console.error('[Master] Erro e-mail boas-vindas:', e.message); }
+}
+
+// ── Cron: verifica vencimentos diariamente às 08h00 BRT (= 11h00 UTC) ────────
+cron.schedule('0 11 * * *', async () => {
+  console.log('[Master Cron] Verificando vencimentos de tenants...');
+  try {
+    const today = todayBrasilia();
+
+    // 1. Bloqueia tenants vencidos há mais de 2 dias
+    const { rows: toBlock } = await pool.query(
+      `UPDATE tenants SET active=FALSE
+       WHERE active=TRUE AND plan_expires_at < ($1::date - interval '2 days')
+       RETURNING id, slug, owner_email, owner_name`,
+      [today]
+    );
+    for (const t of toBlock) {
+      await logAction(t.id, 'tenant_auto_blocked', `Bloqueado por falta de pagamento (vencido > 2 dias)`);
+      console.log(`[Master Cron] Tenant ${t.slug} bloqueado automaticamente.`);
+    }
+
+    // 2. Envia lembrete para tenants vencendo em exatamente 5 dias
+    const { rows: expiring } = await pool.query(
+      `SELECT t.*, tc.business_name FROM tenants t
+       LEFT JOIN tenant_configs tc ON tc.tenant_id=t.id
+       WHERE t.active=TRUE AND t.plan_expires_at = ($1::date + interval '5 days')`,
+      [today]
+    );
+    for (const t of expiring) {
+      if (!t.owner_email || !process.env.RESEND_API_KEY) continue;
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#fdf5f8;padding:24px">
+          <div style="text-align:center;margin-bottom:20px">
+            <div style="font-family:Georgia,serif;font-size:24px;color:#9b4d6a">Belle Planner</div>
+          </div>
+          <div style="background:linear-gradient(135deg,#C49A3C,#9b6a10);border-radius:12px;padding:20px;color:white;text-align:center;margin-bottom:20px">
+            <div style="font-size:32px;margin-bottom:8px">⚠️</div>
+            <div style="font-family:Georgia,serif;font-size:20px">Sua agenda vence em 5 dias</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:18px;margin-bottom:16px">
+            <p>Olá, <strong>${t.owner_name || 'Profissional'}</strong>!</p>
+            <p>Sua agenda <strong>${t.business_name}</strong> vence em <strong>5 dias</strong>. Para continuar usando sem interrupção, entre em contato para renovar sua assinatura.</p>
+            <p style="margin-top:12px"><strong>📱 WhatsApp:</strong> <a href="https://wa.me/5543999999999">Falar com suporte</a></p>
+          </div>
+          <p style="text-align:center;font-size:11px;color:#aaa">Belle Planner · Sistema de Agendamento Online</p>
+        </div>`;
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from:    'Belle Planner <noreply@belleplanner.com.br>',
+          to:      [t.owner_email],
+          bcc:     ['erick.torritezi@gmail.com'],
+          subject: `⚠️ ${t.business_name} — sua agenda vence em 5 dias`,
+          html,
+        }),
+      });
+      await logAction(t.id, 'expiry_reminder_sent', `Lembrete de vencimento enviado para ${t.owner_email}`);
+      console.log(`[Master Cron] Lembrete enviado para ${t.owner_email}`);
+    }
+    _tenantCache.clear();
+  } catch (err) { console.error('[Master Cron] Erro:', err.message); }
+}, { timezone: 'UTC' });
+
+// Serve o painel master
+app.get('/master', (req, res) => {
+  res.sendFile(require('path').join(__dirname, 'public', 'master.html'));
+});
+app.get('/master/', (req, res) => {
+  res.sendFile(require('path').join(__dirname, 'public', 'master.html'));
 });
 
 // ── Tenant Config (White Label) ───────────────────────────────────────────────
