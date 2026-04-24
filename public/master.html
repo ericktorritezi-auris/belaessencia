@@ -50,7 +50,7 @@
       cursor:pointer; transition:.2s;
     }
     .login-btn:hover { background:var(--rose-l); }
-    .login-err { color:var(--red); font-size:12px; margin-top:10px; }
+    .login-err { color:var(--red); font-size:12px; margin-top:10px; display:none; }
 
     /* LAYOUT */
     #app { display:none; min-height:100vh; }
@@ -213,7 +213,7 @@
     <div class="login-badge">Master Panel</div>
     <input type="password" class="login-input" id="login-pass" placeholder="Senha master" autocomplete="new-password" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="login-btn" onclick="doLogin()">Entrar</button>
-    <div class="login-err hidden" id="login-err">Senha incorreta</div>
+    <div class="login-err" id="login-err">Senha incorreta</div>
   </div>
 </div>
 
@@ -464,9 +464,9 @@ async function doLogin() {
     init();
   } catch {
     const el = document.getElementById('login-err');
-    el.classList.remove('hidden');
+    el.style.display = 'block';
     btn.textContent = 'Entrar'; btn.disabled = false;
-    setTimeout(() => el.classList.add('hidden'), 4000);
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
   }
 }
 async function doLogout() {
