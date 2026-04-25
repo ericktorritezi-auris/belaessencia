@@ -495,15 +495,15 @@ tr:hover td{background:#FAF3F6}
 
 <!-- PAGE LOADER -->
 <div class="page-loader" id="page-loader">
-  <div class="brand-name pl-brand">Bela <em>Essência</em></div>
+  <div class="brand-name pl-brand" data-brand-logo>Bela <em>Essência</em></div>
   <div class="pl-spin"></div>
 </div>
 
 <!-- PUBLIC BOOKING -->
 <div id="booking-app" class="hidden">
   <header class="site-header">
-    <div class="brand-name">Bela <em>Essência</em></div>
-    <div class="brand-tag" id="prof-tag">Estética &amp; Beleza · Ana Paula Silva</div>
+    <div class="brand-name" data-brand-logo>Bela <em>Essência</em></div>
+    <div class="brand-tag" id="prof-tag" data-brand-tagline>Estética &amp; Beleza · Ana Paula Silva</div>
   </header>
   <div class="booking-wrap" id="bk-main">
     <div class="step-dots" id="step-dots">
@@ -604,7 +604,7 @@ tr:hover td{background:#FAF3F6}
 <div id="admin-app" class="hidden">
   <div id="adm-login" class="adm-login-bg">
     <div class="adm-login-card">
-      <div class="brand-name" style="font-size:32px;margin-bottom:3px">Bela <em>Essência</em></div>
+      <div class="brand-name" data-brand-name style="font-size:32px;margin-bottom:3px">Bela Essência</div>
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--text-light);margin-bottom:28px">Painel Administrativo</div>
       <div class="notice err hidden" id="login-err">Credenciais inválidas</div>
       <div class="fg" style="text-align:left"><label>Usuário</label><input type="text" id="adm-user" value="admin"></div>
@@ -619,7 +619,7 @@ tr:hover td{background:#FAF3F6}
     <div class="adm-layout">
       <aside class="adm-sidebar" id="adm-sb">
         <div class="sb-brand">
-          <div class="brand-name" style="font-size:18px;color:var(--rose-mid)">Bela <em>Essência</em></div>
+          <div class="brand-name" data-brand-name style="font-size:18px;color:var(--rose-mid)">Bela Essência</div>
           <div class="sb-sub">Painel Admin</div>
         </div>
         <div>
@@ -1187,7 +1187,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '2.1.1';
+const APP_VERSION  = '2.1.2';
 const APP_COPY     = `Versão: ${APP_VERSION} | Clínica Bela Essência © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -4167,7 +4167,87 @@ if ('serviceWorker' in navigator) {
 // ══════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// FASE 3 — IDENTIDADE VISUAL DINÂMICA (White Label)
+// ══════════════════════════════════════════════════
+const BRAND_DEFAULTS = {
+  business_name:   'Bela Essência',
+  tagline:         'Estética & Beleza · Ana Paula Silva',
+  primary_color:   '#9b4d6a',
+  secondary_color: '#C49A3C',
+  accent_color:    '#7b3050',
+  logo_url:        null,
+  favicon_url:     null,
+};
+
+async function applyBranding() {
+  let cfg = BRAND_DEFAULTS;
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) cfg = { ...BRAND_DEFAULTS, ...(await res.json()) };
+  } catch {} // fallback silencioso — usa defaults
+
+  // CSS variables
+  const root = document.documentElement.style;
+  root.setProperty('--rose',       cfg.primary_color   || BRAND_DEFAULTS.primary_color);
+  root.setProperty('--gold',       cfg.secondary_color || BRAND_DEFAULTS.secondary_color);
+  root.setProperty('--dark-rose',  cfg.accent_color    || BRAND_DEFAULTS.accent_color);
+
+  // Cores derivadas (light/mid) baseadas na primária
+  root.setProperty('--rose-light', hexToRgba(cfg.primary_color || BRAND_DEFAULTS.primary_color, 0.08));
+  root.setProperty('--rose-mid',   hexToRgba(cfg.primary_color || BRAND_DEFAULTS.primary_color, 0.4));
+
+  // Textos
+  if (cfg.business_name) {
+    document.title = cfg.business_name;
+    document.querySelectorAll('[data-brand-name]').forEach(el => {
+      el.textContent = cfg.business_name;
+    });
+  }
+  if (cfg.tagline) {
+    document.querySelectorAll('[data-brand-tagline]').forEach(el => {
+      el.textContent = cfg.tagline;
+    });
+  }
+
+  // Logo ou nome de texto
+  document.querySelectorAll('[data-brand-name]').forEach(el => {
+    el.textContent = cfg.business_name || BRAND_DEFAULTS.business_name;
+  });
+  if (cfg.logo_url) {
+    document.querySelectorAll('[data-brand-logo]').forEach(el => {
+      el.innerHTML = `<img src="${cfg.logo_url}" alt="${cfg.business_name}" style="height:36px;object-fit:contain;vertical-align:middle">`;
+    });
+  } else {
+    // Sem logo: exibe nome como texto com formatação padrão
+    document.querySelectorAll('[data-brand-logo]').forEach(el => {
+      const name = cfg.business_name || BRAND_DEFAULTS.business_name;
+      const parts = name.split(' ');
+      if (parts.length >= 2) {
+        el.innerHTML = `${parts[0]} <em>${parts.slice(1).join(' ')}</em>`;
+      } else {
+        el.textContent = name;
+      }
+    });
+  }
+
+  // Favicon
+  if (cfg.favicon_url) {
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+    link.href = cfg.favicon_url;
+  }
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  applyBranding(); // fase 3 — identidade visual dinâmica (não bloqueia o carregamento)
   renderFooters();
   loadProfProfile(); // carrega nome/contato do profissional do banco
   renderCities(); // async — carrega do banco
