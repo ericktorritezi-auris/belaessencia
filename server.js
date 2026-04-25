@@ -1036,6 +1036,24 @@ app.use((req, res, next) => {
   next();
 });
 
+// Helper: transação com search_path do tenant (evita pool.connect() direto em rotas)
+async function tenantTransaction(req, callback) {
+  const schema = req.schemaName || 'public';
+  const client = await pool.connect();
+  try {
+    await client.query(`SET search_path TO "${schema}", public`);
+    await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Redireciona adminpanel.belleplanner.com.br → /master
 app.use((req, res, next) => {
   if (req.hostname === 'adminpanel.belleplanner.com.br' && !req.path.startsWith('/master')) {
@@ -1169,41 +1187,36 @@ app.post('/api/appointments', async (req, res) => {
     return res.status(400).json({ error: 'Campos obrigatórios faltando' });
   }
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    const appt = await tenantTransaction(req, async (client) => {
+      // Valida que o horário ainda está disponível (anti-race condition)
+      const busy = await client.query(
+        `SELECT id FROM appointments
+         WHERE date = $1 AND status != 'cancelled'
+           AND (st, et) OVERLAPS ($2::time, $3::time)
+         FOR UPDATE`,
+        [date, st, et]
+      );
+      if (busy.rowCount > 0) {
+        throw Object.assign(new Error('Horário não disponível. Por favor, escolha outro.'), { code: 409 });
+      }
 
-    // Valida que o horário ainda está disponível (anti-race condition)
-    const busy = await client.query(
-      `SELECT id FROM appointments
-       WHERE date = $1 AND status != 'cancelled'
-         AND (st, et) OVERLAPS ($2::time, $3::time)
-       FOR UPDATE`,
-      [date, st, et]
-    );
-    if (busy.rowCount > 0) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Horário não disponível. Por favor, escolha outro.' });
-    }
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      const { rows } = await client.query(
+        `INSERT INTO appointments
+           (id, city_id, city_name, proc_id, proc_name, date, st, et, name, phone, price, pt)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+        [id, cityId, cityName, procId, procName, date, st, et, name, phone, price||null, pt||'fixed']
+      );
+      return rows[0];
+    });
 
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    const { rows } = await client.query(
-      `INSERT INTO appointments
-         (id, city_id, city_name, proc_id, proc_name, date, st, et, name, phone, price, pt)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [id, cityId, cityName, procId, procName, date, st, et, name, phone, price||null, pt||'fixed']
-    );
-
-    await client.query('COMMIT');
-    const appt = rows[0];
     // Notificação assíncrona — não bloqueia a resposta
     notifyAdminNewBooking(appt).catch(e => console.error('[Push] notifyAdminNewBooking:', e.message));
     res.status(201).json(appt);
   } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
+    const status = err.code === 409 ? 409 : 500;
+    res.status(status).json({ error: err.message });
   }
 });
 
