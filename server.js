@@ -297,9 +297,13 @@ async function tenantMiddleware(req, res, next) {
   try {
     const tenant = await getTenantByHost(host);
     if (tenant) {
+      // Tenant suspenso — serve página de suspensão com identidade visual
+      if (!tenant.active) {
+        const path = require('path');
+        return res.sendFile(path.join(__dirname, 'public', 'suspended.html'));
+      }
       req.tenant     = tenant;
       req.schemaName = tenant.schema_name;
-      // Define o search_path para este request via pool query wrapper
     }
     // Se não encontrar tenant: sistema opera no schema public (compatibilidade Fase 1)
   } catch (e) {
