@@ -2369,6 +2369,66 @@ app.post('/master/api/payments', requireMaster, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Sync: move orphan data from public to tenant schema ──────────────────────
+app.post('/master/api/sync/:schema', requireMaster, async (req, res) => {
+  const { schema } = req.params;
+  const results = [];
+
+  const tables = [
+    'appointments', 'blocked_dates', 'blocked_slots',
+    'released_dates', 'released_slots', 'push_subscriptions',
+    'nps_responses', 'push_templates', 'app_settings',
+    'promotions', 'commemorative_dates',
+  ];
+
+  const client = await pool.connect();
+  try {
+    for (const tbl of tables) {
+      try {
+        // Find rows in public that don't exist in tenant schema (by id or date PK)
+        let pkCol = 'id';
+        if (tbl === 'blocked_dates') pkCol = 'date';
+        if (tbl === 'app_settings')  pkCol = 'key';
+
+        // Get columns common to both
+        const { rows: colRows } = await client.query(`
+          SELECT column_name FROM information_schema.columns
+          WHERE table_schema = $1 AND table_name = $2
+            AND column_name IN (
+              SELECT column_name FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = $2
+            )
+          ORDER BY ordinal_position
+        `, [schema, tbl]);
+
+        if (!colRows.length) continue;
+        const cols = colRows.map(r => `"${r.column_name}"`).join(', ');
+
+        const { rowCount } = await client.query(`
+          INSERT INTO "${schema}".${tbl} (${cols})
+          SELECT ${cols} FROM public.${tbl} src
+          WHERE NOT EXISTS (
+            SELECT 1 FROM "${schema}".${tbl} dst WHERE dst.${pkCol} = src.${pkCol}
+          )
+        `);
+
+        if (rowCount > 0) {
+          results.push({ table: tbl, synced: rowCount });
+          console.log(`[Sync] ${schema}.${tbl}: +${rowCount} registros sincronizados`);
+        } else {
+          results.push({ table: tbl, synced: 0 });
+        }
+      } catch (err) {
+        results.push({ table: tbl, error: err.message });
+        console.warn(`[Sync] Erro em ${tbl}: ${err.message}`);
+      }
+    }
+    res.json({ ok: true, schema, results });
+  } finally {
+    client.release();
+  }
+});
+
 // ── Logs ─────────────────────────────────────────────────────────────────────
 app.get('/master/api/logs', requireMaster, async (req, res) => {
   try {
