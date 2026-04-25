@@ -947,21 +947,37 @@ app.use(express.json());
 // Tenant middleware — detecta tenant por hostname (Fase 1 White Label)
 app.use(tenantMiddleware);
 
-// Middleware req.db — todas as queries de tenant usam o schema correto
+// Cache: schemas que já confirmaram ter dados migrados
+const _migratedSchemas = new Set();
+
+async function isSchemaMigrated(schemaName) {
+  if (_migratedSchemas.has(schemaName)) return true;
+  try {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*) as cnt FROM "${schemaName}".cities`
+    );
+    const ok = Number(rows[0].cnt) > 0;
+    if (ok) _migratedSchemas.add(schemaName);
+    return ok;
+  } catch { return false; }
+}
+
+// Middleware req.db — roteia queries ao schema correto do tenant
 app.use((req, res, next) => {
   if (req.schemaName && !req.isMaster) {
-    // Tenant detectado: queries vão para o schema correto via search_path
     req.db = async (sql, params) => {
       const client = await pool.connect();
       try {
-        await client.query(`SET search_path TO "${req.schemaName}", public`);
+        // Só usa o schema do tenant se os dados já foram migrados
+        const migrated = await isSchemaMigrated(req.schemaName);
+        const schema   = migrated ? req.schemaName : 'public';
+        await client.query(`SET search_path TO "${schema}", public`);
         return await client.query(sql, params);
       } finally {
         client.release();
       }
     };
   } else {
-    // Sem tenant (master ou fallback): usa pool direto (schema public)
     req.db = (sql, params) => pool.query(sql, params);
   }
   next();
