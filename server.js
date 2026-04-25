@@ -2632,28 +2632,40 @@ app.post('/master/api/push/send', requireMaster, async (req, res) => {
       tenants = rows;
     }
 
+    const webpushModule = require('web-push');
     const payload = JSON.stringify({ title, body, url: '/' });
 
-    // Para cada tenant, busca a subscription do admin e envia
+    // Para cada tenant, busca a subscription do admin (ou qualquer uma) e envia
     for (const t of tenants) {
       try {
         const client = await pool.connect();
         try {
           await client.query(`SET search_path TO "${t.schema_name}", public`);
-          const { rows: subs } = await client.query(
-            `SELECT endpoint, p256dh, auth FROM push_subscriptions
+          // Tenta admin primeiro; fallback para qualquer subscription mais recente
+          let { rows: subs } = await client.query(
+            `SELECT endpoint, p256dh, auth, role FROM push_subscriptions
              WHERE role='admin' ORDER BY created_at DESC LIMIT 1`
           );
           if (!subs.length) {
+            const fb = await client.query(
+              `SELECT endpoint, p256dh, auth, role FROM push_subscriptions
+               ORDER BY created_at DESC LIMIT 1`
+            );
+            subs = fb.rows;
+          }
+          if (!subs.length) {
+            console.log('[MasterPush] ' + t.name + ': sem subscription');
             results.push({ tenant: t.name, status: 'no_subscription' });
             continue;
           }
           const sub = { endpoint: subs[0].endpoint, keys: { p256dh: subs[0].p256dh, auth: subs[0].auth } };
-          await webpush.sendNotification(sub, payload);
+          await webpushModule.sendNotification(sub, payload);
           sentCount++;
-          results.push({ tenant: t.name, status: 'sent' });
+          console.log('[MasterPush] ' + t.name + ': enviado (role=' + subs[0].role + ')');
+          results.push({ tenant: t.name, status: 'sent', role: subs[0].role });
         } finally { client.release(); }
       } catch (e) {
+        console.error('[MasterPush] ' + t.name + ': erro — ' + e.message);
         results.push({ tenant: t.name, status: 'error', error: e.message });
       }
     }
@@ -2697,9 +2709,9 @@ app.get('/master/api/push/tenants', requireMaster, async (req, res) => {
       try {
         await client.query(`SET search_path TO "${t.schema_name}", public`);
         const { rows } = await client.query(
-          `SELECT 1 FROM push_subscriptions WHERE role='admin' LIMIT 1`
+          `SELECT role FROM push_subscriptions ORDER BY created_at DESC LIMIT 1`
         );
-        result.push({ ...t, has_subscription: rows.length > 0 });
+        result.push({ ...t, has_subscription: rows.length > 0, sub_role: rows[0]?.role || null });
       } catch { result.push({ ...t, has_subscription: false }); }
       finally { client.release(); }
     }
