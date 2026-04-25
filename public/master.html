@@ -1789,8 +1789,8 @@ async function loadComms() {
         '<input type="checkbox" class="push-tenant-cb" value="' + t.id + '" checked>' +
         '<span>' + (t.business_name || t.name) + '</span>' +
         (t.has_subscription ?
-          '<span style="color:var(--green);font-size:10px;margin-left:auto">● Online</span>' :
-          '<span style="color:var(--muted);font-size:10px;margin-left:auto">sem app</span>') +
+          '<span style="color:var(--green);font-size:10px;margin-left:auto">● ' + (t.sub_role || 'ok') + '</span>' :
+          '<span style="color:var(--yellow);font-size:10px;margin-left:auto">sem push</span>') +
       '</label>'
     ).join('');
 
