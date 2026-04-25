@@ -182,6 +182,11 @@
     .sec.active { display:block; }
 
     /* RESPONSIVE */
+    /* Projection grid responsive */
+    .proj-grid { grid-template-columns: repeat(3,1fr); }
+    @media(max-width:600px) {
+      .proj-grid { grid-template-columns: 1fr !important; }
+    }
     @media(max-width:768px) {
       .sidebar { transform:translateX(-100%); transition:.3s; }
       .sidebar.open { transform:translateX(0); }
@@ -269,6 +274,9 @@
       <div class="nav-section">Sistema</div>
       <div class="nav-item" id="nav-health" onclick="showSec('health')"><span class="nav-icon">🩺</span> Saúde do Sistema</div>
       <div class="nav-item" id="nav-logs" onclick="showSec('logs')"><span class="nav-icon">📋</span> Logs</div>
+      <div class="nav-sep"></div>
+      <div class="nav-section">Minha Conta</div>
+      <div class="nav-item" id="nav-profile" onclick="showSec('profile')"><span class="nav-icon">👤</span> Meu Perfil</div>
     </nav>
     <div class="sidebar-footer">
       <button class="logout-btn" onclick="doLogout()">Sair do painel</button>
@@ -325,6 +333,7 @@
       <!-- FINANCIAL -->
       <div class="sec" id="sec-financial">
         <div class="stats-grid" id="fin-stats"></div>
+        <div id="revenue-projection"></div>
         <div class="table-card">
           <div class="table-head">
             <div class="table-title">💳 Histórico de pagamentos</div>
@@ -357,6 +366,40 @@
           <a href="https://uptimerobot.com" target="_blank" class="btn btn-primary" style="display:inline-flex;margin-top:12px;text-decoration:none;align-items:center;gap:6px">
             Configurar UptimeRobot ↗
           </a>
+        </div>
+      </div>
+
+      <!-- PROFILE -->
+      <div class="sec" id="sec-profile">
+        <div style="display:grid;grid-template-columns:1fr;gap:16px;max-width:800px" id="profile-grid">
+          <div class="table-card" style="grid-column:1/-1">
+            <div class="table-head"><div class="table-title">👤 Meu Perfil</div></div>
+            <div style="padding:20px 24px 24px">
+              <div class="fg-row">
+                <div class="fg"><label>Nome completo</label><input class="fi" id="mp-name" placeholder="Seu nome"></div>
+                <div class="fg"><label>E-mail</label><input class="fi" id="mp-email" type="email" placeholder="seu@email.com"></div>
+              </div>
+              <div class="fg-row">
+                <div class="fg"><label>WhatsApp de suporte</label><input class="fi" id="mp-whatsapp" placeholder="(43) 99999-9999"></div>
+                <div class="fg"><label>Foto URL (opcional)</label><input class="fi" id="mp-photo" placeholder="https://..."></div>
+              </div>
+              <div class="fg"><label>Mensagem na página de suspensão</label><input class="fi" id="mp-support-msg" placeholder="Entre em contato para renovar sua assinatura."></div>
+              <div class="fg-row" style="margin-top:8px">
+                <div class="fg">
+                  <label>Nova senha master</label>
+                  <input class="fi" id="mp-pass" type="password" placeholder="Mínimo 6 caracteres (deixe em branco para não alterar)">
+                </div>
+                <div class="fg">
+                  <label>Confirmar nova senha</label>
+                  <input class="fi" id="mp-pass2" type="password" placeholder="Repita a nova senha">
+                </div>
+              </div>
+              <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+                <button class="btn btn-primary" onclick="saveProfile()">Salvar alterações</button>
+                <span id="profile-msg" style="font-size:12px;color:var(--green);display:none">✓ Salvo com sucesso</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -443,6 +486,41 @@
   </div>
 </div>
 
+<!-- MODAL NOTES -->
+<div class="modal-bg hidden" id="modal-notes-bg">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="notes-modal-title">Notas internas</div>
+      <button class="modal-close" onclick="closeModal('notes')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="fg" style="display:flex;gap:8px">
+        <input class="fi" id="new-note-input" placeholder="Adicionar nota..." style="flex:1" onkeydown="if(event.key==='Enter')addNote()">
+        <button class="btn btn-primary" onclick="addNote()">+</button>
+      </div>
+      <div id="notes-list" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-top:4px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ONBOARDING -->
+<div class="modal-bg hidden" id="modal-onboarding-bg">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title" id="onboarding-modal-title">Checklist de Onboarding</div>
+      <button class="modal-close" onclick="closeModal('onboarding')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="onboarding-progress" style="margin-bottom:16px"></div>
+      <div style="display:flex;flex-direction:column;gap:10px" id="onboarding-checks"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('onboarding')">Fechar</button>
+        <button class="btn btn-primary" onclick="saveOnboarding()">Salvar checklist</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL PAYMENT -->
 <div class="modal-bg hidden" id="modal-payment-bg">
   <div class="modal" style="max-width:420px">
@@ -512,7 +590,7 @@ function fmtCurr(v) {
   return `R$ ${Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
 }
 
-const SEC_TITLES = { dashboard:'Dashboard', alerts:'Alertas', tenants:'Tenants', financial:'Financeiro', health:'Saúde do Sistema', logs:'Logs' };
+const SEC_TITLES = { dashboard:'Dashboard', alerts:'Alertas', tenants:'Tenants', financial:'Financeiro', health:'Saúde do Sistema', logs:'Logs', profile:'Meu Perfil' };
 let _tenants = [];
 let _editId   = null;
 
@@ -565,10 +643,11 @@ function showSec(name) {
   closeSidebar();
 
   if (name === 'tenants')   renderTenants();
-  if (name === 'financial') loadFinancial();
+  if (name === 'financial') { loadFinancial(); loadRevenueProjection(); }
   if (name === 'logs')      loadLogs();
   if (name === 'alerts')    renderAlerts();
   if (name === 'health')    loadHealth();
+  if (name === 'profile')   loadProfile();
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
@@ -704,8 +783,10 @@ function renderTenantsTable(containerId, list, compact=false) {
       <td style="font-size:12px">${fmtDate(t.plan_expires_at)}</td>
       <td>${tenantStatus(t)}</td>
       <td>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;min-width:160px">
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="openEditModal(${t.id})">Editar</button>
+          <button class="btn btn-ghost btn-sm" onclick="openNotesModal(${t.id},'${(t.business_name||t.name).replace(/'/g,'')}')" title="Notas internas">📝</button>
+          <button class="btn btn-ghost btn-sm" onclick="openOnboardingModal(${t.id},'${(t.business_name||t.name).replace(/'/g,'')}')" title="Checklist onboarding">✅</button>
           <button class="btn btn-sm ${t.active?'btn-red':'btn-green'}" onclick="toggleTenant(${t.id},'${t.slug}',${t.active})">${t.active?'Suspender':'Ativar'}</button>
           ${(t.domain_custom||t.subdomain)?`<a href="https://${t.domain_custom||(t.subdomain+'.belleplanner.com.br')}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration:none">Ver ↗</a>`:''}
           <button class="btn btn-ghost btn-sm" onclick="syncTenant('${t.schema_name}','${t.business_name||t.name}')" title="Sincronizar dados órfãos do schema public">⚙️ Sync</button>
@@ -1137,6 +1218,205 @@ async function loadLogs() {
   } catch(e) { toast(e.message, 'err'); }
 }
 
+// ── PROFILE ────────────────────────────────────────────────────────────────
+async function loadProfile() {
+  try {
+    const p = await GET('/master/api/profile');
+    document.getElementById('mp-name').value        = p.name        || '';
+    document.getElementById('mp-email').value       = p.email       || '';
+    document.getElementById('mp-whatsapp').value    = p.whatsapp    || '';
+    document.getElementById('mp-photo').value       = p.photo_url   || '';
+    document.getElementById('mp-support-msg').value = p.support_msg || '';
+    document.getElementById('mp-pass').value  = '';
+    document.getElementById('mp-pass2').value = '';
+  } catch(e) { toast('Erro ao carregar perfil: ' + e.message, 'err'); }
+}
+
+async function saveProfile() {
+  const pass  = document.getElementById('mp-pass').value.trim();
+  const pass2 = document.getElementById('mp-pass2').value.trim();
+  if (pass && pass !== pass2)  { toast('As senhas não coincidem', 'err'); return; }
+  if (pass && pass.length < 6) { toast('Senha mínima: 6 caracteres', 'err'); return; }
+
+  const body = {
+    name:        document.getElementById('mp-name').value.trim(),
+    email:       document.getElementById('mp-email').value.trim(),
+    whatsapp:    document.getElementById('mp-whatsapp').value.trim(),
+    photo_url:   document.getElementById('mp-photo').value.trim(),
+    support_msg: document.getElementById('mp-support-msg').value.trim(),
+    new_pass:    pass || null,
+  };
+  if (!body.name) { toast('Nome é obrigatório', 'err'); return; }
+
+  try {
+    await PUT('/master/api/profile', body);
+    if (pass) {
+      _masterToken = pass;
+      sessionStorage.setItem('bp_master_token', pass);
+    }
+    const msg = document.getElementById('profile-msg');
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 3000);
+    toast('✓ Perfil salvo com sucesso', 'ok');
+  } catch(e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+// ── NOTES ───────────────────────────────────────────────────────────────────
+let _notesCurrentTenantId = null;
+
+async function openNotesModal(tenantId, name) {
+  _notesCurrentTenantId = tenantId;
+  document.getElementById('notes-modal-title').textContent = 'Notas — ' + name;
+  document.getElementById('new-note-input').value = '';
+  document.getElementById('modal-notes-bg').classList.remove('hidden');
+  await refreshNotes();
+}
+
+async function refreshNotes() {
+  try {
+    const notes = await GET('/master/api/tenants/' + _notesCurrentTenantId + '/notes');
+    const el = document.getElementById('notes-list');
+    if (!notes.length) {
+      el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:16px">Nenhuma nota ainda.</div>';
+      return;
+    }
+    el.innerHTML = notes.map(n => `
+      <div style="background:var(--surface);border-radius:8px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start">
+        <div style="flex:1">
+          <div style="font-size:13px;color:var(--text);line-height:1.5">${n.note.replace(/</g,'&lt;')}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">${new Date(n.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}</div>
+        </div>
+        <button onclick="deleteNote(${n.id})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;flex-shrink:0" title="Excluir">🗑</button>
+      </div>`).join('');
+  } catch(e) { toast('Erro ao carregar notas', 'err'); }
+}
+
+async function addNote() {
+  const input = document.getElementById('new-note-input');
+  const note  = input.value.trim();
+  if (!note) return;
+  try {
+    await POST('/master/api/tenants/' + _notesCurrentTenantId + '/notes', { note });
+    input.value = '';
+    await refreshNotes();
+  } catch(e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+async function deleteNote(id) {
+  if (!confirm('Excluir esta nota?')) return;
+  try {
+    await API('DELETE', '/master/api/notes/' + id);
+    await refreshNotes();
+  } catch(e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+// ── ONBOARDING ──────────────────────────────────────────────────────────────
+let _onboardingCurrentId = null;
+const ONBOARDING_STEPS = [
+  { key: 'acesso_criado',     label: 'Acesso criado (login e senha)' },
+  { key: 'dns_configurado',   label: 'DNS configurado (domínio apontando)' },
+  { key: 'procedimentos',     label: 'Procedimentos cadastrados' },
+  { key: 'cidades',           label: 'Cidades cadastradas' },
+  { key: 'horarios',          label: 'Horários de atendimento configurados' },
+  { key: 'teste_agendamento', label: 'Teste de agendamento realizado' },
+  { key: 'entregue',          label: 'Agenda entregue para a profissional ✨' },
+];
+
+async function openOnboardingModal(tenantId, name) {
+  _onboardingCurrentId = tenantId;
+  document.getElementById('onboarding-modal-title').textContent = 'Onboarding — ' + name;
+  document.getElementById('modal-onboarding-bg').classList.remove('hidden');
+  try {
+    const ob = await GET('/master/api/tenants/' + tenantId + '/onboarding');
+    const done = ONBOARDING_STEPS.filter(s => ob[s.key]).length;
+    const pct  = Math.round((done / ONBOARDING_STEPS.length) * 100);
+
+    document.getElementById('onboarding-progress').innerHTML = `
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:12px;font-weight:800;color:var(--text)">Progresso</span>
+        <span style="font-size:12px;font-weight:800;color:${pct===100?'var(--green)':'var(--gold)'}">${done}/${ONBOARDING_STEPS.length} — ${pct}%</span>
+      </div>
+      <div style="background:var(--surface);border-radius:50px;height:8px;overflow:hidden">
+        <div style="background:${pct===100?'var(--green)':'var(--gold)'};height:100%;width:${pct}%;transition:.3s;border-radius:50px"></div>
+      </div>`;
+
+    document.getElementById('onboarding-checks').innerHTML = ONBOARDING_STEPS.map(s => `
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:var(--surface);border-radius:8px;padding:10px 12px;border:1.5px solid ${ob[s.key]?'var(--green)':'var(--border)'};transition:.2s">
+        <input type="checkbox" id="ob-${s.key}" ${ob[s.key]?'checked':''} style="accent-color:var(--green);width:16px;height:16px;flex-shrink:0" onchange="updateOnboardingProgress()">
+        <span style="font-size:13px;color:${ob[s.key]?'var(--text)':'var(--muted)'}">${s.label}</span>
+      </label>`).join('');
+  } catch(e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+function updateOnboardingProgress() {
+  const done = ONBOARDING_STEPS.filter(s => document.getElementById('ob-'+s.key)?.checked).length;
+  const pct  = Math.round((done / ONBOARDING_STEPS.length) * 100);
+  document.getElementById('onboarding-progress').innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:12px;font-weight:800;color:var(--text)">Progresso</span>
+      <span style="font-size:12px;font-weight:800;color:${pct===100?'var(--green)':'var(--gold)'}">${done}/${ONBOARDING_STEPS.length} — ${pct}%</span>
+    </div>
+    <div style="background:var(--surface);border-radius:50px;height:8px;overflow:hidden">
+      <div style="background:${pct===100?'var(--green)':'var(--gold)'};height:100%;width:${pct}%;transition:.3s;border-radius:50px"></div>
+    </div>`;
+  // Update border colors
+  ONBOARDING_STEPS.forEach(s => {
+    const lbl = document.getElementById('ob-'+s.key)?.closest('label');
+    if (lbl) lbl.style.borderColor = document.getElementById('ob-'+s.key)?.checked ? 'var(--green)' : 'var(--border)';
+  });
+}
+
+async function saveOnboarding() {
+  const body = {};
+  ONBOARDING_STEPS.forEach(s => { body[s.key] = !!document.getElementById('ob-'+s.key)?.checked; });
+  try {
+    await PUT('/master/api/tenants/' + _onboardingCurrentId + '/onboarding', body);
+    toast('✓ Checklist salvo', 'ok');
+    closeModal('onboarding');
+    renderTenants();
+  } catch(e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+// ── PROJEÇÃO DE RECEITA ─────────────────────────────────────────────────────
+async function loadRevenueProjection() {
+  try {
+    const d = await GET('/master/api/revenue/projection');
+    const el = document.getElementById('revenue-projection');
+    if (!el) return;
+
+    const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const now = new Date();
+
+    el.innerHTML = `
+      <div class="table-card" style="margin-top:16px">
+        <div class="table-head">
+          <div class="table-title">📈 Projeção — próximos 3 meses</div>
+        </div>
+        <div style="padding:16px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px" class="proj-grid">
+          ${[0,1,2].map(i => {
+            const dt = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
+            const lbl = months[dt.getMonth()] + '/' + String(dt.getFullYear()).slice(2);
+            return `<div style="background:var(--surface);border-radius:8px;padding:14px;text-align:center">
+              <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px">${lbl}</div>
+              <div style="font-family:'Cormorant Garamond',serif;font-size:28px;color:var(--green);font-weight:600">${fmtCurr(d.mrr)}</div>
+              ${d.at_risk > 0 ? '<div style="font-size:11px;color:var(--yellow);margin-top:4px">⚠️ ' + fmtCurr(d.at_risk) + ' em risco</div>' : '<div style="font-size:11px;color:var(--green);margin-top:4px">✓ Sem vencimentos</div>'}
+            </div>`;
+          }).join('')}
+        </div>
+        ${d.expiring.length ? `
+        <div style="padding:0 20px 16px">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px">⚠️ Vencimentos nos próximos 90 dias</div>
+          ${d.expiring.map(t => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+              <span style="color:var(--text)">${t.business_name||t.name}</span>
+              <span style="color:var(--muted)">${fmtDate(t.plan_expires_at)}</span>
+              <span style="color:var(--rose-l);font-weight:700">${fmtCurr(t.monthly_fee)}</span>
+            </div>`).join('')}
+        </div>` : ''}
+      </div>`;
+  } catch(e) { console.error('projection error:', e); }
+}
+
 // ── SYNC ───────────────────────────────────────────────────────────────────
 async function syncTenant(schema, name) {
   if (!confirm(`Sincronizar dados órfãos do public → ${schema} (${name})?
@@ -1168,7 +1448,8 @@ Isso move agendamentos, NPS e outros dados que estavam no schema público para o
 
 // ── MODALS ─────────────────────────────────────────────────────────────────
 function closeModal(name) {
-  document.getElementById(`modal-${name}-bg`).classList.add('hidden');
+  const el = document.getElementById('modal-' + name + '-bg');
+  if (el) el.classList.add('hidden');
 }
 document.querySelectorAll('.modal-bg').forEach(bg => {
   bg.addEventListener('click', e => { if (e.target === bg) bg.classList.add('hidden'); });
