@@ -281,6 +281,107 @@ async function createTenantSchema(schemaName) {
   }
 }
 
+// Insere dados iniciais no schema do novo tenant
+async function seedTenantData(schemaName, tenantData = {}) {
+  const client = await pool.connect();
+  try {
+    await client.query(`SET search_path TO "${schemaName}", public`);
+
+    const { name, email, login, passHash } = tenantData;
+
+    // admin_profile
+    const apCount = await client.query(`SELECT COUNT(*) as n FROM admin_profile`);
+    if (Number(apCount.rows[0].n) === 0 && passHash) {
+      await client.query(
+        `INSERT INTO admin_profile (name, email, login, pass_hash)
+         VALUES ($1, $2, $3, $4)`,
+        [name || 'Profissional', email || '', login || 'admin', passHash]
+      );
+      console.log(`[DB] admin_profile inserido em "${schemaName}"`);
+    }
+
+    // work_configs padrão: Seg-Sex, 08h-18h
+    const wcCount = await client.query(`SELECT COUNT(*) as n FROM work_configs`);
+    if (Number(wcCount.rows[0].n) === 0) {
+      // dias 1=seg a 5=sex
+      for (let day = 1; day <= 5; day++) {
+        await client.query(
+          `INSERT INTO work_configs (scope, day_of_week, is_active, work_start, work_end)
+           VALUES ('city_day', $1, TRUE, '08:00', '18:00')`,
+          [day]
+        );
+      }
+      // sab e dom desativados
+      for (let day of [0, 6]) {
+        await client.query(
+          `INSERT INTO work_configs (scope, day_of_week, is_active, work_start, work_end)
+           VALUES ('city_day', $1, FALSE, '08:00', '18:00')`,
+          [day]
+        );
+      }
+      console.log(`[DB] work_configs padrão inseridos em "${schemaName}"`);
+    }
+
+    // app_settings padrão
+    const asCount = await client.query(`SELECT COUNT(*) as n FROM app_settings`);
+    if (Number(asCount.rows[0].n) === 0) {
+      const defaults = [
+        ['nps_enabled', 'true'],
+        ['nps_delay_hours', '2'],
+        ['booking_advance_days', '30'],
+      ];
+      for (const [key, value] of defaults) {
+        await client.query(
+          `INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
+          [key, value]
+        );
+      }
+      console.log(`[DB] app_settings padrão inseridos em "${schemaName}"`);
+    }
+
+    // push_templates padrão
+    const ptCount = await client.query(`SELECT COUNT(*) as n FROM push_templates`);
+    if (Number(ptCount.rows[0].n) === 0) {
+      const templates = [
+        ['✅ Agendamento confirmado', 'Seu agendamento foi confirmado! Te esperamos.', true],
+        ['✏️ Agendamento alterado', 'Seu agendamento foi atualizado. Verifique os detalhes.', true],
+        ['❌ Agendamento cancelado', 'Seu agendamento foi cancelado. Entre em contato conosco.', true],
+        ['💖 Procedimento realizado', 'Obrigada pela visita! Esperamos te ver em breve.', true],
+      ];
+      for (const [title, body, is_system] of templates) {
+        await client.query(
+          `INSERT INTO push_templates (title, body, is_system) VALUES ($1, $2, $3)`,
+          [title, body, is_system]
+        );
+      }
+      console.log(`[DB] push_templates padrão inseridos em "${schemaName}"`);
+    }
+
+    // commemorative_dates padrão
+    const cdCount = await client.query(`SELECT COUNT(*) as n FROM commemorative_dates`);
+    if (Number(cdCount.rows[0].n) === 0) {
+      const dates = [
+        ['Dia das Mães', 2, 5, '💐 Feliz Dia das Mães! Aproveite nossas promoções especiais.'],
+        ['Dia dos Namorados', 12, 6, '💕 Dia dos Namorados! Presenteie com beleza e cuidado.'],
+        ['Natal', 25, 12, '🎄 Feliz Natal! Que seu dia seja cheio de beleza e alegria.'],
+        ['Ano Novo', 1, 1, '🥂 Feliz Ano Novo! Que a beleza te acompanhe o ano todo.'],
+      ];
+      for (const [name, day, month, message] of dates) {
+        await client.query(
+          `INSERT INTO commemorative_dates (name, day, month, message, is_active)
+           VALUES ($1, $2, $3, $4, TRUE)`,
+          [name, day, month, message]
+        );
+      }
+      console.log(`[DB] commemorative_dates padrão inseridos em "${schemaName}"`);
+    }
+
+    console.log(`[DB] Seeds iniciais concluídos para "${schemaName}"`);
+  } finally {
+    client.release();
+  }
+}
+
 // ── Middleware de tenant ───────────────────────────────────────────────────────
 // Detecta o tenant pelo hostname e injeta no request
 // FASE 1: Funciona em paralelo com o sistema atual (search_path seletivo)
@@ -2332,6 +2433,19 @@ app.post('/master/api/tenants', requireMaster, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Validação: domínio/subdomínio já em uso?
+    const domainCheck = await pool.query(
+      `SELECT slug FROM tenants
+       WHERE domain_custom = $1 OR subdomain = $2 OR slug = $3`,
+      [domain_custom||null, subdomain||null, slug]
+    );
+    if (domainCheck.rowCount > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `Slug ou domínio já está em uso pelo tenant "${domainCheck.rows[0].slug}"`
+      });
+    }
+
     const mFee = req.body.monthly_fee !== undefined ? Number(req.body.monthly_fee) : 100;
     const sFee = req.body.setup_fee    !== undefined ? Number(req.body.setup_fee)    : 200;
     const { rows } = await client.query(
@@ -2362,10 +2476,26 @@ app.post('/master/api/tenants', requireMaster, async (req, res) => {
     await client.query('COMMIT');
     // Provisiona schema do tenant
     await createTenantSchema(schemaName);
+
+    // Seeds iniciais com dados da profissional
+    await seedTenantData(schemaName, {
+      name:     owner_name || business_name || name,
+      email:    owner_email || '',
+      login:    admin_user  || 'admin',
+      passHash: passHash,
+    });
+
     await logAction(tenant.id, 'tenant_created', `Tenant ${slug} criado por master`);
+
     // E-mail de boas-vindas
-    await sendTenantWelcomeEmail(tenant, { admin_user: admin_user||'admin', admin_pass, business_name: business_name||name });
-    res.status(201).json(tenant);
+    const tenantForEmail = { ...tenant, domain_custom: domain_custom||null, subdomain: subdomain||null, owner_name, owner_email };
+    await sendTenantWelcomeEmail(tenantForEmail, {
+      admin_user:    admin_user    || 'admin',
+      admin_pass:    admin_pass    || '',
+      business_name: business_name || name,
+    });
+
+    res.status(201).json({ ...tenant, provisioned: true });
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
