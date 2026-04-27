@@ -44,7 +44,12 @@ async function getTenantByHost(host) {
               tc.admin_pass_hash, tc.timezone
        FROM tenants t
        LEFT JOIN tenant_configs tc ON tc.tenant_id = t.id
-       WHERE (t.domain_custom = $1 OR t.subdomain = $1 OR $1 LIKE '%.' || t.subdomain || '.%')
+       WHERE (
+         t.domain_custom = $1
+         OR t.subdomain = $1
+         OR t.subdomain || '.belleplanner.com.br' = $1
+         OR $1 LIKE t.subdomain || '.%'
+       )
        LIMIT 1`,
       [host]
     );
@@ -404,8 +409,13 @@ async function tenantMiddleware(req, res, next) {
       }
       req.tenant     = tenant;
       req.schemaName = tenant.schema_name;
+    } else if (host !== 'localhost' && host !== '127.0.0.1' && !host.includes('railway.app')) {
+      // Domínio não reconhecido — serve página de agenda não encontrada
+      // (exceto localhost e railway.app interno que são usados por ferramentas)
+      const path = require('path');
+      return res.sendFile(path.join(__dirname, 'public', 'not-found.html'));
     }
-    // Se não encontrar tenant: sistema opera no schema public (compatibilidade Fase 1)
+    // localhost/railway.app sem tenant: opera no schema public (Ana Paula em dev)
   } catch (e) {
     console.error('[Tenant] Erro ao detectar tenant:', e.message);
   }
@@ -2310,7 +2320,8 @@ app.delete('/api/commemorative/:id', requireAdmin, async (req, res) => {
 // MASTER PANEL — Belle Planner (Erick only)
 // ══════════════════════════════════════════════════════════════════════════════
 
-const MASTER_PASS = process.env.MASTER_PASS || 'belleplanner@master2026';
+const MASTER_PASS       = process.env.MASTER_PASS || 'belleplanner@master2026';
+const MASTER_FROM_EMAIL = process.env.MASTER_FROM_EMAIL || 'noreply@belleplanner.com.br';
 
 function requireMaster(req, res, next) {
   // Check session (primary)
@@ -2428,7 +2439,10 @@ app.post('/master/api/tenants', requireMaster, async (req, res) => {
   }
   const bcrypt = require('bcryptjs');
   const schemaName = `tenant_${slug.replace(/[^a-z0-9]/gi,'_')}`;
-  const passHash   = admin_pass ? await bcrypt.hash(admin_pass, 10) : null;
+
+  // Gera senha automática se não fornecida
+  const finalPass = admin_pass?.trim() || generatePassword();
+  const passHash  = await bcrypt.hash(finalPass, 10);
 
   const client = await pool.connect();
   try {
@@ -2483,6 +2497,7 @@ app.post('/master/api/tenants', requireMaster, async (req, res) => {
       email:    owner_email || '',
       login:    admin_user  || 'admin',
       passHash: passHash,
+      pass: finalPass,
     });
 
     await logAction(tenant.id, 'tenant_created', `Tenant ${slug} criado por master`);
@@ -2491,7 +2506,7 @@ app.post('/master/api/tenants', requireMaster, async (req, res) => {
     const tenantForEmail = { ...tenant, domain_custom: domain_custom||null, subdomain: subdomain||null, owner_name, owner_email };
     await sendTenantWelcomeEmail(tenantForEmail, {
       admin_user:    admin_user    || 'admin',
-      admin_pass:    admin_pass    || '',
+      admin_pass:    finalPass,
       business_name: business_name || name,
     });
 
@@ -2958,6 +2973,29 @@ app.get('/master/api/report/csv', requireMaster, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Re-enviar e-mail de boas-vindas ──────────────────────────────────────────
+app.post('/master/api/tenants/:id/resend-welcome', requireMaster, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.*, tc.business_name, tc.admin_user
+       FROM tenants t LEFT JOIN tenant_configs tc ON tc.tenant_id=t.id
+       WHERE t.id=$1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Tenant não encontrado' });
+    const t = rows[0];
+    const { new_pass } = req.body;
+
+    await sendTenantWelcomeEmail(t, {
+      admin_user:    t.admin_user || 'admin',
+      admin_pass:    new_pass || '(a senha não foi alterada)',
+      business_name: t.business_name || t.name,
+    });
+    await logAction(t.id, 'welcome_email_resent', `E-mail reenviado para ${t.owner_email}`);
+    res.json({ ok: true, sent_to: t.owner_email });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Sync: move orphan data from public to tenant schema ──────────────────────
 app.post('/master/api/sync/:schema', requireMaster, async (req, res) => {
   const { schema } = req.params;
@@ -3030,45 +3068,95 @@ app.get('/master/api/logs', requireMaster, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Gera senha aleatória segura para novos tenants
+function generatePassword() {
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789@#!';
+  let pass = '';
+  for (let i = 0; i < 10; i++) {
+    pass += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return pass;
+}
+
 // ── E-mail de boas-vindas ao novo tenant ────────────────────────────────────
 async function sendTenantWelcomeEmail(tenant, { admin_user, admin_pass, business_name }) {
-  if (!process.env.RESEND_API_KEY) return;
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('[Master] RESEND_API_KEY não configurado — e-mail de boas-vindas não enviado');
+    return;
+  }
+  if (!tenant.owner_email) {
+    console.warn('[Master] Tenant sem owner_email — e-mail de boas-vindas não enviado');
+    return;
+  }
+
   const url = tenant.domain_custom
     ? `https://${tenant.domain_custom}`
     : tenant.subdomain ? `https://${tenant.subdomain}.belleplanner.com.br` : '';
+
+  const adminUrl = url ? `${url}` : '(configure o domínio)';
+
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;background:#fdf5f8;padding:24px">
       <div style="text-align:center;margin-bottom:24px">
-        <div style="font-family:Georgia,serif;font-size:26px;color:#9b4d6a">Belle Planner</div>
-        <div style="font-size:12px;letter-spacing:.1em;color:#b07090;text-transform:uppercase">Sua agenda está no ar!</div>
+        <div style="font-family:Georgia,serif;font-size:26px;color:#9b4d6a">Belle <em>Planner</em></div>
+        <div style="font-size:11px;letter-spacing:.1em;color:#b07090;text-transform:uppercase">Sua agenda está no ar!</div>
       </div>
       <div style="background:linear-gradient(135deg,#9b4d6a,#7b3050);border-radius:12px;padding:24px;color:white;text-align:center;margin-bottom:20px">
         <div style="font-family:Georgia,serif;font-size:22px;margin-bottom:8px">Olá, ${tenant.owner_name || 'Profissional'}! 🎉</div>
-        <p style="opacity:.9;margin:0">Sua agenda <strong>${business_name}</strong> foi criada com sucesso.</p>
+        <p style="opacity:.9;margin:0">Sua agenda <strong>${business_name}</strong> foi criada com sucesso e já está disponível!</p>
       </div>
       <div style="background:white;border-radius:10px;padding:20px;margin-bottom:16px">
-        <p style="font-weight:700;color:#2d1a22;margin-bottom:12px">Seus dados de acesso:</p>
-        <p>🌐 <strong>Endereço:</strong> ${url}</p>
-        <p>👤 <strong>Login:</strong> ${admin_user}</p>
-        ${admin_pass ? `<p>🔑 <strong>Senha:</strong> ${admin_pass}</p>` : ''}
-        <p style="margin-top:12px;font-size:12px;color:#8a6070">Acesse o painel pelo endereço acima e clique em "Área administrativa" no rodapé da página.</p>
+        <p style="font-weight:700;color:#2d1a22;margin-bottom:14px;font-size:15px">📋 Seus dados de acesso:</p>
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:8px 0;color:#8a6070;font-size:13px;width:120px">🌐 Endereço</td><td style="padding:8px 0;font-size:13px"><a href="${adminUrl}" style="color:#9b4d6a">${adminUrl}</a></td></tr>
+          <tr><td style="padding:8px 0;color:#8a6070;font-size:13px">👤 Login</td><td style="padding:8px 0;font-size:13px;font-weight:700">${admin_user}</td></tr>
+          <tr><td style="padding:8px 0;color:#8a6070;font-size:13px">🔑 Senha</td><td style="padding:8px 0;font-size:13px;font-weight:700;color:#9b4d6a">${admin_pass}</td></tr>
+        </table>
+        <p style="margin-top:14px;font-size:12px;color:#8a6070;background:#fdf5f8;padding:10px;border-radius:6px">
+          ℹ️ Para acessar o painel administrativo, abra o endereço acima e clique em <strong>"Área administrativa"</strong> no rodapé da página.
+        </p>
       </div>
-      <p style="text-align:center;font-size:11px;color:#aaa">Belle Planner · Sistema de Agendamento Online</p>
+      <div style="background:white;border-radius:10px;padding:16px 20px;margin-bottom:16px">
+        <p style="font-weight:700;color:#2d1a22;margin-bottom:10px;font-size:14px">🚀 Próximos passos:</p>
+        <ol style="padding-left:18px;color:#4a3040;font-size:13px;line-height:2">
+          <li>Acesse sua agenda pelo endereço acima</li>
+          <li>Entre no painel administrativo</li>
+          <li>Cadastre seus procedimentos e cidades</li>
+          <li>Configure seus horários de atendimento</li>
+          <li>Instale o aplicativo no seu celular</li>
+        </ol>
+      </div>
+      <p style="text-align:center;font-size:11px;color:#aaa;margin-top:16px">
+        Belle Planner · Sistema de Agendamento Online<br>
+        Dúvidas? Entre em contato com seu consultor.
+      </p>
     </div>`;
+
   try {
-    await fetch('https://api.resend.com/emails', {
+    const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
-        from:    'Belle Planner <noreply@belleplanner.com.br>',
+        from:    `Belle Planner <${MASTER_FROM_EMAIL}>`,
         to:      [tenant.owner_email],
         bcc:     ['erick.torritezi@gmail.com'],
-        subject: `${business_name} — sua agenda está no ar! 🎉`,
+          reply_to: 'erick.torritezi@gmail.com',
+        subject: `[Belle Planner] ${business_name} — sua agenda está no ar! 🎉`,
         html,
       }),
     });
-    console.log(`[Master] E-mail de boas-vindas enviado para ${tenant.owner_email}`);
-  } catch (e) { console.error('[Master] Erro e-mail boas-vindas:', e.message); }
+    const result = await response.json();
+    if (!response.ok) {
+      console.error('[Master] Erro ao enviar e-mail de boas-vindas:', JSON.stringify(result));
+    } else {
+      console.log(`[Master] E-mail de boas-vindas enviado para ${tenant.owner_email}`);
+    }
+  } catch (e) {
+    console.error('[Master] Exceção ao enviar e-mail de boas-vindas:', e.message);
+  }
 }
 
 // ── Cron: verifica vencimentos diariamente às 08h00 BRT (= 11h00 UTC) ────────
@@ -3118,9 +3206,10 @@ cron.schedule('0 11 * * *', async () => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from:    'Belle Planner <noreply@belleplanner.com.br>',
+          from:    `Belle Planner <${MASTER_FROM_EMAIL}>`,
           to:      [t.owner_email],
           bcc:     ['erick.torritezi@gmail.com'],
+          reply_to: 'erick.torritezi@gmail.com',
           subject: `⚠️ ${t.business_name} — sua agenda vence em 5 dias`,
           html,
         }),
