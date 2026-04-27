@@ -3169,6 +3169,7 @@ async function sendTenantWelcomeEmail(tenant, { admin_user, admin_pass, business
       </p>
     </div>`;
 
+  console.log('[Master] Enviando e-mail para:', tenant.owner_email, '| From:', MASTER_FROM_EMAIL);
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -3179,8 +3180,8 @@ async function sendTenantWelcomeEmail(tenant, { admin_user, admin_pass, business
       body: JSON.stringify({
         from:    `Belle Planner <${MASTER_FROM_EMAIL}>`,
         to:      [tenant.owner_email],
-        bcc:     ['erick.torritezi@gmail.com'],
-          reply_to: 'erick.torritezi@gmail.com',
+        ...(tenant.owner_email !== 'erick.torritezi@gmail.com' ? { bcc: ['erick.torritezi@gmail.com'] } : {}),
+        reply_to: 'erick.torritezi@gmail.com',
         subject: `[Belle Planner] ${business_name} — sua agenda está no ar! 🎉`,
         html,
       }),
