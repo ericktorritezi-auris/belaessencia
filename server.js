@@ -2510,7 +2510,7 @@ app.post('/master/api/tenants', requireMaster, async (req, res) => {
       business_name: business_name || name,
     });
 
-    res.status(201).json({ ...tenant, provisioned: true });
+    res.status(201).json({ ...tenant, provisioned: true, generated_pass: finalPass, admin_user: admin_user||'admin' });
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
@@ -2970,6 +2970,39 @@ app.get('/master/api/report/csv', requireMaster, async (req, res) => {
       'attachment; filename="belle-planner-' + month + '.csv"');
     const csvContent = lines.join('\r\n');
     res.send(csvContent); // UTF-8
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Redefinir senha do admin do tenant ───────────────────────────────────────
+app.put('/master/api/tenants/:id/reset-password', requireMaster, async (req, res) => {
+  const { new_pass } = req.body;
+  if (!new_pass || new_pass.trim().length < 6) {
+    return res.status(400).json({ error: 'Senha mínima de 6 caracteres' });
+  }
+  try {
+    const bcrypt = require('bcryptjs');
+    const hash   = await bcrypt.hash(new_pass.trim(), 10);
+
+    // Atualiza no tenant_configs (master)
+    await pool.query(
+      `UPDATE tenant_configs SET admin_pass_hash=$1 WHERE tenant_id=$2`,
+      [hash, req.params.id]
+    );
+
+    // Atualiza no schema do tenant (admin_profile)
+    const { rows } = await pool.query(
+      `SELECT schema_name FROM tenants WHERE id=$1`, [req.params.id]
+    );
+    if (rows.length) {
+      const client = await pool.connect();
+      try {
+        await client.query(`SET search_path TO "${rows[0].schema_name}", public`);
+        await client.query(`UPDATE admin_profile SET pass_hash=$1`, [hash]);
+      } finally { client.release(); }
+    }
+
+    await logAction(req.params.id, 'password_reset', 'Senha do admin redefinida pelo master');
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
