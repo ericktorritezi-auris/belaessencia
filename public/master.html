@@ -953,6 +953,7 @@ function renderTenantsTable(containerId, list, compact=false) {
           <button class="btn btn-sm ${t.active?'btn-red':'btn-green'}" onclick="toggleTenant(${t.id},'${t.slug}',${t.active})">${t.active?'Suspender':'Ativar'}</button>
           ${(t.domain_custom||t.subdomain)?`<a href="https://${t.domain_custom||(t.subdomain+'.belleplanner.com.br')}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration:none">Ver ↗</a>`:''}
           <button class="btn btn-ghost btn-sm" onclick="syncTenant('${t.schema_name}','${t.business_name||t.name}')" title="Sincronizar dados órfãos do schema public">⚙️ Sync</button>
+          <button class="btn btn-ghost btn-sm" onclick="resendWelcome(${t.id},'${(t.business_name||t.name).replace(/'/g,'')}','${t.owner_email||''}')" title="Reenviar e-mail de boas-vindas">📧 E-mail</button>
         </div>
       </td>
     </tr>`).join('')}
@@ -1076,7 +1077,8 @@ async function saveTenant() {
     setProvisionStep(4, 'done');
 
     setTimeout(() => {
-      toast('✅ Tenant criado e provisionado! E-mail enviado.', 'ok', 6000);
+      const passInfo = result?.provisioned ? '' : '';
+      toast('✅ Tenant criado e provisionado! Verifique o e-mail com os dados de acesso.', 'ok', 8000);
       closeModal('tenant');
       stepsEl.style.display = 'none';
       btn.textContent = 'Criar tenant + provisionar'; btn.disabled = false;
@@ -1667,6 +1669,16 @@ async function loadRevenueProjection() {
         </div>` : ''}
       </div>`;
   } catch(e) { console.error('projection error:', e); }
+}
+
+// ── RESEND WELCOME ─────────────────────────────────────────────────────────
+async function resendWelcome(id, name, email) {
+  const newPass = prompt('Senha da profissional para incluir no e-mail (deixe vazio para omitir) — ' + name + ' / ' + email);
+  if (newPass === null) return; // cancelado
+  try {
+    const r = await POST('/master/api/tenants/' + id + '/resend-welcome', { new_pass: newPass });
+    toast('✅ E-mail reenviado para ' + r.sent_to, 'ok', 5000);
+  } catch(e) { toast('Erro: ' + e.message, 'err'); }
 }
 
 // ── SYNC ───────────────────────────────────────────────────────────────────
