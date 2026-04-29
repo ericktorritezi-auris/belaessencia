@@ -929,8 +929,9 @@ async function initDB() {
     // Migração: cidades — adiciona uf e neighborhood em public e em todos os schemas de tenant
     await client.query(`ALTER TABLE cities ADD COLUMN IF NOT EXISTS uf VARCHAR(2)`);
     await client.query(`ALTER TABLE cities ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(100)`);
-    // Migração: admin_profile — adiciona phone se não existir
+    // Migração: admin_profile — adiciona phone e torna pass_hash nullable
     await client.query(`ALTER TABLE admin_profile ADD COLUMN IF NOT EXISTS phone VARCHAR(30)`);
+    await client.query(`ALTER TABLE admin_profile ALTER COLUMN pass_hash DROP NOT NULL`);
     // Roda migration em todos os schemas de tenant existentes
     const { rows: schemas } = await client.query(
       `SELECT schema_name FROM tenants WHERE schema_name IS NOT NULL`
@@ -940,6 +941,7 @@ async function initDB() {
         await client.query(`ALTER TABLE "${schema_name}".cities ADD COLUMN IF NOT EXISTS uf VARCHAR(2)`);
         await client.query(`ALTER TABLE "${schema_name}".cities ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(100)`);
         await client.query(`ALTER TABLE "${schema_name}".admin_profile ADD COLUMN IF NOT EXISTS phone VARCHAR(30)`);
+        await client.query(`ALTER TABLE "${schema_name}".admin_profile ALTER COLUMN pass_hash DROP NOT NULL`);
         // Preenche UF=PR para cidades sem UF (padrão para cidades do Paraná)
         await client.query(
           `UPDATE "${schema_name}".cities SET uf='PR' WHERE (uf IS NULL OR uf='') AND id > 0`
@@ -2350,11 +2352,23 @@ app.put('/api/admin/profile', requireAdmin, async (req, res) => {
         [name, phone || '', email, existing[0].id]
       );
     } else {
-      // Profile doesn't exist — insert it
+      // Profile doesn't exist — insert with pass_hash from tenant_configs
       const login = req.body.login || 'admin';
+      // Get pass_hash from tenant_configs as fallback for NOT NULL constraint
+      let existingHash = null;
+      try {
+        const { rows: tcRows } = await pool.query(
+          `SELECT tc.admin_pass_hash FROM tenant_configs tc
+           JOIN tenants t ON t.id = tc.tenant_id
+           WHERE t.schema_name = $1 LIMIT 1`,
+          [req.schemaName || 'public']
+        );
+        existingHash = tcRows[0]?.admin_pass_hash || null;
+      } catch {}
       await req.db(
-        `INSERT INTO admin_profile (name, phone, email, login) VALUES ($1, $2, $3, $4)`,
-        [name, phone || '', email, login]
+        `INSERT INTO admin_profile (name, phone, email, login, pass_hash)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [name, phone || '', email, login, existingHash]
       );
     }
     res.json({ ok: true });
