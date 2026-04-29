@@ -4323,17 +4323,66 @@ async function applyBranding() {
     el.textContent = bizNameBrand;
   });
 
-  const renderBrandEl = (el, size) => {
+  // Detecta luminância média de uma imagem via Canvas
+  // Retorna valor entre 0 (preto) e 255 (branco)
+  function getImgLuminance(imgEl) {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = imgEl.naturalWidth || 32;
+      canvas.height = imgEl.naturalHeight || 32;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let total = 0, count = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i+3]; // alpha
+        if (a < 10) continue; // ignora pixels transparentes
+        // Luminância perceptual (fórmula Rec.709)
+        total += 0.2126 * data[i] + 0.7152 * data[i+1] + 0.0722 * data[i+2];
+        count++;
+      }
+      return count > 0 ? total / count : 128;
+    } catch { return 128; } // fallback: neutro
+  }
+
+  const renderBrandEl = (el, size, onDark) => {
     if (cfg.logo_url) {
-      el.innerHTML = '<img src="' + cfg.logo_url + '" alt="' + bizNameBrand + '" style="height:' + (size||36) + 'px;object-fit:contain;vertical-align:middle">';
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.style.cssText = 'height:' + (size||36) + 'px;object-fit:contain;vertical-align:middle;transition:filter .2s';
+      img.alt = bizNameBrand;
+
+      if (onDark) {
+        // Detecta luminância quando a imagem carrega
+        img.onload = function() {
+          const lum = getImgLuminance(img);
+          // Se luminância < 100 (logo escura) → inverte para branca
+          // Se luminância >= 100 (logo clara/colorida) → mantém original
+          if (lum < 100) {
+            img.style.filter = 'brightness(0) invert(1)';
+          }
+          // Salva decisão para reusos (evita recalcular)
+          window._logoIsDark = lum < 100;
+        };
+        img.onerror = function() {
+          // Se falhar ao carregar, aplica invert preventivo
+          img.style.filter = 'brightness(0) invert(1)';
+        };
+        // Se já foi detectado antes nesta sessão
+        if (window._logoIsDark === true) img.style.filter = 'brightness(0) invert(1)';
+      }
+
+      img.src = cfg.logo_url;
+      el.innerHTML = '';
+      el.appendChild(img);
     } else {
       const parts = bizNameBrand.split(' ');
       el.innerHTML = parts.length >= 2 ? parts[0] + ' <em>' + parts.slice(1).join(' ') + '</em>' : bizNameBrand;
     }
   };
 
-  document.querySelectorAll('[data-brand-logo]').forEach(el => renderBrandEl(el, 36));
-  document.querySelectorAll('[data-admin-brand]').forEach(el => renderBrandEl(el, 32));
+  document.querySelectorAll('[data-brand-logo]').forEach(el => renderBrandEl(el, 36, false));
+  document.querySelectorAll('[data-admin-brand]').forEach(el => renderBrandEl(el, 32, true));
 
   // Favicon
   if (cfg.favicon_url) {
