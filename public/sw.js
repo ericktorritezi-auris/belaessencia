@@ -4,7 +4,7 @@
 //   API (/api/*)       → Network Only  (nunca cacheia dados)
 //   Assets estáticos   → Cache First   (ícones, manifest)
 
-const CACHE_VERSION = 'bela-essencia-2.6.5';
+const CACHE_VERSION = 'bela-essencia-2.6.7';
 const STATIC_ASSETS = ['/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 
 // ── Install: cacheia só assets estáticos ──────────────────────────
@@ -98,7 +98,7 @@ self.addEventListener('push', (e) => {
   };
 
   e.waitUntil(
-    self.registration.showNotification(data.title || 'Bela Essência', options)
+    self.registration.showNotification(data.title || 'Belle Planner', options)
   );
 });
 

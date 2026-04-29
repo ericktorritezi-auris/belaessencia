@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bela Essência — Agendamento Online</title>
+<title>Agenda Online</title>
 <meta name="description" content="Agende agenda online de atendimento">
 <meta name="theme-color" content="#9B4D6A">
 <link rel="manifest" href="/manifest.json">
@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Bela Essência">
+<meta name="apple-mobile-web-app-title" content="Agenda Online">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -538,10 +538,43 @@ tr:hover td{background:#FAF3F6}
         ? parts[0] + ' <em>' + parts.slice(1).join(' ') + '</em>'
         : name;
     };
+    // Update loading screen and metadata immediately
+    var updateAll = function() {
+      var name = cfg.business_name || 'Belle Planner';
+      var tagline = cfg.tagline || 'Agendamento Online';
+      
+      // Loading screen brand
+      document.querySelectorAll('.pl-brand, [data-brand-logo]').forEach(function(el) {
+        if (cfg.logo_url) {
+          el.innerHTML = '<img src="' + cfg.logo_url + '" alt="' + name + '" style="height:36px;object-fit:contain">';
+        } else {
+          var parts = name.split(' ');
+          el.innerHTML = parts.length >= 2 
+            ? parts[0] + ' <em>' + parts.slice(1).join(' ') + '</em>'
+            : name;
+        }
+      });
+      
+      // Page title
+      document.title = name + ' — Agendamento Online';
+      
+      // Meta tags
+      var metaTitle = document.getElementById('meta-app-title');
+      if (metaTitle) metaTitle.setAttribute('content', name);
+      
+      // Brand tagline
+      var tagEl = document.getElementById('prof-tag');
+      if (tagEl) tagEl.textContent = tagline;
+      
+      // Apple touch icon meta
+      var appleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+      if (appleMeta) appleMeta.setAttribute('content', name);
+    };
+    
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', updateLoad);
+      document.addEventListener('DOMContentLoaded', updateAll);
     } else {
-      updateLoad();
+      updateAll();
     }
   }).catch(function(){});
 })();
@@ -552,15 +585,15 @@ tr:hover td{background:#FAF3F6}
 
 <!-- PAGE LOADER -->
 <div class="page-loader" id="page-loader">
-  <div class="brand-name pl-brand" data-brand-logo>Bela <em>Essência</em></div>
+  <div class="brand-name pl-brand" data-brand-logo>Belle <em>Planner</em></div>
   <div class="pl-spin"></div>
 </div>
 
 <!-- PUBLIC BOOKING -->
 <div id="booking-app" class="hidden">
   <header class="site-header">
-    <div class="brand-name" data-brand-logo>Bela <em>Essência</em></div>
-    <div class="brand-tag" id="prof-tag" data-brand-tagline>Estética &amp; Beleza · Ana Paula Silva</div>
+    <div class="brand-name" data-brand-logo>Belle <em>Planner</em></div>
+    <div class="brand-tag" id="prof-tag" data-brand-tagline>Agendamento Online</div>
   </header>
   <div class="booking-wrap" id="bk-main">
     <div class="step-dots" id="step-dots">
@@ -644,7 +677,7 @@ tr:hover td{background:#FAF3F6}
         <h2>Agendado <em style="color:var(--rose)">com sucesso</em>! 🎉</h2>
         <p id="succ-txt"></p>
         <div id="succ-location"></div>
-        <a id="wa-link" href="#" target="_blank" class="btn btn-wa" style="margin:0 auto 14px"><span id="wa-link-label">💬 Falar com Ana Paula Silva</span></a>
+        <a id="wa-link" href="#" target="_blank" class="btn btn-wa" style="margin:0 auto 14px"><span id="wa-link-label">💬 Falar com a profissional</span></a>
         <button class="btn btn-secondary" onclick="resetBooking()">Fazer outro agendamento</button>
       </div>
     </div>
@@ -661,7 +694,7 @@ tr:hover td{background:#FAF3F6}
 <div id="admin-app" class="hidden">
   <div id="adm-login" class="adm-login-bg">
     <div class="adm-login-card">
-      <div class="brand-name" data-brand-name style="font-size:32px;margin-bottom:3px">Bela Essência</div>
+      <div class="brand-name" data-brand-name style="font-size:32px;margin-bottom:3px">Belle Planner</div>
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--text-light);margin-bottom:28px">Painel Administrativo</div>
       <div class="notice err hidden" id="login-err">Credenciais inválidas</div>
       <div class="fg" style="text-align:left"><label>Usuário</label><input type="text" id="adm-user" value="admin"></div>
@@ -676,7 +709,7 @@ tr:hover td{background:#FAF3F6}
     <div class="adm-layout">
       <aside class="adm-sidebar" id="adm-sb">
         <div class="sb-brand">
-          <div class="brand-name" data-admin-brand data-brand-name style="font-size:18px;color:var(--rose-mid)">Bela Essência</div>
+          <div class="brand-name" data-admin-brand data-brand-name style="font-size:18px;color:var(--rose-mid)">Belle Planner</div>
           <div class="sb-sub">Painel Admin</div>
         </div>
         <div>
@@ -1246,7 +1279,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '2.6.5';
+const APP_VERSION  = '2.6.7';
 const APP_COPY     = `Versão: ${APP_VERSION} | ${(window._tenantConfig?.business_name || 'Belle Planner')} © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -4241,8 +4274,8 @@ if ('serviceWorker' in navigator) {
 // FASE 3 — IDENTIDADE VISUAL DINÂMICA (White Label)
 // ══════════════════════════════════════════════════
 const BRAND_DEFAULTS = {
-  business_name:   'Bela Essência',
-  tagline:         'Estética & Beleza · Ana Paula Silva',
+  business_name:   'Belle Planner',
+  tagline:         'Agendamento Online',
   primary_color:   '#9b4d6a',
   secondary_color: '#C49A3C',
   accent_color:    '#7b3050',
