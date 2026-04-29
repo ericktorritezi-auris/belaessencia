@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Bela Essência — Agendamento Online</title>
-<meta name="description" content="Agende seu procedimento estético com Ana Paula Silva">
+<meta name="description" content="Agende agenda online de atendimento">
 <meta name="theme-color" content="#9B4D6A">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
@@ -692,7 +692,7 @@ tr:hover td{background:#FAF3F6}
             <button class="eye-toggle" id="eye-toggle-btn" onclick="toggleValues()" title="Mostrar/ocultar valores e telefones">
               <span id="eye-icon">🙈</span><span id="eye-label">Valores ocultos</span>
             </button>
-            <div id="admin-prof-name" style="font-size:11px;color:var(--text-light)">Ana Paula Silva</div>
+            <div id="admin-prof-name" style="font-size:11px;color:var(--text-light)">Profissional</div>
           </div>
         </div>
         <div class="adm-content">
@@ -1221,7 +1221,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '2.6.1';
+const APP_VERSION  = '2.6.2';
 const APP_COPY     = `Versão: ${APP_VERSION} | ${(window._tenantConfig?.business_name || 'Belle Planner')} © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -3217,9 +3217,9 @@ async function flushScheduleSave(id) {
 async function loadProfile() {
   try {
     const p = await GET('/api/admin/profile');
-    if(p.name)  document.getElementById('pf-name').value  = p.name;
-    if(p.phone) document.getElementById('pf-phone').value = p.phone;
-    if(p.email) document.getElementById('pf-email').value = p.email;
+    document.getElementById('pf-name').value  = p.name  || '';
+    document.getElementById('pf-phone').value = p.phone || '';
+    document.getElementById('pf-email').value = p.email || '';
   } catch(e){showToast('Erro ao carregar perfil','error')}
 }
 
@@ -3240,7 +3240,7 @@ async function saveProfile() {
   const name  = document.getElementById('pf-name').value.trim();
   const phone = document.getElementById('pf-phone').value.trim();
   const email = document.getElementById('pf-email').value.trim();
-  if(!name||!phone||!email){showToast('Preencha todos os campos','error');return}
+  if(!name||!email){showToast('Nome e e-mail são obrigatórios','error');return}
   try {
     await PUT('/api/admin/profile',{name,phone,email});
     showToast('Perfil atualizado!','ok');
