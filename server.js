@@ -200,7 +200,8 @@ async function createTenantSchema(schemaName) {
       `CREATE TABLE IF NOT EXISTS cities (
         id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, short VARCHAR(50),
         local_name VARCHAR(100), address VARCHAR(200), number VARCHAR(20),
-        complement VARCHAR(100), cep VARCHAR(10), maps_url TEXT,
+        complement VARCHAR(100), neighborhood VARCHAR(100), uf VARCHAR(2),
+        cep VARCHAR(10), maps_url TEXT,
         is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
       `CREATE TABLE IF NOT EXISTS city_procedures (
@@ -862,6 +863,10 @@ async function initDB() {
     // Migração v1.7.0: push_auth nos agendamentos (liga subscription ao agendamento)
     await client.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS push_auth TEXT`);
 
+    // Migração: cidades — adiciona uf e neighborhood se não existirem
+    await client.query(`ALTER TABLE cities ADD COLUMN IF NOT EXISTS uf VARCHAR(2)`);
+    await client.query(`ALTER TABLE cities ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(100)`);
+
     // Migração: mensalidade por tenant
     await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS monthly_fee NUMERIC(8,2) NOT NULL DEFAULT 100.00`);
     await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS setup_fee NUMERIC(8,2) NOT NULL DEFAULT 200.00`);
@@ -942,20 +947,22 @@ async function initDB() {
     // ── CIDADES ──────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS cities (
-        id            SERIAL       PRIMARY KEY,
-        name          VARCHAR(100) NOT NULL,
-        uf            VARCHAR(2)   NOT NULL,
-        local_name    VARCHAR(200) NOT NULL,
-        address       VARCHAR(200) NOT NULL,
-        number        VARCHAR(20)  NOT NULL,
-        complement    VARCHAR(100),
-        neighborhood  VARCHAR(100) NOT NULL,
-        cep           VARCHAR(9)   NOT NULL,
-        maps_url      TEXT,
-        is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
-        created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+        id           SERIAL       PRIMARY KEY,
+        name         VARCHAR(100) NOT NULL,
+        short        VARCHAR(50),
+        local_name   VARCHAR(100),
+        address      VARCHAR(200),
+        number       VARCHAR(20),
+        complement   VARCHAR(100),
+        neighborhood VARCHAR(100),
+        uf           VARCHAR(2),
+        cep          VARCHAR(10),
+        maps_url     TEXT,
+        is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
+
 
     // Procedimentos habilitados por cidade (habilitado por padrão)
     await client.query(`
@@ -3237,7 +3244,7 @@ cron.schedule('0 11 * * *', async () => {
           <div style="text-align:center;margin-bottom:20px">
             <div style="font-family:Georgia,serif;font-size:24px;color:#9b4d6a">Belle Planner</div>
           </div>
-          <div style="background:linear-gradient(135deg,${t.monthly_fee>0?'#C49A3C':'#9b4d6a'},#7b5010);border-radius:12px;padding:20px;color:white;text-align:center;margin-bottom:20px">
+          <div style="background:linear-gradient(135deg,#C49A3C,#7b5010);border-radius:12px;padding:20px;color:white;text-align:center;margin-bottom:20px">
             <div style="font-size:32px;margin-bottom:8px">⚠️</div>
             <div style="font-family:Georgia,serif;font-size:20px">Sua agenda vence em 5 dias</div>
           </div>
