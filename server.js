@@ -929,9 +929,18 @@ async function initDB() {
     // Migração: cidades — adiciona uf e neighborhood em public e em todos os schemas de tenant
     await client.query(`ALTER TABLE cities ADD COLUMN IF NOT EXISTS uf VARCHAR(2)`);
     await client.query(`ALTER TABLE cities ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(100)`);
-    // Migração: admin_profile — adiciona phone e torna pass_hash nullable
+    // Migração: admin_profile — adiciona phone e torna pass_hash nullable (se existir)
     await client.query(`ALTER TABLE admin_profile ADD COLUMN IF NOT EXISTS phone VARCHAR(30)`);
-    await client.query(`ALTER TABLE admin_profile ALTER COLUMN pass_hash DROP NOT NULL`);
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='admin_profile' AND column_name='pass_hash'
+        ) THEN
+          ALTER TABLE admin_profile ALTER COLUMN pass_hash DROP NOT NULL;
+        END IF;
+      END $$
+    `);
     // Roda migration em todos os schemas de tenant existentes
     const { rows: schemas } = await client.query(
       `SELECT schema_name FROM tenants WHERE schema_name IS NOT NULL`
@@ -941,7 +950,9 @@ async function initDB() {
         await client.query(`ALTER TABLE "${schema_name}".cities ADD COLUMN IF NOT EXISTS uf VARCHAR(2)`);
         await client.query(`ALTER TABLE "${schema_name}".cities ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(100)`);
         await client.query(`ALTER TABLE "${schema_name}".admin_profile ADD COLUMN IF NOT EXISTS phone VARCHAR(30)`);
-        await client.query(`ALTER TABLE "${schema_name}".admin_profile ALTER COLUMN pass_hash DROP NOT NULL`);
+        try {
+          await client.query(`ALTER TABLE "${schema_name}".admin_profile ALTER COLUMN pass_hash DROP NOT NULL`);
+        } catch {}
         // Preenche UF=PR para cidades sem UF (padrão para cidades do Paraná)
         await client.query(
           `UPDATE "${schema_name}".cities SET uf='PR' WHERE (uf IS NULL OR uf='') AND id > 0`
