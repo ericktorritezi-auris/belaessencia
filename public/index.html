@@ -1204,7 +1204,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '2.5.0';
+const APP_VERSION  = '2.6.0';
 const APP_COPY     = `Versão: ${APP_VERSION} | ${(window._tenantConfig?.business_name || 'Belle Planner')} © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -1234,7 +1234,7 @@ async function loadProfProfile() {
 function applyProfProfile() {
   // Header público
   const tagEl = document.getElementById('prof-tag');
-  if (tagEl) tagEl.textContent = `Estética & Beleza · ${PROF.name}`;
+  if (tagEl) tagEl.textContent = window._tenantConfig?.tagline || ('Estética & Beleza · ' + PROF.name);
   // Botão WhatsApp na tela de sucesso
   const waBtn = document.getElementById('wa-link-label');
   if (waBtn) waBtn.textContent = `💬 Falar com ${PROF.name.split(' ')[0]}`;
@@ -4042,7 +4042,7 @@ function showWelcomePopup() {
   if (isInstalled) return;
 
   // Preenche com o nome do profissional (já carregado em PROF)
-  const profName = PROF.name || window._tenantConfig?.business_name || 'nossa profissional';
+  const profName = window._tenantConfig?.business_name || PROF.name || 'nossa profissional';
   document.getElementById('welcome-title').textContent  = `Olá, seja bem-vinda(o)!`;
   document.getElementById('welcome-subtitle').textContent = `Agenda de ${profName}`;
   document.getElementById('welcome-msg').innerHTML =
@@ -4204,15 +4204,26 @@ async function applyBranding() {
     if (res.ok) cfg = { ...BRAND_DEFAULTS, ...(await res.json()) };
   } catch {} // fallback silencioso — usa defaults
 
-  // CSS variables
+  // CSS variables — set ALL vars including derivatives
   const root = document.documentElement.style;
-  root.setProperty('--rose',       cfg.primary_color   || BRAND_DEFAULTS.primary_color);
-  root.setProperty('--gold',       cfg.secondary_color || BRAND_DEFAULTS.secondary_color);
-  root.setProperty('--dark-rose',  cfg.accent_color    || BRAND_DEFAULTS.accent_color);
+  const p   = cfg.primary_color   || BRAND_DEFAULTS.primary_color;
+  const s   = cfg.secondary_color || BRAND_DEFAULTS.secondary_color;
+  const acc = cfg.accent_color    || BRAND_DEFAULTS.accent_color;
 
-  // Cores derivadas (light/mid) baseadas na primária
-  root.setProperty('--rose-light', hexToRgba(cfg.primary_color || BRAND_DEFAULTS.primary_color, 0.08));
-  root.setProperty('--rose-mid',   hexToRgba(cfg.primary_color || BRAND_DEFAULTS.primary_color, 0.4));
+  root.setProperty('--rose',        p);
+  root.setProperty('--rose-deep',   shadeColor(p, -20));
+  root.setProperty('--rose-light',  hexToRgba(p, 0.08));
+  root.setProperty('--rose-mid',    hexToRgba(p, 0.35));
+  root.setProperty('--dark-rose',   acc || shadeColor(p, -15));
+  root.setProperty('--gold',        s);
+  root.setProperty('--gold-light',  hexToRgba(s, 0.15));
+  root.setProperty('--gold-deep',   shadeColor(s, -20));
+  root.setProperty('--dark',        shadeColor(p, -70));
+  root.setProperty('--text',        shadeColor(p, -40));
+  root.setProperty('--text-light',  hexToRgba(p, 0.55));
+  root.setProperty('--border',      hexToRgba(p, 0.18));
+  root.setProperty('--border-light',hexToRgba(p, 0.10));
+  root.setProperty('--cream',       hexToRgba(p, 0.04));
 
   // Textos
   const bizName = cfg.business_name || 'Belle Planner';
@@ -4247,30 +4258,28 @@ async function applyBranding() {
   });
 
   // Footer — update APP_COPY text
-  document.querySelectorAll('[id^="footer-"]').forEach(el => {
-    el.textContent = 'Versão: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') + ' | ' + bizName + ' © ' + new Date().getFullYear();
-  });
+  const newCopy = 'Versão: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') + ' | ' + bizName + ' © ' + new Date().getFullYear();
+  document.querySelectorAll('[id^="footer-"]').forEach(el => { el.textContent = newCopy; });
+  // Also update APP_COPY variable if accessible
+  if (typeof APP_COPY !== 'undefined') { try { window.APP_COPY = newCopy; } catch {} }
 
   // Logo ou nome de texto
+  const bizNameBrand = cfg.business_name || BRAND_DEFAULTS.business_name;
   document.querySelectorAll('[data-brand-name]').forEach(el => {
-    el.textContent = cfg.business_name || BRAND_DEFAULTS.business_name;
+    el.textContent = bizNameBrand;
   });
-  if (cfg.logo_url) {
-    document.querySelectorAll('[data-brand-logo]').forEach(el => {
-      el.innerHTML = `<img src="${cfg.logo_url}" alt="${cfg.business_name}" style="height:36px;object-fit:contain;vertical-align:middle">`;
-    });
-  } else {
-    // Sem logo: exibe nome como texto com formatação padrão
-    document.querySelectorAll('[data-brand-logo]').forEach(el => {
-      const name = cfg.business_name || BRAND_DEFAULTS.business_name;
-      const parts = name.split(' ');
-      if (parts.length >= 2) {
-        el.innerHTML = `${parts[0]} <em>${parts.slice(1).join(' ')}</em>`;
-      } else {
-        el.textContent = name;
-      }
-    });
-  }
+
+  const renderBrandEl = (el, size) => {
+    if (cfg.logo_url) {
+      el.innerHTML = '<img src="' + cfg.logo_url + '" alt="' + bizNameBrand + '" style="height:' + (size||36) + 'px;object-fit:contain;vertical-align:middle">';
+    } else {
+      const parts = bizNameBrand.split(' ');
+      el.innerHTML = parts.length >= 2 ? parts[0] + ' <em>' + parts.slice(1).join(' ') + '</em>' : bizNameBrand;
+    }
+  };
+
+  document.querySelectorAll('[data-brand-logo]').forEach(el => renderBrandEl(el, 36));
+  document.querySelectorAll('[data-admin-brand]').forEach(el => renderBrandEl(el, 32));
 
   // Favicon
   if (cfg.favicon_url) {
@@ -4278,6 +4287,17 @@ async function applyBranding() {
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
     link.href = cfg.favicon_url;
   }
+}
+
+function shadeColor(hex, pct) {
+  // Darkens (negative) or lightens (positive) a hex color by percentage
+  try {
+    const num = parseInt(hex.replace('#',''), 16);
+    const r = Math.min(255, Math.max(0, (num >> 16) + Math.round(255 * pct / 100)));
+    const g = Math.min(255, Math.max(0, ((num >> 8) & 0xFF) + Math.round(255 * pct / 100)));
+    const b = Math.min(255, Math.max(0, (num & 0xFF) + Math.round(255 * pct / 100)));
+    return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+  } catch { return hex; }
 }
 
 function hexToRgba(hex, alpha) {
