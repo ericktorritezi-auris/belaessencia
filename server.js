@@ -3289,18 +3289,18 @@ async function sendTenantWelcomeEmail(tenant, { admin_user, admin_pass, business
         <p style="opacity:.9;margin:0">Sua agenda <strong>${business_name}</strong> foi criada com sucesso e já está disponível!</p>
       </div>
       <div style="background:white;border-radius:10px;padding:20px;margin-bottom:16px">
-        <p style="font-weight:700;color:#2d1a22;margin-bottom:14px;font-size:15px">📋 Seus dados de acesso:</p>
+        <p style="font-weight:700;color:#333333;margin-bottom:14px;font-size:15px">📋 Seus dados de acesso:</p>
         <table style="width:100%;border-collapse:collapse">
-          <tr><td style="padding:8px 0;color:#8a6070;font-size:13px;width:120px">🌐 Endereço</td><td style="padding:8px 0;font-size:13px"><a href="${adminUrl}" style="color:#9b4d6a">${adminUrl}</a></td></tr>
+          <tr><td style="padding:8px 0;color:#8a6070;font-size:13px;width:120px">🌐 Endereço</td><td style="padding:8px 0;font-size:13px"><a href="${adminUrl}" style="color:${primaryColor}">${adminUrl}</a></td></tr>
           <tr><td style="padding:8px 0;color:#8a6070;font-size:13px">👤 Login</td><td style="padding:8px 0;font-size:13px;font-weight:700">${admin_user}</td></tr>
-          <tr><td style="padding:8px 0;color:#8a6070;font-size:13px">🔑 Senha</td><td style="padding:8px 0;font-size:13px;font-weight:700;color:#9b4d6a">${admin_pass}</td></tr>
+          <tr><td style="padding:8px 0;color:#8a6070;font-size:13px">🔑 Senha</td><td style="padding:8px 0;font-size:13px;font-weight:700;color:${primaryColor}">${admin_pass}</td></tr>
         </table>
         <p style="margin-top:14px;font-size:12px;color:#8a6070;background:#fdf5f8;padding:10px;border-radius:6px">
           ℹ️ Para acessar o painel administrativo, abra o endereço acima e clique em <strong>"Área administrativa"</strong> no rodapé da página.
         </p>
       </div>
       <div style="background:white;border-radius:10px;padding:16px 20px;margin-bottom:16px">
-        <p style="font-weight:700;color:#2d1a22;margin-bottom:10px;font-size:14px">🚀 Próximos passos:</p>
+        <p style="font-weight:700;color:#333333;margin-bottom:10px;font-size:14px">🚀 Próximos passos:</p>
         <ol style="padding-left:18px;color:#4a3040;font-size:13px;line-height:2">
           <li>Acesse sua agenda pelo endereço acima</li>
           <li>Entre no painel administrativo</li>
@@ -3373,9 +3373,9 @@ cron.schedule('0 11 * * *', async () => {
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#fdf5f8;padding:24px">
           <div style="text-align:center;margin-bottom:20px">
-            <div style="font-family:Georgia,serif;font-size:24px;color:#9b4d6a">Belle Planner</div>
+            <div style="font-family:Georgia,serif;font-size:24px;color:${primaryColor}">Belle Planner</div>
           </div>
-          <div style="background:linear-gradient(135deg,#C49A3C,#7b5010);border-radius:12px;padding:20px;color:white;text-align:center;margin-bottom:20px">
+          <div style="background:linear-gradient(135deg,${t.primary_color||'#9b4d6a'},${t.secondary_color||'#C49A3C'});border-radius:12px;padding:20px;color:white;text-align:center;margin-bottom:20px">
             <div style="font-size:32px;margin-bottom:8px">⚠️</div>
             <div style="font-family:Georgia,serif;font-size:20px">Sua agenda vence em 5 dias</div>
           </div>
@@ -3551,8 +3551,8 @@ app.get('/api/config', async (req, res) => {
       });
     }
     res.json({
-      business_name:   'Bela Essência',
-      tagline:         'Estética & Beleza · Ana Paula Silva',
+      business_name:   'Belle Planner',
+      tagline:         'Agendamento Online',
       primary_color:   '#9b4d6a',
       secondary_color: '#C49A3C',
       accent_color:    '#7b3050',
@@ -4080,24 +4080,24 @@ async function sendDailyAgendaEmail() {
           <tr>
             <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;font-weight:600;color:#2d1a22">${a.name}</td>
             <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#666">${phone}</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#2d1a22">${a.proc_name}</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#2d1a22;white-space:nowrap">${String(a.st).slice(0,5)}</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#9b4d6a;font-weight:700">${valor}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#333">${a.proc_name}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:#333;white-space:nowrap">${String(a.st).slice(0,5)}</td>
+            <td style="padding:10px 14px;border-bottom:1px solid #f0e8ec;color:${emailColor};font-weight:700">${valor}</td>
           </tr>`;
       }).join('');
       return `
         <div style="margin-bottom:28px">
-          <div style="background:#9b4d6a;color:white;padding:10px 16px;border-radius:8px 8px 0 0;font-size:15px;font-weight:700">
+          <div style="background:${emailColor};color:white;padding:10px 16px;border-radius:8px 8px 0 0;font-size:15px;font-weight:700">
             📍 ${city}
           </div>
           <table style="width:100%;border-collapse:collapse;background:white;border-radius:0 0 8px 8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
             <thead>
               <tr style="background:#fdf0f4">
-                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">Cliente</th>
-                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">WhatsApp</th>
-                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">Procedimento</th>
-                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">Horário</th>
-                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:#9b4d6a;letter-spacing:.06em">Valor</th>
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:${emailColor};letter-spacing:.06em">Cliente</th>
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:${emailColor};letter-spacing:.06em">WhatsApp</th>
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:${emailColor};letter-spacing:.06em">Procedimento</th>
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:${emailColor};letter-spacing:.06em">Horário</th>
+                <th style="padding:8px 14px;text-align:left;font-size:11px;text-transform:uppercase;color:${emailColor};letter-spacing:.06em">Valor</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -4108,17 +4108,17 @@ async function sendDailyAgendaEmail() {
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;background:#fdf5f8;padding:24px">
         <div style="text-align:center;margin-bottom:24px">
-          <div style="font-family:Georgia,serif;font-size:28px;color:#9b4d6a;font-style:italic">Bela Essência</div>
+          <div style="font-family:Georgia,serif;font-size:28px;color:${emailColor};font-style:italic">${prof.name || 'Belle Planner'}</div>
           <div style="font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#b07090;margin-top:4px">Agenda do Dia</div>
         </div>
-        <div style="background:linear-gradient(135deg,#9b4d6a,#7b3050);border-radius:12px;padding:20px 24px;margin-bottom:24px;color:white;text-align:center">
+        <div style="background:linear-gradient(135deg,${emailColor},${emailColor}cc);border-radius:12px;padding:20px 24px;margin-bottom:24px;color:white;text-align:center">
           <div style="font-size:14px;opacity:.85;margin-bottom:6px">Sua programação para</div>
           <div style="font-family:Georgia,serif;font-size:24px;font-weight:bold">${dateLabel}</div>
           <div style="font-size:13px;margin-top:8px;opacity:.85">${appts.length} procedimento${appts.length!==1?'s':''} agendado${appts.length!==1?'s':''}</div>
         </div>
         ${cityBlocks}
         <div style="text-align:center;margin-top:24px;font-size:11px;color:#aaa">
-          Bela Essência · Sistema de Agendamento Online<br>
+          ${prof.name || 'Belle Planner'} · Sistema de Agendamento Online<br>
           Este e-mail é gerado automaticamente às 06h30 (horário de Brasília)
         </div>
       </div>`;
@@ -4239,7 +4239,7 @@ cron.schedule('30 9 * * *', async () => {
         // Monta HTML do email com os agendamentos do snapshot
         const rows_html = appts.length ? appts.map(a =>
           '<tr>' +
-          '<td style="padding:8px 12px;border-bottom:1px solid #f0e0e8;font-size:13px;color:#4a3040">' + a.st + ' – ' + a.et + '</td>' +
+          '<td style="padding:8px 12px;border-bottom:1px solid #f0e0e8;font-size:13px;color:#444">' + a.st + ' – ' + a.et + '</td>' +
           '<td style="padding:8px 12px;border-bottom:1px solid #f0e0e8;font-size:13px;color:#4a3040;font-weight:600">' + a.name + '</td>' +
           '<td style="padding:8px 12px;border-bottom:1px solid #f0e0e8;font-size:13px;color:#6a4060">' + (a.proc_name||'') + '</td>' +
           '<td style="padding:8px 12px;border-bottom:1px solid #f0e0e8;font-size:13px;color:#8a6070">' + (a.city_name||'') + '</td>' +
@@ -4254,10 +4254,10 @@ cron.schedule('30 9 * * *', async () => {
           '<div style="background:white;border-radius:8px;overflow:hidden;margin-bottom:12px">' +
             '<table style="width:100%;border-collapse:collapse">' +
               '<thead><tr style="background:#f5eaef">' +
-                '<th style="padding:8px 12px;text-align:left;font-size:11px;color:#9b4d6a;font-weight:800;text-transform:uppercase">Horário</th>' +
-                '<th style="padding:8px 12px;text-align:left;font-size:11px;color:#9b4d6a;font-weight:800;text-transform:uppercase">Cliente</th>' +
-                '<th style="padding:8px 12px;text-align:left;font-size:11px;color:#9b4d6a;font-weight:800;text-transform:uppercase">Procedimento</th>' +
-                '<th style="padding:8px 12px;text-align:left;font-size:11px;color:#9b4d6a;font-weight:800;text-transform:uppercase">Local</th>' +
+                '<th style="padding:8px 12px;text-align:left;font-size:11px;color:' + color + ';font-weight:800;text-transform:uppercase">Horário</th>' +
+                '<th style="padding:8px 12px;text-align:left;font-size:11px;color:' + color + ';font-weight:800;text-transform:uppercase">Cliente</th>' +
+                '<th style="padding:8px 12px;text-align:left;font-size:11px;color:' + color + ';font-weight:800;text-transform:uppercase">Procedimento</th>' +
+                '<th style="padding:8px 12px;text-align:left;font-size:11px;color:' + color + ';font-weight:800;text-transform:uppercase">Local</th>' +
               '</tr></thead>' +
               '<tbody>' + rows_html + '</tbody>' +
             '</table>' +
