@@ -2340,10 +2340,23 @@ app.put('/api/admin/profile', requireAdmin, async (req, res) => {
   if (!name || !email) return res.status(400).json({ error: 'Nome e e-mail são obrigatórios' });
   // phone is optional
   try {
-    await req.db(
-      `UPDATE admin_profile SET name=$1, phone=$2, email=$3 WHERE id IN (SELECT id FROM admin_profile LIMIT 1)`,
-      [name, phone || '', email]
+    // Check if profile exists
+    const { rows: existing } = await req.db(
+      'SELECT id FROM admin_profile LIMIT 1'
     );
+    if (existing.length > 0) {
+      await req.db(
+        `UPDATE admin_profile SET name=$1, phone=$2, email=$3 WHERE id=$4`,
+        [name, phone || '', email, existing[0].id]
+      );
+    } else {
+      // Profile doesn't exist — insert it
+      const login = req.body.login || 'admin';
+      await req.db(
+        `INSERT INTO admin_profile (name, phone, email, login) VALUES ($1, $2, $3, $4)`,
+        [name, phone || '', email, login]
+      );
+    }
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
