@@ -1279,7 +1279,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '2.6.7';
+const APP_VERSION  = '2.6.8';
 const APP_COPY     = `Versão: ${APP_VERSION} | ${(window._tenantConfig?.business_name || 'Belle Planner')} © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -4173,6 +4173,12 @@ function welcomeInstallGeneric() {
 
 function closeWelcome() {
   document.getElementById('welcome-overlay').classList.add('hidden');
+  // Após fechar o welcome, exibe o banner PWA após 2 segundos (se não foi dispensado)
+  setTimeout(function() {
+    if (!sessionStorage.getItem(PWA_DISMISSED_KEY) && !isPWAInstalled()) {
+      showPWABanner();
+    }
+  }, 2000);
 }
 
 // Re-inscreve silenciosamente se a permissão de notificação já foi concedida.
