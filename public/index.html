@@ -4386,7 +4386,9 @@ async function applyBranding() {
   const renderBrandEl = (el, size, onDark) => {
     if (cfg.logo_url) {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      // Only set crossOrigin when needed for Canvas luminance detection
+      // Without this, logos from external URLs (Google Drive, CDNs, etc.) display correctly
+      if (onDark) img.crossOrigin = 'anonymous';
       img.style.cssText = 'height:' + (size||36) + 'px;object-fit:contain;vertical-align:middle;transition:filter .2s';
       img.alt = bizNameBrand;
 
@@ -4410,6 +4412,11 @@ async function applyBranding() {
         if (window._logoIsDark === true) img.style.filter = 'brightness(0) invert(1)';
       }
 
+      img.onerror = function() {
+        // Fallback: se a imagem não carregar, mostra o nome como texto
+        const parts = bizNameBrand.split(' ');
+        el.innerHTML = parts.length >= 2 ? parts[0] + ' <em>' + parts.slice(1).join(' ') + '</em>' : bizNameBrand;
+      };
       img.src = cfg.logo_url;
       el.innerHTML = '';
       el.appendChild(img);
