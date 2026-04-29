@@ -1279,7 +1279,7 @@ tr:hover td{background:#FAF3F6}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '2.6.8';
+const APP_VERSION  = '2.6.9';
 const APP_COPY     = `Versão: ${APP_VERSION} | ${(window._tenantConfig?.business_name || 'Belle Planner')} © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -4264,6 +4264,13 @@ function dismissPWA(el) {
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
+  // Agenda exibição do banner: 3s se welcome não estiver visível
+  // Se welcome estiver visível, closeWelcome() cuidará de exibir após 2s
+  setTimeout(() => {
+    const welcomeHidden = document.getElementById('welcome-overlay') &&
+      document.getElementById('welcome-overlay').classList.contains('hidden');
+    if (welcomeHidden) showPWABanner();
+  }, 3000);
 });
 
 // ══════════════════════════════════════════════════
@@ -4463,6 +4470,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Re-inscreve silenciosamente se a permissão já foi concedida antes
   // Garante que subscriptions com encoding antigo (pré-v1.7.2) sejam atualizadas
   resubscribeIfPermitted();
+
+  // iOS não dispara beforeinstallprompt — mostrar banner manual após 5s
+  // (Android usa o evento beforeinstallprompt, iOS usa este timer)
+  if (isIOS && isIOS() && !isPWAInstalled()) {
+    setTimeout(() => {
+      const welcomeHidden = document.getElementById('welcome-overlay') &&
+        document.getElementById('welcome-overlay').classList.contains('hidden');
+      if (welcomeHidden) showPWABanner();
+      // Se welcome estiver visível, closeWelcome() cuidará disso
+    }, 5000);
+  }
 
   setTimeout(() => {
     document.getElementById('page-loader').classList.add('hidden');
