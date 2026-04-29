@@ -672,7 +672,8 @@ async function initDB() {
 
     // Reparo startup: garante que todos os tenants têm admin_profile populado
     const { rows: allTenants } = await client.query(
-      `SELECT t.id, t.schema_name, t.name, tc.admin_user, tc.admin_pass_hash, tc.business_name
+      `SELECT t.id, t.schema_name, t.name, t.owner_email,
+              tc.admin_user, tc.admin_pass_hash, tc.business_name
        FROM tenants t LEFT JOIN tenant_configs tc ON tc.tenant_id=t.id`
     );
     for (const t of allTenants) {
@@ -682,14 +683,28 @@ async function initDB() {
           await tc.query(`SET search_path TO "${t.schema_name}", public`);
           const { rows: apRows } = await tc.query(`SELECT COUNT(*) as n FROM admin_profile`);
           if (Number(apRows[0].n) === 0 && t.admin_pass_hash) {
+            // Insere admin_profile do zero
             await tc.query(
               `INSERT INTO admin_profile (name, email, login, pass_hash)
-               VALUES ($1, '', $2, $3)`,
+               VALUES ($1, $2, $3, $4)`,
               [t.business_name || t.name || 'Profissional',
+               t.owner_email   || '',
                t.admin_user    || 'admin',
                t.admin_pass_hash]
             );
-            console.log(`[DB] admin_profile reparado para "${t.schema_name}"`);
+            console.log(`[DB] admin_profile criado para "${t.schema_name}"`);
+          } else if (Number(apRows[0].n) > 0) {
+            // Garante que nome e login estão preenchidos
+            await tc.query(
+              `UPDATE admin_profile SET
+                 name  = CASE WHEN name  = '' OR name  IS NULL THEN $1 ELSE name  END,
+                 email = CASE WHEN email = '' OR email IS NULL THEN $2 ELSE email END,
+                 login = CASE WHEN login = '' OR login IS NULL THEN $3 ELSE login END
+               WHERE id IN (SELECT id FROM admin_profile LIMIT 1)`,
+              [t.business_name || t.name || 'Profissional',
+               t.owner_email   || '',
+               t.admin_user    || 'admin']
+            );
           }
         } finally { tc.release(); }
       } catch {}
