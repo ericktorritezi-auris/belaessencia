@@ -3899,35 +3899,70 @@ app.get('/api/availability', async (req, res) => {
   }
 });
 
-// ── Bella: serviços + disponibilidade (sem autenticação, para o chat) ────────
-// GET /api/bella/availability?step=services|dates|slots&procId=&cityId=&date=
-// step=services → lista procedimentos ativos da cidade
-// step=dates    → próximas datas disponíveis (até 14 dias)
-// step=slots    → horários livres para procId+cityId+date
+// ── Bella: catálogo + disponibilidade (sem autenticação, para o chat) ─────────
+// steps: categories | services | cities | dates | slots
 app.get('/api/bella/availability', async (req, res) => {
   if (!req.tenant?.has_chat) return res.status(403).json({ error: 'Chat não disponível' });
   const { step, procId, cityId, date } = req.query;
 
   try {
+    // ── STEP: categories ────────────────────────────────────────────────────
+    if (step === 'categories') {
+      // Lista categorias que têm pelo menos 1 procedimento ativo
+      const r = await req.db(
+        `SELECT DISTINCT c.id, c.name, c.sort_order
+         FROM proc_categories c
+         INNER JOIN proc_category_links l ON l.category_id = c.id
+         INNER JOIN procedures p ON p.id = l.proc_id AND p.active = true
+         ORDER BY c.sort_order, c.name
+         LIMIT 20`
+      );
+      return res.json(r.rows);
+    }
+
     // ── STEP: services ──────────────────────────────────────────────────────
     if (step === 'services') {
-      // Lista procedimentos ativos. Se cityId informado, respeita city_procedures.enabled.
+      // Lista procedimentos ativos. Se categoryId informado, filtra por categoria.
+      // Se cityId informado, respeita city_procedures.enabled.
+      const { categoryId } = req.query;
       let rows;
-      if (cityId) {
+      if (cityId && categoryId) {
         const r = await req.db(
-          `SELECT p.id, p.name, p.duration as dur, p.price,
+          `SELECT p.id, p.name, p.dur, p.price,
+                  COALESCE(cp.enabled, true) as enabled
+           FROM procedures p
+           INNER JOIN proc_category_links l ON l.proc_id = p.id AND l.category_id = $2
+           LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$1
+           WHERE p.active=true AND COALESCE(cp.enabled, true)=true
+           ORDER BY p.sort_order, p.name LIMIT 30`,
+          [Number(cityId), Number(categoryId)]
+        );
+        rows = r.rows;
+      } else if (categoryId) {
+        const r = await req.db(
+          `SELECT p.id, p.name, p.dur, p.price
+           FROM procedures p
+           INNER JOIN proc_category_links l ON l.proc_id = p.id AND l.category_id = $1
+           WHERE p.active=true
+           ORDER BY p.sort_order, p.name LIMIT 30`,
+          [Number(categoryId)]
+        );
+        rows = r.rows;
+      } else if (cityId) {
+        const r = await req.db(
+          `SELECT p.id, p.name, p.dur, p.price,
                   COALESCE(cp.enabled, true) as enabled
            FROM procedures p
            LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$1
            WHERE p.active=true AND COALESCE(cp.enabled, true)=true
-           ORDER BY p.sort_order, p.name LIMIT 20`,
+           ORDER BY p.sort_order, p.name LIMIT 30`,
           [Number(cityId)]
         );
         rows = r.rows;
       } else {
         const r = await req.db(
-          `SELECT id, name, duration as dur, price FROM procedures
-           WHERE active=true ORDER BY sort_order, name LIMIT 20`
+          `SELECT id, name, dur, price FROM procedures
+           WHERE active=true ORDER BY sort_order, name LIMIT 30`
         );
         rows = r.rows;
       }
@@ -3985,7 +4020,7 @@ app.get('/api/bella/availability', async (req, res) => {
         }
         // Há pelo menos 1 procedimento disponível?
         const pRow = await req.db(
-          `SELECT p.duration as dur FROM procedures p
+          `SELECT p.dur FROM procedures p
            LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$2
            WHERE p.id=$1 AND p.active=TRUE AND COALESCE(cp.enabled,true)=true LIMIT 1`,
           [Number(procId), Number(cityId)]
@@ -4037,7 +4072,7 @@ app.get('/api/bella/availability', async (req, res) => {
       if (blkDay.rowCount > 0) return res.json([]);
 
       const pRow = await req.db(
-        `SELECT p.duration as dur FROM procedures p
+        `SELECT p.dur FROM procedures p
          LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$2
          WHERE p.id=$1 AND p.active=TRUE AND COALESCE(cp.enabled,true)=true LIMIT 1`,
         [Number(procId), Number(cityId)]
@@ -4092,7 +4127,7 @@ app.get('/api/bella/availability', async (req, res) => {
       return res.json(slots);
     }
 
-    return res.status(400).json({ error: 'step inválido. Use: services, cities, dates ou slots' });
+    return res.status(400).json({ error: 'step inválido. Use: categories, services, cities, dates ou slots' });
   } catch(err) {
     res.status(500).json({ error: err.message });
   }

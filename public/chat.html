@@ -1,651 +1,811 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bella Chat</title>
-<meta name="theme-color" content="#9B4D6A">
-<link rel="icon" type="image/x-icon" href="/favicon.ico">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<style>
-:root{
-  --cream:#FAF7F2;--white:#FFFFFF;--rose:#9B4D6A;--rose-deep:#7A3554;--rose-light:#F5E8EE;
-  --rose-mid:#C98CA8;--gold:#C4994A;--gold-light:#F5EDD8;--dark:#1A1214;--text:#3D2B35;
-  --text-light:#8A6B76;--border:#E8D5DE;--border-light:#F0E2E8;
-  --sh-sm:0 2px 8px rgba(155,77,106,.08);--sh-md:0 4px 20px rgba(155,77,106,.12);
-  --r-sm:8px;--r-md:14px;--r-lg:22px;--r-xl:40px;
-  --primary:var(--rose);--primary-deep:var(--rose-deep);--primary-light:var(--rose-light);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden;-webkit-text-size-adjust:100%}
-body{
-  font-family:'Nunito',sans-serif;background:var(--cream);color:var(--text);
-  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;
-  display:flex;flex-direction:column;
-}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Bella – Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap">
+  <style>
+    :root {
+      --cream: #FAF7F2;
+      --rose:  #9B4D6A;
+      --rose-light: #c47a97;
+      --gold:  #C4994A;
+      --dark:  #1A1214;
+      --text:  #3D2B35;
+      --muted: #7a6370;
+      --chip-bg: #f3ede8;
+      --chip-border: #d4bcc8;
+      --surface: #fff;
+      --shadow: rgba(155,77,106,0.12);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      font-family: 'Nunito', sans-serif;
+      background: var(--cream);
+      color: var(--text);
+      overflow: hidden;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      background: var(--cream);
+    }
 
-/* ── HEADER ── */
-.chat-header{
-  background:var(--white);border-bottom:1px solid var(--border);
-  padding:12px 16px;display:flex;align-items:center;gap:12px;
-  box-shadow:var(--sh-sm);flex-shrink:0;position:relative;
-}
-.back-btn{
-  background:none;border:none;cursor:pointer;padding:6px;border-radius:50%;
-  color:var(--text-light);display:flex;align-items:center;justify-content:center;
-  transition:background .2s;-webkit-tap-highlight-color:transparent;
-}
-.back-btn:active{background:var(--border-light)}
-.bella-avatar{
-  width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--rose-deep));
-  display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;
-  box-shadow:var(--sh-sm);
-}
-.bella-info{flex:1;min-width:0}
-.bella-name{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:600;color:var(--dark);line-height:1.2}
-.bella-status{font-size:11px;color:var(--text-light);display:flex;align-items:center;gap:5px}
-.online-dot{width:7px;height:7px;border-radius:50%;background:#2D7D52;display:inline-block}
+    /* Header */
+    #header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px 12px;
+      background: var(--rose);
+      color: #fff;
+      flex-shrink: 0;
+      padding-top: calc(14px + env(safe-area-inset-top, 0px));
+    }
+    #header-avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+    #header-info { flex: 1; }
+    #header-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 18px; font-weight: 600;
+      line-height: 1.2;
+    }
+    #header-status { font-size: 12px; opacity: .8; }
+    #btn-close {
+      background: none; border: none; color: #fff;
+      font-size: 22px; cursor: pointer; padding: 4px 8px;
+      border-radius: 8px; line-height: 1;
+      transition: background .15s;
+    }
+    #btn-close:hover { background: rgba(255,255,255,.15); }
 
-/* ── MESSAGES ── */
-.messages-wrap{flex:1;overflow-y:auto;padding:16px 14px 10px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
-.messages-wrap::-webkit-scrollbar{width:4px}
-.messages-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+    /* Mensagens */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 14px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .msg {
+      display: flex;
+      gap: 8px;
+      max-width: 88%;
+      animation: fadeUp .25s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity:0; transform: translateY(8px); }
+      to   { opacity:1; transform: translateY(0); }
+    }
+    .msg.bella { align-self: flex-start; }
+    .msg.user  { align-self: flex-end; flex-direction: row-reverse; }
+    .msg-avatar {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--rose); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0; margin-top: auto;
+    }
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 18px;
+      font-size: 14.5px; line-height: 1.55;
+      word-break: break-word;
+    }
+    .msg.bella .bubble {
+      background: var(--surface);
+      color: var(--text);
+      border-bottom-left-radius: 5px;
+      box-shadow: 0 1px 4px var(--shadow);
+    }
+    .msg.user .bubble {
+      background: var(--rose);
+      color: #fff;
+      border-bottom-right-radius: 5px;
+    }
 
-.msg{max-width:80%;display:flex;flex-direction:column;gap:3px;animation:fadeIn .25s ease}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    /* Typing */
+    .typing-dots { display: flex; gap: 4px; padding: 4px 2px; }
+    .typing-dots span {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--rose-light);
+      animation: bounce .9s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: .15s; }
+    .typing-dots span:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce {
+      0%,80%,100% { transform: translateY(0); }
+      40%          { transform: translateY(-6px); }
+    }
 
-.msg.bella{align-self:flex-start}
-.msg.user{align-self:flex-end}
+    /* Chips */
+    #chip-area {
+      flex-shrink: 0;
+      padding: 8px 14px 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      border-top: 1px solid rgba(155,77,106,.1);
+      background: var(--cream);
+      min-height: 52px;
+      align-items: center;
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 16px;
+      background: var(--chip-bg);
+      border: 1.5px solid var(--chip-border);
+      border-radius: 999px;
+      font-family: 'Nunito', sans-serif;
+      font-size: 13.5px; font-weight: 600;
+      color: var(--rose);
+      cursor: pointer;
+      transition: background .15s, border-color .15s, transform .1s;
+      white-space: nowrap;
+    }
+    .chip:hover  { background: #ecdde5; border-color: var(--rose); }
+    .chip:active { transform: scale(.96); }
+    .chip.primary {
+      background: var(--rose); border-color: var(--rose); color: #fff;
+    }
+    .chip.primary:hover { background: #883060; }
 
-.msg-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--rose-deep));display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-bottom:2px}
+    /* Input */
+    #input-area {
+      flex-shrink: 0;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      padding: 8px 14px calc(8px + env(safe-area-inset-bottom, 0px));
+      background: var(--cream);
+      border-top: 1px solid rgba(155,77,106,.1);
+      flex-wrap: wrap;
+    }
+    #msg-input {
+      flex: 1;
+      min-width: 0;
+      border: 1.5px solid var(--chip-border);
+      border-radius: 22px;
+      padding: 10px 16px;
+      font-family: 'Nunito', sans-serif;
+      font-size: 14.5px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+      resize: none;
+      line-height: 1.4;
+      max-height: 100px;
+      overflow-y: auto;
+      transition: border-color .15s;
+    }
+    #msg-input:focus { border-color: var(--rose); }
+    #msg-input::placeholder { color: var(--muted); }
+    #btn-send {
+      width: 42px; height: 42px; flex-shrink: 0;
+      border-radius: 50%; border: none;
+      background: var(--rose); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background .15s, transform .1s;
+      font-size: 18px;
+    }
+    #btn-send:hover  { background: #883060; }
+    #btn-send:active { transform: scale(.92); }
+    #btn-send:disabled { background: #ccc; cursor: default; }
 
-.msg-row{display:flex;align-items:flex-end;gap:7px}
-.msg.user .msg-row{flex-direction:row-reverse}
+    /* Botão encerrar */
+    #btn-end-chat {
+      display: none;
+      width: 100%;
+      padding: 13px;
+      background: var(--dark);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-family: 'Nunito', sans-serif;
+      font-size: 15px; font-weight: 700;
+      cursor: pointer;
+      transition: background .15s;
+      letter-spacing: .2px;
+      margin-top: 4px;
+    }
+    #btn-end-chat:hover { background: #3d1a25; }
 
-.bubble{
-  padding:10px 14px;border-radius:18px;font-size:13.5px;line-height:1.65;
-  word-break:break-word;white-space:pre-wrap;
-}
-.msg.bella .bubble{
-  background:var(--white);color:var(--text);border-bottom-left-radius:4px;
-  box-shadow:var(--sh-sm);border:1px solid var(--border-light);
-}
-.msg.user .bubble{
-  background:linear-gradient(135deg,var(--rose),var(--rose-deep));
-  color:white;border-bottom-right-radius:4px;box-shadow:var(--sh-sm);
-}
-.bubble b,.bubble strong{font-weight:700}
-.bubble a{color:var(--rose);text-decoration:underline;font-weight:600}
-.msg.user .bubble a{color:rgba(255,255,255,.9)}
-.msg-time{font-size:10px;color:var(--text-light);padding:0 4px}
-.msg.user .msg-time{text-align:right}
+    /* Summary card */
+    .summary-card {
+      background: var(--surface);
+      border: 1.5px solid var(--chip-border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-top: 4px;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .summary-card h4 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 16px; font-weight: 600;
+      color: var(--rose); margin-bottom: 6px;
+    }
+    .summary-row { display: flex; gap: 8px; }
+    .summary-label { color: var(--muted); min-width: 70px; }
 
-/* Typing indicator */
-.typing-bubble{
-  background:var(--white);border:1px solid var(--border-light);
-  padding:12px 16px;border-radius:18px;border-bottom-left-radius:4px;
-  box-shadow:var(--sh-sm);display:flex;align-items:center;gap:5px;
-}
-.typing-dot{width:7px;height:7px;border-radius:50%;background:var(--rose-mid);animation:blink 1.2s infinite}
-.typing-dot:nth-child(2){animation-delay:.2s}
-.typing-dot:nth-child(3){animation-delay:.4s}
-@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
-
-/* ── CHIPS (booking + quick replies) ── */
-.chips-wrap{
-  display:flex;gap:7px;padding:6px 14px 8px;overflow-x:auto;flex-shrink:0;
-  flex-wrap:wrap;max-height:92px;overflow-y:auto;
-  scrollbar-width:none;
-}
-.chips-wrap::-webkit-scrollbar{display:none}
-.chip{
-  white-space:nowrap;background:var(--white);border:1.5px solid var(--border);
-  border-radius:50px;padding:6px 13px;font-family:'Nunito',sans-serif;
-  font-size:12px;font-weight:600;color:var(--rose);cursor:pointer;
-  transition:all .2s;-webkit-tap-highlight-color:transparent;flex-shrink:0;
-}
-.chip:active,.chip:hover{background:var(--rose-light);border-color:var(--rose)}
-.chip.chip-date{color:var(--text);border-color:var(--border)}
-.chip.chip-date:active,.chip.chip-date:hover{background:var(--gold-light);border-color:var(--gold);color:var(--dark)}
-.chip.chip-slot{color:var(--dark);border-color:var(--border)}
-.chip.chip-slot:active,.chip.chip-slot:hover{background:var(--gold-light);border-color:var(--gold)}
-
-/* ── INPUT ── */
-.input-area{
-  background:var(--white);border-top:1px solid var(--border);
-  padding:10px 12px 14px;display:flex;align-items:flex-end;gap:9px;flex-shrink:0;
-}
-.input-field{
-  flex:1;border:1.5px solid var(--border);border-radius:22px;
-  padding:10px 16px;font-family:'Nunito',sans-serif;font-size:14px;
-  color:var(--text);background:var(--cream);resize:none;
-  outline:none;transition:border-color .2s;line-height:1.5;max-height:100px;
-  min-height:42px;overflow-y:auto;
-}
-.input-field:focus{border-color:var(--rose)}
-.input-field::placeholder{color:var(--text-light)}
-.send-btn{
-  width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--rose-deep));
-  border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;transition:opacity .2s;box-shadow:var(--sh-sm);
-  -webkit-tap-highlight-color:transparent;
-}
-.send-btn:active{opacity:.8}
-.send-btn svg{width:18px;height:18px;fill:white}
-.send-btn:disabled{opacity:.4;cursor:not-allowed}
-
-/* ── LOADING INIT ── */
-.init-loader{
-  position:fixed;inset:0;background:var(--cream);z-index:100;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-}
-.init-loader .bella-avatar-lg{
-  width:72px;height:72px;border-radius:50%;
-  background:linear-gradient(135deg,var(--rose),var(--rose-deep));
-  display:flex;align-items:center;justify-content:center;font-size:36px;
-  box-shadow:var(--sh-md);
-}
-.init-loader p{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:var(--rose)}
-.init-loader span{font-size:12px;color:var(--text-light)}
-.spin{width:24px;height:24px;border:2.5px solid var(--border);border-top-color:var(--rose);border-radius:50%;animation:spin .7s linear infinite;margin-top:4px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.hidden{display:none!important}
-
-/* ── TOAST ── */
-.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--dark);color:white;padding:10px 18px;border-radius:50px;font-size:12px;font-weight:600;z-index:200;opacity:0;transition:all .3s;white-space:nowrap}
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.toast.err{background:#C4564A}
-
-/* responsive */
-@media(max-width:420px){
-  .bubble{font-size:13px;padding:9px 12px}
-  .msg{max-width:88%}
-}
-</style>
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --cream: #1e1218; --surface: #2c1e26;
+        --chip-bg: #2e1d28; --chip-border: #5a3a4e;
+        --text: #f0dce8; --muted: #a08090;
+        --shadow: rgba(0,0,0,.3);
+      }
+    }
+    :root[data-theme="dark"] {
+      --cream: #1e1218; --surface: #2c1e26;
+      --chip-bg: #2e1d28; --chip-border: #5a3a4e;
+      --text: #f0dce8; --muted: #a08090;
+      --shadow: rgba(0,0,0,.3);
+    }
+  </style>
 </head>
 <body>
-
-<div class="init-loader" id="loader">
-  <div class="bella-avatar-lg">🌸</div>
-  <p>Bella</p>
-  <span>Iniciando o chat…</span>
-  <div class="spin"></div>
-</div>
-
-<div id="chat-app" class="hidden" style="display:flex;flex-direction:column;height:100%">
-  <!-- Header -->
-  <div class="chat-header">
-    <button class="back-btn" onclick="history.length>1?history.back():location.href='/'" title="Voltar">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-    </button>
-    <div class="bella-avatar">🌸</div>
-    <div class="bella-info">
-      <div class="bella-name">Bella</div>
-      <div class="bella-status"><span class="online-dot"></span> Assistente virtual</div>
+<div id="app">
+  <div id="header">
+    <div id="header-avatar">🌸</div>
+    <div id="header-info">
+      <div id="header-name">Bella</div>
+      <div id="header-status">Assistente virtual</div>
     </div>
+    <button id="btn-close" title="Fechar" onclick="closeApp()">✕</button>
   </div>
 
-  <!-- Messages -->
-  <div class="messages-wrap" id="messages"></div>
+  <div id="messages"></div>
+  <div id="chip-area"></div>
 
-  <!-- Chips (quick replies / booking) -->
-  <div class="chips-wrap" id="chipsArea">
-    <button class="chip" onclick="sendQuick('📅 Quero agendar')">📅 Agendar</button>
-    <button class="chip" onclick="sendQuick('🌿 Quais são os serviços?')">🌿 Serviços</button>
-    <button class="chip" onclick="sendQuick('💫 Quais os preços?')">💫 Preços</button>
-    <button class="chip" onclick="sendQuick('📍 Qual é a localização?')">📍 Localização</button>
-    <button class="chip" onclick="sendQuick('📱 WhatsApp')">📱 WhatsApp</button>
-  </div>
-
-  <!-- Input -->
-  <div class="input-area">
-    <textarea class="input-field" id="msgInput" placeholder="Digite sua mensagem…" rows="1"></textarea>
-    <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
-      <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
-    </button>
+  <div id="input-area">
+    <textarea id="msg-input" rows="1" placeholder="Digite sua mensagem..." disabled></textarea>
+    <button id="btn-send" disabled onclick="sendMessage()">➤</button>
+    <button id="btn-end-chat" onclick="closeApp()">Fechar esta conversa</button>
   </div>
 </div>
-
-<div class="toast" id="toast"></div>
 
 <script>
-// ── State ────────────────────────────────────────────────────────────────────
-let SESSION_ID   = null;
-let VISITOR_NAME = null;
-let isSending    = false;
+// ── Estado global ────────────────────────────────────────────────────
+let cfg = {};
+let session_id = null;
+let visitorName = null;
+let visitorPhone = null;
+let inputLocked = false;
+let _nextInput = null; // callback para próxima entrada de texto
 
-// Booking flow state
-const booking = {
-  active:  false,
-  step:    null,   // 'service' | 'city' | 'date' | 'slot'
-  cities:  [],
-  services:[],
-  cityId:  null,
-  cityName:'',
-  procId:  null,
-  procName:'',
-  date:    null,
-  slot:    null,
+const bk = {
+  active: false, step: null,
+  categories: [], services: [], cities: [],
+  categoryId: null, categoryName: null,
+  procId: null, procName: null, procDur: null,
+  cityId: null, cityName: null,
+  date: null, slot: null,
 };
 
-// ── Init ─────────────────────────────────────────────────────────────────────
-const HISTORY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+// ── DOM refs ─────────────────────────────────────────────────────────
+const $msgs   = document.getElementById('messages');
+const $chips  = document.getElementById('chip-area');
+const $input  = document.getElementById('msg-input');
+const $send   = document.getElementById('btn-send');
+const $endBtn = document.getElementById('btn-end-chat');
 
-(async function init() {
-  try {
-    const lastActivity = parseInt(localStorage.getItem('bella_last') || '0', 10);
-    if (lastActivity && Date.now() - lastActivity > HISTORY_TTL_MS) {
-      localStorage.removeItem('bella_sid');
-      localStorage.removeItem('bella_last');
-    }
-    SESSION_ID = localStorage.getItem('bella_sid');
-  } catch {}
-
-  if (!SESSION_ID) {
-    SESSION_ID = 'b' + Date.now() + Math.random().toString(36).slice(2,8);
-    try { localStorage.setItem('bella_sid', SESSION_ID); } catch {}
-  }
-
-  try {
-    const r = await fetch('/api/chat/init', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ session_id: SESSION_ID })
-    });
-    const data = await r.json();
-    VISITOR_NAME = data.visitor_name || null;
-
-    if (data.history?.length) {
-      for (const m of data.history) {
-        if (m.content === '__init__') continue;
-        renderMsg(m.role, m.content, false);
-      }
-    } else {
-      const bizName = data.business_name || 'nosso espaço';
-      const greeting = `Olá! 👋 Sou a Bella, assistente virtual de *${bizName}*.\n\nPara começar, como posso te chamar?`;
-      renderMsg('bella', greeting, true);
-      fetch('/api/chat/message', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ session_id: SESSION_ID, message: '__greeting__', visitor_name: null })
-      }).catch(()=>{});
-    }
-    scrollBottom();
-    try { localStorage.setItem('bella_last', String(Date.now())); } catch {}
-  } catch(e) {
-    showToast('Erro ao conectar. Tente novamente.', true);
-  }
-
-  document.getElementById('loader').classList.add('hidden');
-  const app = document.getElementById('chat-app');
-  app.classList.remove('hidden');
-  app.style.display = 'flex';
-
-  const inp = document.getElementById('msgInput');
-  inp.addEventListener('input', onInput);
-  inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-  });
-  autoGrow(inp);
-  document.getElementById('sendBtn').disabled = false;
-})();
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers DOM ──────────────────────────────────────────────────────
 function scrollBottom() {
-  const w = document.getElementById('messages');
-  w.scrollTop = w.scrollHeight;
+  requestAnimationFrame(() => { $msgs.scrollTop = $msgs.scrollHeight; });
 }
 
-function fmtTime(d) {
-  const dt = d ? new Date(d) : new Date();
-  return dt.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
-}
-
-function renderMarkdown(text) {
-  return text
-    .replace(/\*([^*]+)\*/g, '<b>$1</b>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-}
-
-function renderMsg(role, content, animate = true) {
-  const wrap = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg ' + role;
-  if (!animate) div.style.animation = 'none';
-
-  const row = document.createElement('div');
-  row.className = 'msg-row';
-
-  if (role === 'bella') {
-    const av = document.createElement('div');
-    av.className = 'msg-avatar';
-    av.textContent = '🌸';
-    row.appendChild(av);
-  }
-
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  bubble.innerHTML = renderMarkdown(content);
-
-  row.appendChild(bubble);
-  div.appendChild(row);
-
-  const time = document.createElement('div');
-  time.className = 'msg-time';
-  time.textContent = fmtTime();
-  div.appendChild(time);
-
-  wrap.appendChild(div);
-  scrollBottom();
-  return div;
-}
-
-function showTyping() {
-  const wrap = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg bella';
-  div.id = 'typing-ind';
-  const row = document.createElement('div');
-  row.className = 'msg-row';
+function addMsg(role, content, isHtml) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + role;
   const av = document.createElement('div');
   av.className = 'msg-avatar';
-  av.textContent = '🌸';
-  const tb = document.createElement('div');
-  tb.className = 'typing-bubble';
-  tb.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
-  row.appendChild(av);
-  row.appendChild(tb);
-  div.appendChild(row);
-  wrap.appendChild(div);
+  av.textContent = role === 'bella' ? '🌸' : '👤';
+  const bub = document.createElement('div');
+  bub.className = 'bubble';
+  if (isHtml) bub.innerHTML = content;
+  else bub.textContent = content;
+  wrap.append(av, bub);
+  $msgs.append(wrap);
   scrollBottom();
+  return wrap;
+}
+const addBellaHtml = h => addMsg('bella', h, true);
+const addUserMsg   = t => addMsg('user', t, false);
+
+function showTyping() {
+  return addBellaHtml('<div class="typing-dots"><span></span><span></span><span></span></div>');
 }
 
-function hideTyping() {
-  const el = document.getElementById('typing-ind');
-  if (el) el.remove();
-}
-
-function showToast(msg, err) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast' + (err ? ' err' : '') + ' show';
-  setTimeout(() => { t.className = 'toast'; }, 3000);
-}
-
-function autoGrow(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
-}
-
-function onInput(e) {
-  autoGrow(e.target);
-  document.getElementById('sendBtn').disabled = !e.target.value.trim();
-}
-
-// ── Chips ────────────────────────────────────────────────────────────────────
-function setDefaultChips() {
-  const area = document.getElementById('chipsArea');
-  area.innerHTML = `
-    <button class="chip" onclick="sendQuick('📅 Quero agendar')">📅 Agendar</button>
-    <button class="chip" onclick="sendQuick('🌿 Quais são os serviços?')">🌿 Serviços</button>
-    <button class="chip" onclick="sendQuick('💫 Quais os preços?')">💫 Preços</button>
-    <button class="chip" onclick="sendQuick('📍 Qual é a localização?')">📍 Localização</button>
-    <button class="chip" onclick="sendQuick('📱 WhatsApp')">📱 WhatsApp</button>
-  `;
+async function bellaDelay(html, delay) {
+  const t = showTyping();
+  await new Promise(r => setTimeout(r, delay || 650));
+  t.remove();
+  addBellaHtml(html);
 }
 
 function setChips(chips) {
-  // chips = [{label, fn}]
-  const area = document.getElementById('chipsArea');
-  area.innerHTML = '';
-  for (const c of chips) {
+  $chips.innerHTML = '';
+  $endBtn.style.display = 'none';
+  chips.forEach(c => {
     const btn = document.createElement('button');
-    btn.className = 'chip ' + (c.cls || '');
+    btn.className = 'chip' + (c.primary ? ' primary' : '');
     btn.textContent = c.label;
-    btn.onclick = c.fn;
-    area.appendChild(btn);
+    btn.onclick = c.action;
+    $chips.append(btn);
+  });
+}
+
+function clearChips() {
+  $chips.innerHTML = '';
+  $endBtn.style.display = 'none';
+}
+
+function showEndButton() {
+  $chips.innerHTML = '';
+  $input.style.display = 'none';
+  $send.style.display = 'none';
+  $endBtn.style.display = 'block';
+}
+
+function setInputEnabled(on) {
+  inputLocked = !on;
+  $input.disabled = !on;
+  $send.disabled  = !on;
+  if (on) $input.focus();
+}
+
+function fmtDate(d) {
+  const [y,m,dd] = d.split('-').map(Number);
+  const days = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  return `${days[new Date(y,m-1,dd).getDay()]}, ${String(dd).padStart(2,'0')}/${String(m).padStart(2,'0')}`;
+}
+
+// ── LocalStorage: só nome e telefone ────────────────────────────────
+function loadSaved() {
+  try { return { name: localStorage.getItem('bella_name') || null, phone: localStorage.getItem('bella_phone') || null }; }
+  catch { return { name: null, phone: null }; }
+}
+function saveName(n)  { try { localStorage.setItem('bella_name', n);  } catch {} }
+function savePhone(p) { try { localStorage.setItem('bella_phone', p); } catch {} }
+
+// ── Fechar app ───────────────────────────────────────────────────────
+function closeApp() {
+  window.close();
+  setTimeout(() => { history.back(); }, 300);
+}
+
+// ── Inicialização ────────────────────────────────────────────────────
+async function init() {
+  try {
+    const r = await fetch('/api/config');
+    cfg = await r.json();
+    if (cfg.primary_color) {
+      document.documentElement.style.setProperty('--rose', cfg.primary_color);
+    }
+  } catch {}
+
+  // Nova sessão a cada visita — sem TTL
+  try {
+    session_id = crypto.randomUUID();
+  } catch {
+    session_id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random()*16|0;
+      return (c==='x' ? r : (r&0x3|0x8)).toString(16);
+    });
+  }
+
+  const saved = loadSaved();
+  visitorName  = saved.name;
+  visitorPhone = saved.phone;
+
+  if (saved.name && saved.phone) {
+    await startWithConfirmation();
+  } else if (saved.name) {
+    await bellaDelay(`Olá, <strong>${saved.name}</strong>! Que bom ter você de volta! 🌸<br><br>Qual é o seu telefone com DDD para confirmarmos?`, 900);
+    await askPhone();
+  } else {
+    await bellaDelay('Olá! 🌸 Seja muito bem-vinda! Eu sou a <strong>Bella</strong>, sua assistente virtual.<br><br>Para começar, como posso te chamar?', 900);
+    setInputEnabled(true);
+    $input.placeholder = 'Digite seu nome...';
+    _nextInput = handleName;
   }
 }
 
-// ── Booking flow ─────────────────────────────────────────────────────────────
-async function startBookingFlow() {
-  booking.active = true;
-  booking.step   = null;
-  booking.cityId = null;
-  booking.procId = null;
-  booking.date   = null;
-  booking.slot   = null;
+// ── Coleta de nome ───────────────────────────────────────────────────
+async function handleName(txt) {
+  const name = txt.trim();
+  if (!name) { setInputEnabled(true); return; }
+  _nextInput = null;
+  visitorName = name;
+  saveName(name);
+  addUserMsg(name);
+  setInputEnabled(false);
+  await bellaDelay(`Que lindo nome! 😍 Prazer, <strong>${name.split(' ')[0]}</strong>!<br><br>Agora preciso do seu telefone com DDD:`, 700);
+  await askPhone();
+}
 
-  showTyping();
-  try {
-    // Carregar cidades
-    const citiesRes = await fetch('/api/bella/availability?step=cities');
-    booking.cities = citiesRes.ok ? await citiesRes.json() : [];
-    // Carregar serviços
-    const svcRes = await fetch('/api/bella/availability?step=services');
-    booking.services = svcRes.ok ? await svcRes.json() : [];
-  } catch {}
-  hideTyping();
+// ── Coleta de telefone ───────────────────────────────────────────────
+async function askPhone() {
+  $input.placeholder = 'Ex: 11 99999-9999';
+  setInputEnabled(true);
+  _nextInput = async (txt) => {
+    const digits = txt.trim().replace(/\D/g, '');
+    if (digits.length < 8) {
+      await bellaDelay('Por favor, informe um número válido com DDD 😊', 350);
+      setInputEnabled(true);
+      return;
+    }
+    _nextInput = null;
+    visitorPhone = txt.trim();
+    savePhone(txt.trim());
+    addUserMsg(txt.trim());
+    setInputEnabled(false);
+    try {
+      await fetch('/api/chat/session', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id, visitor_name: visitorName, visitor_phone: visitorPhone })
+      });
+    } catch {}
+    await startMainFlow();
+  };
+}
 
-  if (!booking.services.length) {
-    booking.active = false;
-    renderMsg('bella', 'No momento não há serviços cadastrados. Entre em contato pelo WhatsApp para agendar! 📱');
+// ── Confirmação de retorno ───────────────────────────────────────────
+async function startWithConfirmation() {
+  await bellaDelay(
+    `Olá, <strong>${visitorName.split(' ')[0]}</strong>! Que prazer ter você de volta! 🌸<br><br>` +
+    `Só confirmar rapidinho — seu telefone ainda é <strong>${visitorPhone}</strong>?`,
+    900
+  );
+  setChips([
+    { label: '✓ Sim, está certo', primary: true, action: async () => {
+        clearChips();
+        await startMainFlow();
+    }},
+    { label: 'Não, quero atualizar', action: async () => {
+        clearChips();
+        visitorPhone = null;
+        await bellaDelay('Sem problemas! Qual é o seu telefone com DDD?', 400);
+        await askPhone();
+    }},
+  ]);
+}
+
+// ── Fluxo principal ──────────────────────────────────────────────────
+async function startMainFlow() {
+  const first = visitorName.split(' ')[0];
+  await bellaDelay(`${first}, é um prazer te atender! 🌸 Em que posso te ajudar hoje?`, 700);
+  setDefaultChips();
+  setInputEnabled(true);
+  $input.placeholder = 'Digite sua mensagem...';
+}
+
+function setDefaultChips() {
+  setChips([
+    { label: '📅 Agendar', primary: true, action: () => startBookingFlow() },
+    { label: '📍 Localização',            action: () => handleChipMsg('Onde vocês ficam?') },
+    { label: '⏰ Horários',               action: () => handleChipMsg('Quais são os horários de atendimento?') },
+    { label: '💬 WhatsApp',              action: () => handleChipMsg('whatsapp') },
+  ]);
+}
+
+async function handleChipMsg(txt) {
+  clearChips();
+  addUserMsg(txt);
+  setInputEnabled(false);
+  await sendToServer(txt);
+  setDefaultChips();
+  setInputEnabled(true);
+}
+
+// ── Envio de mensagem ────────────────────────────────────────────────
+function sendMessage() {
+  const txt = $input.value.trim();
+  if (!txt || inputLocked) return;
+  $input.value = '';
+  $input.style.height = '';
+  if (_nextInput) { _nextInput(txt); return; }
+  clearChips();
+  addUserMsg(txt);
+  setInputEnabled(false);
+  sendToServer(txt).then(() => {
     setDefaultChips();
+    setInputEnabled(true);
+  });
+}
+
+$input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+$input.addEventListener('input', () => {
+  $input.style.height = 'auto';
+  $input.style.height = Math.min($input.scrollHeight, 100) + 'px';
+});
+
+async function sendToServer(txt) {
+  const t = showTyping();
+  try {
+    const r = await fetch('/api/chat/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id, message: txt, visitor_name: visitorName, visitor_phone: visitorPhone })
+    });
+    const data = await r.json();
+    t.remove();
+    if (data.response === '__BOOKING_START__') {
+      startBookingFlow();
+    } else {
+      addBellaHtml((data.response || '').replace(/\n/g, '<br>'));
+    }
+  } catch {
+    t.remove();
+    addBellaHtml('Desculpe, ocorreu um erro. Tente novamente 🙏');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// FLUXO DE AGENDAMENTO — 100% chips
+// ════════════════════════════════════════════════════════════════════
+async function startBookingFlow() {
+  bk.active = true;
+  bk.step = 'category';
+  Object.assign(bk, {
+    categoryId: null, categoryName: null,
+    procId: null, procName: null, procDur: null,
+    cityId: null, cityName: null,
+    date: null, slot: null,
+  });
+  clearChips();
+  setInputEnabled(false);
+
+  const t = showTyping();
+  let cats = [];
+  try {
+    const r = await fetch('/api/bella/availability?step=categories');
+    cats = await r.json();
+    t.remove();
+  } catch {
+    t.remove();
+    addBellaHtml('Não consegui carregar as categorias. Tente novamente 🙏');
+    setDefaultChips(); setInputEnabled(true); return;
+  }
+
+  if (!cats.length) {
+    addBellaHtml('Hmm, não encontrei categorias cadastradas no momento 😔');
+    setDefaultChips(); setInputEnabled(true); return;
+  }
+  bk.categories = cats;
+
+  addBellaHtml('Ótimo! Vamos agendar juntos 🗓️<br><br>Qual <strong>categoria</strong> de serviço você procura?');
+  setChips(cats.map(c => ({ label: c.name, action: () => pickCategory(c) })));
+}
+
+async function pickCategory(cat) {
+  bk.categoryId = cat.id; bk.categoryName = cat.name;
+  bk.step = 'service';
+  addUserMsg(cat.name);
+  clearChips();
+
+  const t = showTyping();
+  let svcs = [];
+  try {
+    const r = await fetch(`/api/bella/availability?step=services&categoryId=${cat.id}`);
+    svcs = await r.json();
+    t.remove();
+  } catch {
+    t.remove();
+    addBellaHtml('Não consegui carregar os serviços. Tente novamente 🙏');
+    startBookingFlow(); return;
+  }
+
+  if (!svcs.length) {
+    addBellaHtml(`Não há serviços disponíveis em <strong>${cat.name}</strong> no momento 😔`);
+    await new Promise(r => setTimeout(r, 400));
+    addBellaHtml('Quer escolher outra categoria?');
+    setChips([{ label: '← Voltar', primary: true, action: () => startBookingFlow() }]);
     return;
   }
+  bk.services = svcs;
 
-  // Se há apenas 1 cidade, pula para serviços direto
-  if (booking.cities.length <= 1) {
-    booking.cityId   = booking.cities[0]?.id || null;
-    booking.cityName = booking.cities[0]?.name || '';
-    askService();
-  } else {
-    askCity();
-  }
-}
-
-function askCity() {
-  booking.step = 'city';
-  const greeting = VISITOR_NAME ? `${VISITOR_NAME.split(' ')[0]}, ` : '';
-  renderMsg('bella', `${greeting}Em qual cidade você prefere ser atendida? 📍`);
-  setChips(booking.cities.map(c => ({
-    label: c.name,
-    fn: () => selectCity(c.id, c.name)
+  addBellaHtml(`Aqui estão os serviços de <strong>${cat.name}</strong>:`);
+  setChips(svcs.map(s => ({
+    label: s.dur ? `${s.name} (${s.dur}min)` : s.name,
+    action: () => pickService(s)
   })));
 }
 
-function selectCity(id, name) {
-  booking.cityId   = id;
-  booking.cityName = name;
-  renderMsg('user', name);
-  askService();
-}
+async function pickService(svc) {
+  bk.procId = svc.id; bk.procName = svc.name; bk.procDur = svc.dur;
+  bk.step = 'city';
+  addUserMsg(svc.name);
+  clearChips();
 
-async function askService() {
-  booking.step = 'service';
-  // Recarrega serviços filtrados pela cidade selecionada
-  if (booking.cityId) {
-    try {
-      const r = await fetch(`/api/bella/availability?step=services&cityId=${booking.cityId}`);
-      if (r.ok) booking.services = await r.json();
-    } catch {}
-  }
-
-  if (!booking.services.length) {
-    renderMsg('bella', 'Ops! Não há serviços disponíveis para essa localidade. Posso te ajudar com outra coisa?');
-    booking.active = false;
-    setDefaultChips();
+  const t = showTyping();
+  let cities = [];
+  try {
+    const r = await fetch('/api/bella/availability?step=cities');
+    cities = await r.json();
+    t.remove();
+  } catch {
+    t.remove();
+    addBellaHtml('Erro ao carregar cidades. Tente novamente 🙏');
     return;
   }
+  bk.cities = cities;
 
-  const greeting = VISITOR_NAME ? `${VISITOR_NAME.split(' ')[0]}, ` : '';
-  const cityPart = booking.cityName ? ` em *${booking.cityName}*` : '';
-  renderMsg('bella', `${greeting}Qual serviço você deseja agendar${cityPart}? 🌸`);
-  setChips(booking.services.map(s => {
-    const price = s.price ? ` · R$ ${Number(s.price).toFixed(2).replace('.',',')}` : '';
-    return {
-      label: s.name + price,
-      fn: () => selectService(s.id, s.name)
-    };
-  }));
+  if (cities.length <= 1) {
+    bk.cityId   = cities[0]?.id   || null;
+    bk.cityName = cities[0]?.name || null;
+    await askDate();
+  } else {
+    addBellaHtml('Em qual <strong>cidade</strong> você prefere ser atendida?');
+    setChips(cities.map(c => ({ label: c.name, action: () => pickCity(c) })));
+  }
 }
 
-async function selectService(id, name) {
-  booking.procId   = id;
-  booking.procName = name;
-  renderMsg('user', name);
+async function pickCity(city) {
+  bk.cityId = city.id; bk.cityName = city.name;
+  addUserMsg(city.name);
+  clearChips();
   await askDate();
 }
 
 async function askDate() {
-  booking.step = 'date';
-  showTyping();
+  bk.step = 'date';
+  const t = showTyping();
   let dates = [];
   try {
-    const r = await fetch(`/api/bella/availability?step=dates&procId=${booking.procId}&cityId=${booking.cityId || 1}`);
-    if (r.ok) dates = await r.json();
-  } catch {}
-  hideTyping();
+    const r = await fetch(`/api/bella/availability?step=dates&procId=${bk.procId}&cityId=${bk.cityId}`);
+    dates = await r.json();
+    t.remove();
+  } catch {
+    t.remove();
+    addBellaHtml('Não consegui verificar as datas. Tente novamente 🙏');
+    return;
+  }
 
   if (!dates.length) {
-    renderMsg('bella', 'Não encontrei datas disponíveis nos próximos 21 dias. 😔\n\nEntre em contato pelo WhatsApp para verificar outras opções!');
-    booking.active = false;
-    setDefaultChips();
-    return;
+    addBellaHtml('Não há datas disponíveis para este serviço no momento 😔<br><br>Entre em contato pelo WhatsApp para outras opções!');
+    setDefaultChips(); setInputEnabled(true); return;
   }
 
-  renderMsg('bella', `Ótimo! Escolha uma data disponível: 🗓️`);
-  setChips(dates.map(d => ({
-    label: fmtDate(d),
-    cls:   'chip-date',
-    fn:    () => selectDate(d)
-  })));
+  addBellaHtml('Ótimo! Escolha uma <strong>data</strong>:');
+  setChips(dates.map(d => ({ label: fmtDate(d), action: () => pickDate(d) })));
 }
 
-async function selectDate(dateStr) {
-  booking.date = dateStr;
-  renderMsg('user', fmtDate(dateStr));
-  await askSlot();
-}
+async function pickDate(d) {
+  bk.date = d; bk.step = 'slot';
+  addUserMsg(fmtDate(d));
+  clearChips();
 
-async function askSlot() {
-  booking.step = 'slot';
-  showTyping();
+  const t = showTyping();
   let slots = [];
   try {
-    const r = await fetch(`/api/bella/availability?step=slots&procId=${booking.procId}&cityId=${booking.cityId || 1}&date=${booking.date}`);
-    if (r.ok) slots = await r.json();
-  } catch {}
-  hideTyping();
+    const r = await fetch(`/api/bella/availability?step=slots&procId=${bk.procId}&cityId=${bk.cityId}&date=${bk.date}`);
+    slots = await r.json();
+    t.remove();
+  } catch {
+    t.remove();
+    addBellaHtml('Não consegui buscar os horários. Tente novamente 🙏');
+    return;
+  }
 
   if (!slots.length) {
-    renderMsg('bella', 'Não há horários disponíveis nessa data. Vamos tentar outra? 🗓️');
-    await askDate();
-    return;
+    addBellaHtml('Não há horários disponíveis nesta data 😔');
+    await new Promise(r => setTimeout(r, 400));
+    await askDate(); return;
   }
 
-  renderMsg('bella', `Perfeito! Escolha um horário: ⏰`);
-  setChips(slots.map(s => ({
-    label: s,
-    cls:   'chip-slot',
-    fn:    () => selectSlot(s)
-  })));
+  addBellaHtml('Perfeito! Escolha um <strong>horário</strong>:');
+  setChips(slots.map(s => ({ label: s, action: () => pickSlot(s) })));
 }
 
-function selectSlot(slot) {
-  booking.slot = slot;
-  renderMsg('user', slot);
-  confirmBooking();
+async function pickSlot(slot) {
+  bk.slot = slot; bk.step = 'confirm';
+  addUserMsg(slot);
+  clearChips();
+
+  const cityRow = bk.cityName
+    ? `<div class="summary-row"><span class="summary-label">Cidade</span><span>${bk.cityName}</span></div>` : '';
+  addBellaHtml(
+    `Aqui está o resumo do seu agendamento:<div class="summary-card">
+      <h4>✨ Resumo</h4>
+      <div class="summary-row"><span class="summary-label">Serviço</span><span>${bk.procName}</span></div>
+      <div class="summary-row"><span class="summary-label">Data</span><span>${fmtDate(bk.date)}</span></div>
+      <div class="summary-row"><span class="summary-label">Horário</span><span>${bk.slot}</span></div>
+      ${cityRow}
+    </div>`
+  );
+
+  await new Promise(r => setTimeout(r, 500));
+  addBellaHtml('Posso confirmar seu agendamento? 😊');
+  setChips([
+    { label: '✅ Sim, confirmar!', primary: true, action: () => confirmBooking() },
+    { label: '🔄 Alterar dados',   action: () => { addUserMsg('Quero alterar'); startBookingFlow(); } },
+  ]);
 }
 
-function confirmBooking() {
-  booking.step = 'confirm';
-  const cityPart = booking.cityName ? `\n📍 *Local:* ${booking.cityName}` : '';
-  const summary =
-    `Ótimo! Aqui está o resumo do seu agendamento: ✨\n\n` +
-    `🌿 *Serviço:* ${booking.procName}` +
-    cityPart +
-    `\n🗓️ *Data:* ${fmtDate(booking.date)}` +
-    `\n⏰ *Horário:* ${booking.slot}\n\n` +
-    `Para confirmar, acesse nossa agenda e finalize o agendamento!\n\n👉 [Agendar agora](/)`;
-  renderMsg('bella', summary);
-  booking.active = false;
-  setTimeout(setDefaultChips, 800);
+async function confirmBooking() {
+  clearChips();
+  addUserMsg('Confirmar!');
+  bk.step = 'done'; bk.active = false;
+
+  const t = showTyping();
+  await new Promise(r => setTimeout(r, 800));
+  t.remove();
+
+  // TODO v2.9.19 — salvar appointment no DB
+  const first = visitorName.split(' ')[0];
+  addBellaHtml(
+    `🎉 <strong>Perfeito, ${first}!</strong><br><br>` +
+    `Seu agendamento de <strong>${bk.procName}</strong> está confirmado para ` +
+    `<strong>${fmtDate(bk.date)}</strong> às <strong>${bk.slot}</strong>.<br><br>` +
+    `Em breve você receberá uma confirmação. Te aguardamos! 🌸`
+  );
+
+  await new Promise(r => setTimeout(r, 600));
+  await askAnythingElse();
 }
 
-function fmtDate(d) {
-  // "2025-09-24" → "Ter, 24/09"
-  const [y,m,dd] = d.split('-').map(Number);
-  const dt = new Date(y, m-1, dd);
-  const days = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  return `${days[dt.getDay()]}, ${String(dd).padStart(2,'0')}/${String(m).padStart(2,'0')}`;
+// ── Encerramento da conversa ─────────────────────────────────────────
+async function askAnythingElse() {
+  await new Promise(r => setTimeout(r, 400));
+  addBellaHtml('Posso te ajudar em mais alguma coisa?');
+  setChips([
+    { label: 'Sim', primary: true, action: async () => {
+        addUserMsg('Sim');
+        clearChips();
+        await new Promise(r => setTimeout(r, 350));
+        addBellaHtml('Gostaria de agendar um novo procedimento?');
+        setChips([
+          { label: 'Sim, quero agendar', primary: true, action: async () => {
+              addUserMsg('Sim, quero agendar');
+              clearChips();
+              await new Promise(r => setTimeout(r, 200));
+              startBookingFlow();
+          }},
+          { label: 'Não, outra coisa', action: async () => {
+              addUserMsg('Não, outra coisa');
+              clearChips();
+              await bellaDelay('Em que mais posso te ajudar? 😊', 400);
+              setDefaultChips();
+              setInputEnabled(true);
+          }},
+        ]);
+    }},
+    { label: 'Não', action: async () => {
+        addUserMsg('Não');
+        clearChips();
+        setInputEnabled(false);
+        const first = visitorName.split(' ')[0];
+        await bellaDelay(
+          `Muito obrigada, <strong>${first}</strong>! 🌸<br><br>` +
+          `Sua agenda foi confirmada para <strong>${fmtDate(bk.date)}</strong> às <strong>${bk.slot}</strong>.<br><br>` +
+          `Te aguardamos com carinho! Até logo 💕`,
+          750
+        );
+        await new Promise(r => setTimeout(r, 500));
+        showEndButton();
+    }},
+  ]);
 }
 
-// ── Send ─────────────────────────────────────────────────────────────────────
-async function sendToServer(message) {
-  try {
-    const r = await fetch('/api/chat/message', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        session_id: SESSION_ID,
-        message,
-        visitor_name: VISITOR_NAME || undefined
-      })
-    });
-    const data = await r.json();
-    if (data.visitor_name) VISITOR_NAME = data.visitor_name;
-    return data.response || null;
-  } catch(e) { return null; }
-}
-
-async function sendMessage() {
-  const inp = document.getElementById('msgInput');
-  const text = inp.value.trim();
-  if (!text || isSending) return;
-
-  isSending = true;
-  inp.value = '';
-  inp.style.height = 'auto';
-  document.getElementById('sendBtn').disabled = true;
-
-  if (booking.active) {
-    // Usuário digitou no campo enquanto fluxo de chips está ativo — reseta o fluxo
-    booking.active = false;
-    setDefaultChips();
-  }
-
-  renderMsg('user', text);
-  showTyping();
-
-  const response = await sendToServer(text);
-  hideTyping();
-
-  if (!response) {
-    showToast('Não consegui responder agora. Tente novamente.', true);
-    isSending = false;
-    document.getElementById('sendBtn').disabled = false;
-    inp.focus();
-    return;
-  }
-
-  // Marcador especial: inicia fluxo de agendamento por chips
-  if (response === '__BOOKING_START__') {
-    await startBookingFlow();
-  } else {
-    renderMsg('bella', response);
-    setDefaultChips();
-  }
-
-  isSending = false;
-  document.getElementById('sendBtn').disabled = false;
-  inp.focus();
-}
-
-async function sendQuick(text) {
-  if (isSending) return;
-  document.getElementById('msgInput').value = text;
-  document.getElementById('sendBtn').disabled = false;
-  await sendMessage();
-}
+// ── Start ────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
