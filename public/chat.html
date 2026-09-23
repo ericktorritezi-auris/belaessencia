@@ -738,12 +738,34 @@ async function sendToServer(txt) {
 // ════════════════════════════════════════════════════════════════════
 // FLUXO DE AGENDAMENTO — 100% chips
 // ════════════════════════════════════════════════════════════════════
+// ── Helper: mensagem de urgência para produtos promocionais ──────────
+function promoUrgencyMsg(p) {
+  const limit = p.promo_limit ? Number(p.promo_limit) : null;
+  const used  = p.promo_used  ? Number(p.promo_used)  : 0;
+  const remaining = (limit !== null) ? limit - used : null;
+  const endDate = p.promo_end_date ? String(p.promo_end_date).slice(0, 10) : null;
+  let endStr = '';
+  if (endDate) {
+    const [y, mo, d] = endDate.split('-');
+    endStr = ` até ${d}/${mo}/${y}`;
+  }
+  if (remaining !== null && remaining <= 3)  return `🚨 ÚLTIMAS ${remaining} vaga${remaining !== 1 ? 's' : ''}${endStr}!`;
+  if (remaining !== null && remaining <= 7)  return `⚡ Restam apenas ${remaining} vagas${endStr}!`;
+  if (remaining !== null)                    return `🔥 ${remaining} vagas disponíveis${endStr}`;
+  if (endDate) {
+    const today = new Date().toISOString().slice(0, 10);
+    const diff  = Math.ceil((new Date(endDate) - new Date(today)) / 86400000);
+    if (diff >= 0 && diff <= 30) return `⏰ Promo termina${diff === 0 ? ' hoje' : ` em ${diff} dia${diff !== 1 ? 's' : ''}`}!`;
+  }
+  return '';
+}
+
 async function startBookingFlow() {
   bk.active = true;
   bk.step = 'city';
   Object.assign(bk, {
     categoryId: null, categoryName: null,
-    procId: null, procName: null, procDur: null,
+    procId: null, procName: null, procDur: null, promoDate: null,
     cityId: null, cityName: null, cityAddress: null,
     date: null, slot: null,
     allDates: [], dateOffset: 0,
@@ -838,7 +860,7 @@ async function loadServicesDirectly() {
 
   addBellaHtml('Qual <strong>procedimento</strong> você deseja?');
   setChips(svcs.map(s => ({
-    label: s.dur ? `${s.name} (${s.dur}min)` : s.name,
+    label: (s.is_promo ? '🏷️ ' : '') + (s.dur ? `${s.name} (${s.dur}min)` : s.name),
     action: () => pickService(s)
   })));
 }
@@ -873,16 +895,29 @@ async function pickCategory(cat) {
 
   addBellaHtml(`Qual <strong>procedimento</strong> em ${cat.name}?`);
   setChips(svcs.map(s => ({
-    label: s.dur ? `${s.name} (${s.dur}min)` : s.name,
+    label: (s.is_promo ? '🏷️ ' : '') + (s.dur ? `${s.name} (${s.dur}min)` : s.name),
     action: () => pickService(s)
   })));
 }
 
 async function pickService(svc) {
-  bk.procId = svc.id; bk.procName = svc.name; bk.procDur = svc.dur; bk.procPrice = svc.price ?? null;
+  bk.procId    = svc.id;
+  bk.procName  = svc.name;
+  bk.procDur   = svc.dur;
+  bk.procPrice = svc.price ?? null;
+  bk.promoDate = svc.promo_date || null;
   bk.step = 'date';
   addUserMsg(svc.name);
   clearChips();
+  // Exibe indicação de produto promocional com urgência
+  if (svc.is_promo) {
+    const urgency = promoUrgencyMsg(svc);
+    const msg = urgency
+      ? `🏷️ <strong>Produto Promocional!</strong><br><small>${urgency}</small>`
+      : '🏷️ <strong>Produto Promocional!</strong>';
+    addBellaHtml(msg);
+    await new Promise(r => setTimeout(r, 350));
+  }
   // Cidade já foi escolhida — vai direto para datas
   await askDate();
 }
@@ -899,6 +934,13 @@ function buildAddress(city) {
 
 async function askDate(isFirstLoad) {
   bk.step = 'date';
+  // Procedimento promo com data exclusiva — seleciona automaticamente
+  if (bk.promoDate) {
+    addBellaHtml(`📅 Este procedimento está disponível para <strong>${fmtDate(bk.promoDate)}</strong>.`);
+    await new Promise(r => setTimeout(r, 300));
+    await pickDate(bk.promoDate);
+    return;
+  }
   if (isFirstLoad !== false) {
     // Reset paginação ao entrar na etapa de data pela primeira vez
     bk.allDates = [];
