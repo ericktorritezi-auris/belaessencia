@@ -740,7 +740,7 @@ async function sendToServer(txt) {
 // ════════════════════════════════════════════════════════════════════
 async function startBookingFlow() {
   bk.active = true;
-  bk.step = 'category';
+  bk.step = 'city';
   Object.assign(bk, {
     categoryId: null, categoryName: null,
     procId: null, procName: null, procDur: null,
@@ -751,6 +751,49 @@ async function startBookingFlow() {
   clearChips();
   setInputEnabled(false);
 
+  // v3.0 — Cidade primeiro
+  const t = showTyping();
+  let cities = [];
+  try {
+    const r = await fetch('/api/bella/availability?step=cities');
+    cities = await r.json();
+    t.remove();
+  } catch {
+    t.remove();
+    addBellaHtml('Não consegui carregar as cidades. Tente novamente 🙏');
+    setDefaultChips(); setInputEnabled(true); return;
+  }
+
+  if (!cities.length) {
+    // Sem cidades cadastradas — vai direto para serviços
+    await loadServicesDirectly();
+    return;
+  }
+
+  if (cities.length === 1) {
+    // Única cidade — pula a escolha silenciosamente
+    bk.cityId      = cities[0].id;
+    bk.cityName    = cities[0].name;
+    bk.cityAddress = buildAddress(cities[0]);
+    await loadServicesForCity();
+    return;
+  }
+
+  addBellaHtml('Ótimo! Vamos agendar 🗓️<br><br>Em qual <strong>cidade</strong> você deseja o atendimento?');
+  setChips(cities.map(c => ({ label: c.name, action: () => pickCity(c) })));
+}
+
+async function pickCity(city) {
+  bk.cityId      = city.id;
+  bk.cityName    = city.name;
+  bk.cityAddress = buildAddress(city);
+  addUserMsg(city.name);
+  clearChips();
+  await loadServicesForCity();
+}
+
+// Após cidade escolhida — carrega categorias (com filtro de cidade) ou serviços diretos
+async function loadServicesForCity() {
   const t = showTyping();
   let cats = [];
   try {
@@ -760,8 +803,9 @@ async function startBookingFlow() {
   t.remove();
 
   if (cats.length > 0) {
+    bk.step = 'category';
     bk.categories = cats;
-    addBellaHtml('Ótimo! Vamos agendar juntos 🗓️<br><br>Qual <strong>categoria</strong> de serviço você procura?');
+    addBellaHtml('Qual <strong>categoria</strong> de serviço você procura?');
     setChips(cats.map(c => ({ label: c.name, action: () => pickCategory(c) })));
   } else {
     await loadServicesDirectly();
@@ -773,7 +817,10 @@ async function loadServicesDirectly() {
   const t = showTyping();
   let svcs = [];
   try {
-    const r = await fetch('/api/bella/availability?step=services');
+    const url = bk.cityId
+      ? `/api/bella/availability?step=services&cityId=${bk.cityId}`
+      : '/api/bella/availability?step=services';
+    const r = await fetch(url);
     svcs = await r.json();
     t.remove();
   } catch {
@@ -788,7 +835,7 @@ async function loadServicesDirectly() {
   }
   bk.services = svcs;
 
-  addBellaHtml('Ótimo! Vamos agendar juntos 🗓️<br><br>Qual <strong>serviço</strong> você deseja?');
+  addBellaHtml('Qual <strong>procedimento</strong> você deseja?');
   setChips(svcs.map(s => ({
     label: s.dur ? `${s.name} (${s.dur}min)` : s.name,
     action: () => pickService(s)
@@ -804,7 +851,8 @@ async function pickCategory(cat) {
   const t = showTyping();
   let svcs = [];
   try {
-    const r = await fetch(`/api/bella/availability?step=services&categoryId=${cat.id}`);
+    const cityParam = bk.cityId ? `&cityId=${bk.cityId}` : '';
+    const r = await fetch(`/api/bella/availability?step=services&categoryId=${cat.id}${cityParam}`);
     svcs = await r.json();
     t.remove();
   } catch {
@@ -817,12 +865,12 @@ async function pickCategory(cat) {
     addBellaHtml(`Não há serviços disponíveis em <strong>${cat.name}</strong> no momento 😔`);
     await new Promise(r => setTimeout(r, 400));
     addBellaHtml('Quer escolher outra categoria?');
-    setChips([{ label: '← Voltar', primary: true, action: () => startBookingFlow() }]);
+    setChips([{ label: '← Voltar', primary: true, action: () => loadServicesForCity() }]);
     return;
   }
   bk.services = svcs;
 
-  addBellaHtml(`Aqui estão os serviços de <strong>${cat.name}</strong>:`);
+  addBellaHtml(`Qual <strong>procedimento</strong> em ${cat.name}?`);
   setChips(svcs.map(s => ({
     label: s.dur ? `${s.name} (${s.dur}min)` : s.name,
     action: () => pickService(s)
@@ -831,39 +879,11 @@ async function pickCategory(cat) {
 
 async function pickService(svc) {
   bk.procId = svc.id; bk.procName = svc.name; bk.procDur = svc.dur; bk.procPrice = svc.price ?? null;
-  bk.step = 'city';
+  bk.step = 'date';
   addUserMsg(svc.name);
   clearChips();
-
-  const t = showTyping();
-  let cities = [];
-  try {
-    // Passa procId → server filtra cidades com disponibilidade real
-    const r = await fetch(`/api/bella/availability?step=cities&procId=${bk.procId}`);
-    cities = await r.json();
-    t.remove();
-  } catch {
-    t.remove();
-    addBellaHtml('Erro ao carregar cidades. Tente novamente 🙏');
-    return;
-  }
-  bk.cities = cities;
-
-  if (!cities.length) {
-    addBellaHtml('Não há disponibilidade para este serviço no momento 😔<br><br>Entre em contato pelo WhatsApp para outras opções!');
-    setDefaultChips(); setInputEnabled(true); return;
-  }
-
-  if (cities.length === 1) {
-    // Única cidade — pula a escolha
-    bk.cityId      = cities[0].id;
-    bk.cityName    = cities[0].name;
-    bk.cityAddress = buildAddress(cities[0]);
-    await askDate();
-  } else {
-    addBellaHtml('Em qual <strong>cidade</strong> você prefere o atendimento?');
-    setChips(cities.map(c => ({ label: c.name, action: () => pickCity(c) })));
-  }
+  // Cidade já foi escolhida — vai direto para datas
+  await askDate();
 }
 
 function buildAddress(city) {
@@ -874,15 +894,6 @@ function buildAddress(city) {
     city.neighborhood || null,
   ].filter(Boolean);
   return parts.join(', ') || null;
-}
-
-async function pickCity(city) {
-  bk.cityId      = city.id;
-  bk.cityName    = city.name;
-  bk.cityAddress = buildAddress(city);
-  addUserMsg(city.name);
-  clearChips();
-  await askDate();
 }
 
 async function askDate(isFirstLoad) {

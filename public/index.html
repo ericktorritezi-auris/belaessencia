@@ -2961,6 +2961,9 @@ async function doLogin() {
     await POST('/api/auth/login',{user,pass});
     document.getElementById('adm-login').classList.add('hidden');
     document.getElementById('adm-dash').classList.remove('hidden');
+    // Bella é só para clientes — oculta o FAB no painel admin
+    const _fab = document.getElementById('bella-fab');
+    if (_fab) _fab.style.display = 'none';
     initAdmin();
     loadProfProfile(); // atualiza nome no topbar do admin
     // Inscreve profissional para receber push de novos agendamentos
@@ -2977,6 +2980,10 @@ async function doLogout() {
   document.getElementById('adm-dash').classList.add('hidden');
   document.getElementById('adm-login').classList.remove('hidden');
   document.getElementById('adm-pass').value='';
+  // Restaura Bella para clientes que possam usar o painel público
+  const _fab = document.getElementById('bella-fab');
+  const _cfg = window._tenantConfig;
+  if (_fab && _cfg && _cfg.has_chat) _fab.style.display = 'flex';
   checkBiometricAvailability();
 }
 function toggleSB(){document.getElementById('adm-sb').classList.toggle('open')}
