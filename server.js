@@ -3899,6 +3899,205 @@ app.get('/api/availability', async (req, res) => {
   }
 });
 
+// ── Bella: serviços + disponibilidade (sem autenticação, para o chat) ────────
+// GET /api/bella/availability?step=services|dates|slots&procId=&cityId=&date=
+// step=services → lista procedimentos ativos da cidade
+// step=dates    → próximas datas disponíveis (até 14 dias)
+// step=slots    → horários livres para procId+cityId+date
+app.get('/api/bella/availability', async (req, res) => {
+  if (!req.tenant?.has_chat) return res.status(403).json({ error: 'Chat não disponível' });
+  const { step, procId, cityId, date } = req.query;
+
+  try {
+    // ── STEP: services ──────────────────────────────────────────────────────
+    if (step === 'services') {
+      // Lista procedimentos ativos. Se cityId informado, respeita city_procedures.enabled.
+      let rows;
+      if (cityId) {
+        const r = await req.db(
+          `SELECT p.id, p.name, p.duration as dur, p.price,
+                  COALESCE(cp.enabled, true) as enabled
+           FROM procedures p
+           LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$1
+           WHERE p.active=true AND COALESCE(cp.enabled, true)=true
+           ORDER BY p.sort_order, p.name LIMIT 20`,
+          [Number(cityId)]
+        );
+        rows = r.rows;
+      } else {
+        const r = await req.db(
+          `SELECT id, name, duration as dur, price FROM procedures
+           WHERE active=true ORDER BY sort_order, name LIMIT 20`
+        );
+        rows = r.rows;
+      }
+      return res.json(rows);
+    }
+
+    // ── STEP: cities ────────────────────────────────────────────────────────
+    if (step === 'cities') {
+      const r = await req.db(
+        `SELECT id, name FROM cities ORDER BY name LIMIT 20`
+      );
+      return res.json(r.rows);
+    }
+
+    // ── STEP: dates ─────────────────────────────────────────────────────────
+    // Retorna próximas datas (até 21 dias) que têm pelo menos 1 slot livre
+    if (step === 'dates') {
+      if (!procId || !cityId) return res.status(400).json({ error: 'procId e cityId obrigatórios' });
+      const nowBRT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const availDates = [];
+      for (let i = 0; i <= 21 && availDates.length < 7; i++) {
+        const d = new Date(nowBRT);
+        d.setDate(d.getDate() + i);
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        // Reutiliza lógica da /api/availability via fetch interno (mesma instância)
+        // Para evitar dependência circular, fazemos a query diretamente
+        const dayOfWeek = d.getDay();
+        const cfg = await resolveWorkConfig(Number(cityId), dayOfWeek);
+        // Verifica bloqueio total do dia
+        const blk = await req.db(
+          `SELECT 1 FROM blocked_dates
+           WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+          [dateStr, Number(cityId)]
+        );
+        if (blk.rowCount > 0) continue;
+        // Verifica exclusividade de outra cidade
+        const excl = await req.db(
+          `SELECT 1 FROM released_dates
+           WHERE date=$1 AND cardinality(city_ids)>0 AND NOT ($2=ANY(city_ids)) LIMIT 1`,
+          [dateStr, Number(cityId)]
+        );
+        if (excl.rowCount > 0) continue;
+        // Dia ativo?
+        if (!cfg.is_active || !cfg.work_start) {
+          // Verifica released_dates ou released_slots específicos
+          const rel = await req.db(
+            `SELECT 1 FROM released_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+            [dateStr, Number(cityId)]
+          );
+          const relS = await req.db(
+            `SELECT 1 FROM released_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+            [dateStr, Number(cityId)]
+          );
+          if (!rel.rowCount && !relS.rowCount) continue;
+        }
+        // Há pelo menos 1 procedimento disponível?
+        const pRow = await req.db(
+          `SELECT p.duration as dur FROM procedures p
+           LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$2
+           WHERE p.id=$1 AND p.active=TRUE AND COALESCE(cp.enabled,true)=true LIMIT 1`,
+          [Number(procId), Number(cityId)]
+        );
+        if (!pRow.rowCount) continue;
+        // Há slots livres? (consulta rápida via availability)
+        const appts = await req.db(
+          `SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [dateStr]
+        );
+        const bkSlots = await req.db(
+          `SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`,
+          [dateStr, Number(cityId)]
+        );
+        const busy = [...appts.rows, ...bkSlots.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
+        const dur = pRow.rows[0].dur;
+        const wStart = timeToMin(cfg.work_start || '08:00');
+        const wEnd   = timeToMin(cfg.work_end   || '18:00');
+        const nowMin = (i === 0) ? nowBRT.getHours()*60 + nowBRT.getMinutes() : 0;
+        let hasSlot = false;
+        const brks = (cfg.breaks || []).filter(b => b && b.s && b.e).map(b => ({ s: timeToMin(b.s), e: timeToMin(b.e) }));
+        for (let s = wStart; s + dur <= wEnd; s += 30) {
+          if (s <= nowMin) continue;
+          if (brks.some(b => s < b.e && s + dur > b.s)) continue;
+          if (!busy.some(b => s < b.e && s + dur > b.s)) { hasSlot = true; break; }
+        }
+        if (hasSlot) availDates.push(dateStr);
+      }
+      return res.json(availDates); // ["2025-09-24","2025-09-25",...]
+    }
+
+    // ── STEP: slots ─────────────────────────────────────────────────────────
+    // Proxy para /api/availability — mesma lógica, sem requireAdmin
+    if (step === 'slots') {
+      if (!procId || !cityId || !date) return res.status(400).json({ error: 'procId, cityId e date obrigatórios' });
+      // Redireciona internamente para o handler de /api/availability
+      req.query.procId  = procId;
+      req.query.cityId  = cityId;
+      req.query.date    = date;
+      // Chama a lógica diretamente
+      const nowBRT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const todayBRT = `${nowBRT.getFullYear()}-${String(nowBRT.getMonth()+1).padStart(2,'0')}-${String(nowBRT.getDate()).padStart(2,'0')}`;
+      const isToday  = (date === todayBRT);
+      const nowMinBRT = isToday ? nowBRT.getHours()*60 + nowBRT.getMinutes() : 0;
+
+      const blkDay = await req.db(
+        `SELECT 1 FROM blocked_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+        [date, Number(cityId)]
+      );
+      if (blkDay.rowCount > 0) return res.json([]);
+
+      const pRow = await req.db(
+        `SELECT p.duration as dur FROM procedures p
+         LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$2
+         WHERE p.id=$1 AND p.active=TRUE AND COALESCE(cp.enabled,true)=true LIMIT 1`,
+        [Number(procId), Number(cityId)]
+      );
+      if (!pRow.rowCount) return res.json([]);
+      const dur = pRow.rows[0].dur;
+
+      const [y,m,dd] = date.split('-').map(Number);
+      const cfg = await resolveWorkConfig(Number(cityId), new Date(y,m-1,dd).getDay());
+
+      let siRow = { rows: [] };
+      try { siRow = await req.db('SELECT slot_interval FROM cities WHERE id=$1', [Number(cityId)]); } catch {}
+      const interval = parseInt(siRow.rows[0]?.slot_interval) || 30;
+
+      if (!cfg.is_active || !cfg.work_start) {
+        const relS = await req.db(
+          `SELECT st, et FROM released_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`,
+          [date, Number(cityId)]
+        );
+        if (!relS.rowCount) return res.json([]);
+        const appts = await req.db(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]);
+        const bkS   = await req.db(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]);
+        const busy  = [...appts.rows, ...bkS.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
+        const slots = [];
+        for (const row of relS.rows) {
+          for (let s = timeToMin(row.st); s + dur <= timeToMin(row.et); s += interval) {
+            if (s > nowMinBRT && !busy.some(b => s < b.e && s+dur > b.s)) slots.push(minToTime(s));
+          }
+        }
+        return res.json(slots);
+      }
+
+      const wStart = timeToMin(cfg.work_start);
+      const wEnd   = timeToMin(cfg.work_end);
+      const brks   = (cfg.breaks || []).filter(b => b && b.s && b.e).map(b => ({ s: timeToMin(b.s), e: timeToMin(b.e) }));
+      const appts  = await req.db(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]);
+      const bkS    = await req.db(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]);
+      const relSl  = await req.db(`SELECT st, et FROM released_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]);
+      const busy   = [...appts.rows, ...bkS.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
+      const released = relSl.rows.map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
+      const slots = [];
+      for (let s = wStart; s + dur <= wEnd; s += interval) {
+        if (s <= nowMinBRT) continue;
+        if (brks.some(b => s < b.e && s+dur > b.s)) continue;
+        const inRel = released.some(r => s >= r.s && s+dur <= r.e);
+        const overlap = busy.some(b => {
+          if (!inRel) return s < b.e && s+dur > b.s;
+          return appts.rows.some(a => timeToMin(a.st) === b.s) && s < b.e && s+dur > b.s;
+        });
+        if (!overlap) slots.push(minToTime(s));
+      }
+      return res.json(slots);
+    }
+
+    return res.status(400).json({ error: 'step inválido. Use: services, cities, dates ou slots' });
+  } catch(err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Disponibilidade mensal (admin) ───────────────────────────────────────────
 app.get('/api/availability/month', requireAdmin, async (req, res) => {
   const { year, month, cityId } = req.query;
@@ -7275,9 +7474,13 @@ async function bellaRespond({ message, history, name, tenant, procedures }) {
     }
   }
 
-  // — Agendamento
+  // — Agendamento: inicia fluxo guiado se o tenant tem cidades/serviços
   if (/agendar|agenda|marcar|reservar|horario|horários|disponib|datas|vaga/.test(msg)) {
-    return `${greeting}Para agendar é super simples! 🗓️\n\nAcesse nossa página de agendamento — lá você escolhe o serviço, a data e o horário disponível!\n\n👉 [Agendar agora](/)`;
+    if (!procedures.length) {
+      return `${greeting}Para agendar é super simples! 🗓️\n\nAcesse nossa página de agendamento — lá você escolhe o serviço, a data e o horário disponível!\n\n👉 [Agendar agora](/)`;
+    }
+    // Retorna marcador especial para o frontend iniciar fluxo de chips
+    return `__BOOKING_START__`;
   }
 
   // — Serviços / procedimentos
@@ -7290,7 +7493,7 @@ async function bellaRespond({ message, history, name, tenant, procedures }) {
       return `• *${p.name}*${price}`;
     }).join('\n');
     const extra = procedures.length > 6 ? `\n_...e mais ${procedures.length - 6} opções disponíveis_` : '';
-    return `${greeting}Aqui estão alguns dos nossos serviços: 🌸\n\n${list}${extra}\n\nQuer saber mais sobre algum ou prefere já agendar?\n\n👉 [Ver tudo e agendar](/)`;
+    return `${greeting}Aqui estão alguns dos nossos serviços: 🌸\n\n${list}${extra}\n\nQuer saber mais sobre algum ou prefere já agendar?`;
   }
 
   // — Preço / valor
@@ -7300,7 +7503,7 @@ async function bellaRespond({ message, history, name, tenant, procedures }) {
       return `${greeting}Para conferir os valores dos atendimentos, acesse nossa agenda onde tudo está listado com preços atualizados! 💫\n\n👉 [Ver preços](/)`;
     }
     const list = withPrice.map(p => `• *${p.name}*: R$ ${Number(p.price).toFixed(2).replace('.',',')}`).join('\n');
-    return `${greeting}Valores dos nossos serviços: 💫\n\n${list}\n\nPara ver todos e agendar:\n\n👉 [Acessar agenda](/)`;
+    return `${greeting}Valores dos nossos serviços: 💫\n\n${list}\n\nPara agendar, é só me dizer qual serviço deseja! 🗓️`;
   }
 
   // — Endereço / localização
@@ -7444,10 +7647,14 @@ app.post('/api/chat/message', async (req, res) => {
       tenant:     req.tenant,
       procedures,
     });
-    // Salva resposta da Bella
+    // Salva resposta da Bella (exceto marcadores internos)
+    const nameGreet = resolvedName ? `${resolvedName.split(' ')[0]}, ` : '';
+    const storedResponse = response === '__BOOKING_START__'
+      ? `${nameGreet}Ótimo! Vamos agendar juntos! 🗓️\n\nQual serviço você deseja?`
+      : response;
     await req.db(
       `INSERT INTO bella_messages(session_id, role, content) VALUES($1,'bella',$2)`,
-      [session_id, response]
+      [session_id, storedResponse]
     );
     // Se a mensagem anterior da Bella pediu o nome e ainda não temos, tenta capturar
     const lastBellaMsg = history.filter(h => h.role === 'bella').pop()?.content || '';

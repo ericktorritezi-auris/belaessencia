@@ -92,19 +92,24 @@ body{
 .typing-dot:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
 
-/* ── QUICK REPLIES ── */
-.quick-replies{
-  display:flex;gap:7px;padding:6px 14px;overflow-x:auto;flex-shrink:0;
+/* ── CHIPS (booking + quick replies) ── */
+.chips-wrap{
+  display:flex;gap:7px;padding:6px 14px 8px;overflow-x:auto;flex-shrink:0;
+  flex-wrap:wrap;max-height:92px;overflow-y:auto;
   scrollbar-width:none;
 }
-.quick-replies::-webkit-scrollbar{display:none}
-.qr-btn{
+.chips-wrap::-webkit-scrollbar{display:none}
+.chip{
   white-space:nowrap;background:var(--white);border:1.5px solid var(--border);
   border-radius:50px;padding:6px 13px;font-family:'Nunito',sans-serif;
   font-size:12px;font-weight:600;color:var(--rose);cursor:pointer;
   transition:all .2s;-webkit-tap-highlight-color:transparent;flex-shrink:0;
 }
-.qr-btn:active{background:var(--rose-light);border-color:var(--rose)}
+.chip:active,.chip:hover{background:var(--rose-light);border-color:var(--rose)}
+.chip.chip-date{color:var(--text);border-color:var(--border)}
+.chip.chip-date:active,.chip.chip-date:hover{background:var(--gold-light);border-color:var(--gold);color:var(--dark)}
+.chip.chip-slot{color:var(--dark);border-color:var(--border)}
+.chip.chip-slot:active,.chip.chip-slot:hover{background:var(--gold-light);border-color:var(--gold)}
 
 /* ── INPUT ── */
 .input-area{
@@ -184,13 +189,13 @@ body{
   <!-- Messages -->
   <div class="messages-wrap" id="messages"></div>
 
-  <!-- Quick replies -->
-  <div class="quick-replies" id="quickReplies">
-    <button class="qr-btn" onclick="sendQuick('📅 Quero agendar')">📅 Agendar</button>
-    <button class="qr-btn" onclick="sendQuick('🌿 Quais são os serviços?')">🌿 Serviços</button>
-    <button class="qr-btn" onclick="sendQuick('💫 Quais os preços?')">💫 Preços</button>
-    <button class="qr-btn" onclick="sendQuick('📍 Qual é a localização?')">📍 Localização</button>
-    <button class="qr-btn" onclick="sendQuick('📱 WhatsApp')">📱 WhatsApp</button>
+  <!-- Chips (quick replies / booking) -->
+  <div class="chips-wrap" id="chipsArea">
+    <button class="chip" onclick="sendQuick('📅 Quero agendar')">📅 Agendar</button>
+    <button class="chip" onclick="sendQuick('🌿 Quais são os serviços?')">🌿 Serviços</button>
+    <button class="chip" onclick="sendQuick('💫 Quais os preços?')">💫 Preços</button>
+    <button class="chip" onclick="sendQuick('📍 Qual é a localização?')">📍 Localização</button>
+    <button class="chip" onclick="sendQuick('📱 WhatsApp')">📱 WhatsApp</button>
   </div>
 
   <!-- Input -->
@@ -206,15 +211,28 @@ body{
 
 <script>
 // ── State ────────────────────────────────────────────────────────────────────
-let SESSION_ID = null;
+let SESSION_ID   = null;
 let VISITOR_NAME = null;
-let isSending = false;
+let isSending    = false;
+
+// Booking flow state
+const booking = {
+  active:  false,
+  step:    null,   // 'service' | 'city' | 'date' | 'slot'
+  cities:  [],
+  services:[],
+  cityId:  null,
+  cityName:'',
+  procId:  null,
+  procName:'',
+  date:    null,
+  slot:    null,
+};
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 const HISTORY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 (async function init() {
-  // Gera ou recupera session_id; limpa se mais de 24h sem atividade
   try {
     const lastActivity = parseInt(localStorage.getItem('bella_last') || '0', 10);
     if (lastActivity && Date.now() - lastActivity > HISTORY_TTL_MS) {
@@ -238,17 +256,14 @@ const HISTORY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
     VISITOR_NAME = data.visitor_name || null;
 
     if (data.history?.length) {
-      // Retoma histórico existente (filtra mensagens técnicas)
       for (const m of data.history) {
         if (m.content === '__init__') continue;
         renderMsg(m.role, m.content, false);
       }
     } else {
-      // Sem histórico — exibe saudação diretamente (sem chamar o servidor)
       const bizName = data.business_name || 'nosso espaço';
       const greeting = `Olá! 👋 Sou a Bella, assistente virtual de *${bizName}*.\n\nPara começar, como posso te chamar?`;
       renderMsg('bella', greeting, true);
-      // Salva saudação no banco para que o fluxo de nome funcione
       fetch('/api/chat/message', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ session_id: SESSION_ID, message: '__greeting__', visitor_name: null })
@@ -366,6 +381,205 @@ function onInput(e) {
   document.getElementById('sendBtn').disabled = !e.target.value.trim();
 }
 
+// ── Chips ────────────────────────────────────────────────────────────────────
+function setDefaultChips() {
+  const area = document.getElementById('chipsArea');
+  area.innerHTML = `
+    <button class="chip" onclick="sendQuick('📅 Quero agendar')">📅 Agendar</button>
+    <button class="chip" onclick="sendQuick('🌿 Quais são os serviços?')">🌿 Serviços</button>
+    <button class="chip" onclick="sendQuick('💫 Quais os preços?')">💫 Preços</button>
+    <button class="chip" onclick="sendQuick('📍 Qual é a localização?')">📍 Localização</button>
+    <button class="chip" onclick="sendQuick('📱 WhatsApp')">📱 WhatsApp</button>
+  `;
+}
+
+function setChips(chips) {
+  // chips = [{label, fn}]
+  const area = document.getElementById('chipsArea');
+  area.innerHTML = '';
+  for (const c of chips) {
+    const btn = document.createElement('button');
+    btn.className = 'chip ' + (c.cls || '');
+    btn.textContent = c.label;
+    btn.onclick = c.fn;
+    area.appendChild(btn);
+  }
+}
+
+// ── Booking flow ─────────────────────────────────────────────────────────────
+async function startBookingFlow() {
+  booking.active = true;
+  booking.step   = null;
+  booking.cityId = null;
+  booking.procId = null;
+  booking.date   = null;
+  booking.slot   = null;
+
+  showTyping();
+  try {
+    // Carregar cidades
+    const citiesRes = await fetch('/api/bella/availability?step=cities');
+    booking.cities = citiesRes.ok ? await citiesRes.json() : [];
+    // Carregar serviços
+    const svcRes = await fetch('/api/bella/availability?step=services');
+    booking.services = svcRes.ok ? await svcRes.json() : [];
+  } catch {}
+  hideTyping();
+
+  if (!booking.services.length) {
+    booking.active = false;
+    renderMsg('bella', 'No momento não há serviços cadastrados. Entre em contato pelo WhatsApp para agendar! 📱');
+    setDefaultChips();
+    return;
+  }
+
+  // Se há apenas 1 cidade, pula para serviços direto
+  if (booking.cities.length <= 1) {
+    booking.cityId   = booking.cities[0]?.id || null;
+    booking.cityName = booking.cities[0]?.name || '';
+    askService();
+  } else {
+    askCity();
+  }
+}
+
+function askCity() {
+  booking.step = 'city';
+  const greeting = VISITOR_NAME ? `${VISITOR_NAME.split(' ')[0]}, ` : '';
+  renderMsg('bella', `${greeting}Em qual cidade você prefere ser atendida? 📍`);
+  setChips(booking.cities.map(c => ({
+    label: c.name,
+    fn: () => selectCity(c.id, c.name)
+  })));
+}
+
+function selectCity(id, name) {
+  booking.cityId   = id;
+  booking.cityName = name;
+  renderMsg('user', name);
+  askService();
+}
+
+async function askService() {
+  booking.step = 'service';
+  // Recarrega serviços filtrados pela cidade selecionada
+  if (booking.cityId) {
+    try {
+      const r = await fetch(`/api/bella/availability?step=services&cityId=${booking.cityId}`);
+      if (r.ok) booking.services = await r.json();
+    } catch {}
+  }
+
+  if (!booking.services.length) {
+    renderMsg('bella', 'Ops! Não há serviços disponíveis para essa localidade. Posso te ajudar com outra coisa?');
+    booking.active = false;
+    setDefaultChips();
+    return;
+  }
+
+  const greeting = VISITOR_NAME ? `${VISITOR_NAME.split(' ')[0]}, ` : '';
+  const cityPart = booking.cityName ? ` em *${booking.cityName}*` : '';
+  renderMsg('bella', `${greeting}Qual serviço você deseja agendar${cityPart}? 🌸`);
+  setChips(booking.services.map(s => {
+    const price = s.price ? ` · R$ ${Number(s.price).toFixed(2).replace('.',',')}` : '';
+    return {
+      label: s.name + price,
+      fn: () => selectService(s.id, s.name)
+    };
+  }));
+}
+
+async function selectService(id, name) {
+  booking.procId   = id;
+  booking.procName = name;
+  renderMsg('user', name);
+  await askDate();
+}
+
+async function askDate() {
+  booking.step = 'date';
+  showTyping();
+  let dates = [];
+  try {
+    const r = await fetch(`/api/bella/availability?step=dates&procId=${booking.procId}&cityId=${booking.cityId || 1}`);
+    if (r.ok) dates = await r.json();
+  } catch {}
+  hideTyping();
+
+  if (!dates.length) {
+    renderMsg('bella', 'Não encontrei datas disponíveis nos próximos 21 dias. 😔\n\nEntre em contato pelo WhatsApp para verificar outras opções!');
+    booking.active = false;
+    setDefaultChips();
+    return;
+  }
+
+  renderMsg('bella', `Ótimo! Escolha uma data disponível: 🗓️`);
+  setChips(dates.map(d => ({
+    label: fmtDate(d),
+    cls:   'chip-date',
+    fn:    () => selectDate(d)
+  })));
+}
+
+async function selectDate(dateStr) {
+  booking.date = dateStr;
+  renderMsg('user', fmtDate(dateStr));
+  await askSlot();
+}
+
+async function askSlot() {
+  booking.step = 'slot';
+  showTyping();
+  let slots = [];
+  try {
+    const r = await fetch(`/api/bella/availability?step=slots&procId=${booking.procId}&cityId=${booking.cityId || 1}&date=${booking.date}`);
+    if (r.ok) slots = await r.json();
+  } catch {}
+  hideTyping();
+
+  if (!slots.length) {
+    renderMsg('bella', 'Não há horários disponíveis nessa data. Vamos tentar outra? 🗓️');
+    await askDate();
+    return;
+  }
+
+  renderMsg('bella', `Perfeito! Escolha um horário: ⏰`);
+  setChips(slots.map(s => ({
+    label: s,
+    cls:   'chip-slot',
+    fn:    () => selectSlot(s)
+  })));
+}
+
+function selectSlot(slot) {
+  booking.slot = slot;
+  renderMsg('user', slot);
+  confirmBooking();
+}
+
+function confirmBooking() {
+  booking.step = 'confirm';
+  const cityPart = booking.cityName ? `\n📍 *Local:* ${booking.cityName}` : '';
+  const summary =
+    `Ótimo! Aqui está o resumo do seu agendamento: ✨\n\n` +
+    `🌿 *Serviço:* ${booking.procName}` +
+    cityPart +
+    `\n🗓️ *Data:* ${fmtDate(booking.date)}` +
+    `\n⏰ *Horário:* ${booking.slot}\n\n` +
+    `Para confirmar, acesse nossa agenda e finalize o agendamento!\n\n👉 [Agendar agora](/)`;
+  renderMsg('bella', summary);
+  booking.active = false;
+  setTimeout(setDefaultChips, 800);
+}
+
+function fmtDate(d) {
+  // "2025-09-24" → "Ter, 24/09"
+  const [y,m,dd] = d.split('-').map(Number);
+  const dt = new Date(y, m-1, dd);
+  const days = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  return `${days[dt.getDay()]}, ${String(dd).padStart(2,'0')}/${String(m).padStart(2,'0')}`;
+}
+
 // ── Send ─────────────────────────────────────────────────────────────────────
 async function sendToServer(message) {
   try {
@@ -393,16 +607,32 @@ async function sendMessage() {
   inp.style.height = 'auto';
   document.getElementById('sendBtn').disabled = true;
 
+  if (booking.active) {
+    // Usuário digitou no campo enquanto fluxo de chips está ativo — reseta o fluxo
+    booking.active = false;
+    setDefaultChips();
+  }
+
   renderMsg('user', text);
   showTyping();
 
   const response = await sendToServer(text);
   hideTyping();
 
-  if (response) {
-    renderMsg('bella', response);
-  } else {
+  if (!response) {
     showToast('Não consegui responder agora. Tente novamente.', true);
+    isSending = false;
+    document.getElementById('sendBtn').disabled = false;
+    inp.focus();
+    return;
+  }
+
+  // Marcador especial: inicia fluxo de agendamento por chips
+  if (response === '__BOOKING_START__') {
+    await startBookingFlow();
+  } else {
+    renderMsg('bella', response);
+    setDefaultChips();
   }
 
   isSending = false;
