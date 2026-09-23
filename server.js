@@ -4040,12 +4040,15 @@ app.get('/api/bella/availability', async (req, res) => {
     }
 
     // ── STEP: dates ─────────────────────────────────────────────────────────
-    // Retorna próximas datas (até 21 dias) que têm pelo menos 1 slot livre
+    // Retorna até 7 datas disponíveis a partir de `offset` dias a frente.
+    // offset=0 → próximos 22 dias; offset=22 → dias 22-43; etc.
+    // Responde com { dates: [...], hasMore: bool } para suportar "Mais datas".
     if (step === 'dates') {
       if (!procId || !cityId) return res.status(400).json({ error: 'procId e cityId obrigatórios' });
+      const offset = Math.max(0, parseInt(req.query.offset) || 0);
       const nowBRT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
       const availDates = [];
-      for (let i = 0; i <= 21 && availDates.length < 7; i++) {
+      for (let i = offset; i <= offset + 21 && availDates.length < 7; i++) {
         const d = new Date(nowBRT);
         d.setDate(d.getDate() + i);
         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -4110,7 +4113,27 @@ app.get('/api/bella/availability', async (req, res) => {
         }
         if (hasSlot) availDates.push(dateStr);
       }
-      return res.json(availDates); // ["2025-09-24","2025-09-25",...]
+      // hasMore: verifica se há pelo menos mais 1 data disponível além das 7 retornadas
+      // (busca apenas 1 extra para decidir sem custo excessivo)
+      let hasMore = false;
+      if (availDates.length === 7) {
+        const nextOffset = offset + 22;
+        for (let i = nextOffset; i <= nextOffset + 7 && !hasMore; i++) {
+          const d2 = new Date(nowBRT);
+          d2.setDate(d2.getDate() + i);
+          const ds2 = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`;
+          const dow2 = d2.getDay();
+          const cfg2 = await resolveWorkConfig(Number(cityId), dow2);
+          const blk2 = await req.db(`SELECT 1 FROM blocked_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`, [ds2, Number(cityId)]);
+          if (blk2.rowCount > 0) continue;
+          if (!cfg2.is_active || !cfg2.work_start) {
+            const rel2 = await req.db(`SELECT 1 FROM released_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`, [ds2, Number(cityId)]);
+            if (!rel2.rowCount) continue;
+          }
+          hasMore = true;
+        }
+      }
+      return res.json({ dates: availDates, hasMore, nextOffset: offset + 22 });
     }
 
     // ── STEP: slots ─────────────────────────────────────────────────────────

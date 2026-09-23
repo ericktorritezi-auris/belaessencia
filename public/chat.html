@@ -288,6 +288,12 @@
       border: 1.5px solid rgba(var(--rose-rgb), 0.3);
     }
     .btn-calendar:hover { background: rgba(var(--rose-rgb), 0.17); }
+    .btn-gcal {
+      background: #fff;
+      color: #1A1214 !important;
+      border: 1.5px solid #ddd;
+    }
+    .btn-gcal:hover { background: #f5f5f5; }
   </style>
 </head>
 <body>
@@ -327,6 +333,8 @@ const bk = {
   procId: null, procName: null, procDur: null,
   cityId: null, cityName: null, cityAddress: null,
   date: null, slot: null,
+  // paginação de datas
+  allDates: [], dateOffset: 0,
 };
 
 // ── DOM refs ─────────────────────────────────────────────────────────
@@ -477,7 +485,7 @@ async function init() {
     await bellaDelay(`Olá, <strong>${saved.name}</strong>! Que bom ter você de volta! 🌸<br><br>Qual é o seu telefone com DDD para confirmarmos?`, 900);
     await askPhone();
   } else {
-    await bellaDelay('Olá! 🌸 Seja muito bem-vinda! Eu sou a <strong>Bella</strong>, sua assistente virtual.<br><br>Para começar, como posso te chamar?', 900);
+    await bellaDelay('Olá! 🌸 Seja muito bem-vindo(a)! Eu sou a <strong>Bella</strong>, sua assistente virtual.<br><br>Para começar, como posso te chamar?', 900);
     setInputEnabled(true);
     $input.placeholder = 'Digite seu nome...';
     _nextInput = handleName;
@@ -574,10 +582,11 @@ async function startMainFlow() {
 
 function setDefaultChips() {
   setChips([
-    { label: '📅 Agendar', primary: true, action: () => startBookingFlow() },
-    { label: '📍 Localização',            action: () => handleChipMsg('Onde vocês ficam?') },
-    { label: '⏰ Horários',               action: () => handleChipMsg('Quais são os horários de atendimento?') },
-    { label: '💬 WhatsApp',              action: () => handleChipMsg('whatsapp') },
+    { label: '📅 Agendar',    primary: true, action: () => startBookingFlow() },
+    { label: '📍 Localização',             action: () => handleChipMsg('Onde vocês ficam?') },
+    { label: '⏰ Horários',                action: () => handleChipMsg('Quais são os horários de atendimento?') },
+    { label: '💬 WhatsApp',               action: () => handleChipMsg('whatsapp') },
+    { label: '👋 Encerrar',               action: () => { addUserMsg('Encerrar atendimento'); farewell(); } },
   ]);
 }
 
@@ -646,6 +655,7 @@ async function startBookingFlow() {
     procId: null, procName: null, procDur: null,
     cityId: null, cityName: null, cityAddress: null,
     date: null, slot: null,
+    allDates: [], dateOffset: 0,
   });
   clearChips();
   setInputEnabled(false);
@@ -784,13 +794,22 @@ async function pickCity(city) {
   await askDate();
 }
 
-async function askDate() {
+async function askDate(isFirstLoad) {
   bk.step = 'date';
+  if (isFirstLoad !== false) {
+    // Reset paginação ao entrar na etapa de data pela primeira vez
+    bk.allDates = [];
+    bk.dateOffset = 0;
+  }
+  await loadMoreDates(isFirstLoad !== false);
+}
+
+async function loadMoreDates(isFirst) {
   const t = showTyping();
-  let dates = [];
+  let payload = { dates: [], hasMore: false, nextOffset: bk.dateOffset + 22 };
   try {
-    const r = await fetch(`/api/bella/availability?step=dates&procId=${bk.procId}&cityId=${bk.cityId}`);
-    dates = await r.json();
+    const r = await fetch(`/api/bella/availability?step=dates&procId=${bk.procId}&cityId=${bk.cityId}&offset=${bk.dateOffset}`);
+    payload = await r.json();
     t.remove();
   } catch {
     t.remove();
@@ -798,13 +817,25 @@ async function askDate() {
     return;
   }
 
-  if (!dates.length) {
+  const newDates = payload.dates || [];
+  bk.allDates = [...bk.allDates, ...newDates];
+  bk.dateOffset = payload.nextOffset || bk.dateOffset + 22;
+
+  if (!bk.allDates.length) {
     addBellaHtml('Não há datas disponíveis para este serviço no momento 😔<br><br>Entre em contato pelo WhatsApp para outras opções!');
     setDefaultChips(); setInputEnabled(true); return;
   }
 
-  addBellaHtml('Ótimo! Escolha uma <strong>data</strong>:');
-  setChips(dates.map(d => ({ label: fmtDate(d), action: () => pickDate(d) })));
+  if (isFirst) addBellaHtml('Ótimo! Escolha uma <strong>data</strong>:');
+
+  const chips = bk.allDates.map(d => ({ label: fmtDate(d), action: () => pickDate(d) }));
+  if (payload.hasMore) {
+    chips.push({ label: '📆 Mais datas →', action: async () => {
+      clearChips();
+      await loadMoreDates(false);
+    }});
+  }
+  setChips(chips);
 }
 
 async function pickDate(d) {
@@ -993,37 +1024,51 @@ async function confirmBooking() {
     </div>`
   );
 
-  // Download ICS automático (adiciona ao calendário com alarmes)
-  setTimeout(() => downloadICS(), 600);
-
-  // Link WhatsApp + botão agenda
-  const whaNum = (cfg.whatsapp_number || '').replace(/\D/g, '');
+  // ── WhatsApp (sempre presente — fallback sem número) ──────────────────
+  const whaNum  = (cfg.whatsapp_number || '').replace(/\D/g, '');
   const whaText = encodeURIComponent(
     `Olá! Confirmei meu agendamento pela Bella 🌸\n\n` +
     `📋 Serviço: ${bk.procName}\n` +
     `📅 Data: ${fmtDate(bk.date)}\n` +
     `⏰ Horário: ${bk.slot}\n` +
-    (bk.cityName ? `📍 Local: ${bk.cityName}\n` : '') +
-    (bk.cityAddress ? `🗺️ ${bk.cityAddress}\n` : '') +
+    (bk.cityName    ? `📍 Local: ${bk.cityName}\n`    : '') +
+    (bk.cityAddress ? `🗺️ ${bk.cityAddress}\n`         : '') +
     `\nAté logo! 💕`
   );
   const whaHref = whaNum
     ? `https://wa.me/${whaNum.startsWith('55') ? whaNum : '55' + whaNum}?text=${whaText}`
-    : null;
+    : `https://wa.me/?text=${whaText}`;   // fallback: usuário escolhe o contato
+
+  // ── Google Calendar URL (funciona no celular e no desktop) ────────────
+  const [cy, cm, cd] = bk.date.split('-').map(Number);
+  const [ch, cmin]   = bk.slot.split(':').map(Number);
+  const cdur         = bk.procDur || 60;
+  const cEndMin      = ch * 60 + cmin + cdur;
+  const cPad         = n => String(n).padStart(2, '0');
+  const gcalDates    =
+    `${cy}${cPad(cm)}${cPad(cd)}T${cPad(ch)}${cPad(cmin)}00` +
+    `/${cy}${cPad(cm)}${cPad(cd)}T${cPad(Math.floor(cEndMin/60))}${cPad(cEndMin%60)}00`;
+  const gcalLoc      = encodeURIComponent([bk.cityName, bk.cityAddress].filter(Boolean).join(' — '));
+  const gcalUrl      =
+    `https://calendar.google.com/calendar/render?action=TEMPLATE` +
+    `&text=${encodeURIComponent(bk.procName)}` +
+    `&dates=${gcalDates}` +
+    `&details=${encodeURIComponent('Agendamento confirmado pela Bella 🌸')}` +
+    (gcalLoc ? `&location=${gcalLoc}` : '') +
+    `&sf=true&output=xml`;
+
+  // ── Download ICS automático (iOS captura e oferece "Adicionar à Agenda") ─
+  setTimeout(() => downloadICS(), 600);
 
   await new Promise(r => setTimeout(r, 500));
 
   addBellaHtml(
-    `📲 Você pode nos enviar uma mensagem no WhatsApp para confirmar ou tirar dúvidas. ` +
-    `E seu agendamento já foi <strong>adicionado à sua agenda</strong> com lembretes 🔔` +
-    (whaHref
-      ? `<div class="post-booking-actions">
-           <a href="${whaHref}" target="_blank" class="btn-whatsapp">📲 Enviar confirmação no WhatsApp</a>
-           <a onclick="downloadICS()" class="btn-calendar">📅 Baixar novamente (Agenda)</a>
-         </div>`
-      : `<div class="post-booking-actions">
-           <a onclick="downloadICS()" class="btn-calendar">📅 Baixar (.ics) para a Agenda</a>
-         </div>`)
+    `Quer salvar na sua agenda ou avisar pelo WhatsApp? Escolha abaixo como prefere 👇` +
+    `<div class="post-booking-actions">
+       <a href="${whaHref}" target="_blank" class="btn-whatsapp">📲 Enviar no WhatsApp</a>
+       <a href="${gcalUrl}" target="_blank" class="btn-gcal">📅 Google Agenda</a>
+       <a onclick="downloadICS()" class="btn-calendar">🗓️ Apple / Outlook (.ics)</a>
+     </div>`
   );
 
   await new Promise(r => setTimeout(r, 700));
