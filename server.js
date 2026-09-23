@@ -7264,8 +7264,15 @@ async function bellaRespond({ message, history, name, tenant, procedures }) {
 
   // — Resposta ao pedido de nome
   if (!name && /como posso te chamar/.test(lastBella.toLowerCase())) {
-    const detected = message.trim().split(' ')[0];
-    return `Que prazer, *${detected}*! 🌸\n\nComo posso te ajudar hoje? Você pode me perguntar sobre:\n• 📅 Agendamento\n• 🌿 Serviços disponíveis\n• 💫 Preços e valores\n• 📍 Localização`;
+    // Palavras que claramente NÃO são nomes — o visitante já perguntou algo antes de dar o nome
+    const notAName = /^(quero|gostaria|preciso|pode|poderia|como|quando|quanto|qual|o que|voce|oi|ola|olá|agendar|ver|saber|info|ajuda|help|sim|nao|não|ok|tudo|bom|boa)/i;
+    const firstWord = message.trim().split(' ')[0];
+    if (notAName.test(firstWord) || firstWord.length < 2) {
+      // Trata como pergunta normal (cai no resto do bellaRespond)
+      // Não retorna aqui — deixa o fluxo continuar para capturar intenção
+    } else {
+      return `Que prazer, *${firstWord}*! 🌸\n\nComo posso te ajudar hoje? Você pode me perguntar sobre:\n• 📅 Agendamento\n• 🌿 Serviços disponíveis\n• 💫 Preços e valores\n• 📍 Localização`;
+    }
   }
 
   // — Agendamento
@@ -7444,9 +7451,10 @@ app.post('/api/chat/message', async (req, res) => {
     );
     // Se a mensagem anterior da Bella pediu o nome e ainda não temos, tenta capturar
     const lastBellaMsg = history.filter(h => h.role === 'bella').pop()?.content || '';
+    const notANameRe = /^(quero|gostaria|preciso|pode|poderia|como|quando|quanto|qual|o que|voce|oi|ola|olá|agendar|ver|saber|info|ajuda|help|sim|nao|não|ok|tudo|bom|boa)/i;
     if (!currentName && /como posso te chamar/.test(lastBellaMsg.toLowerCase())) {
       const detectedName = message.trim().split(' ')[0];
-      if (detectedName.length >= 2) {
+      if (detectedName.length >= 2 && !notANameRe.test(detectedName)) {
         await req.db(
           `UPDATE bella_sessions SET visitor_name=$1, updated_at=NOW() WHERE id=$2`,
           [detectedName, session_id]

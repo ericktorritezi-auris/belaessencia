@@ -9399,6 +9399,16 @@ async function resetBiometric() {
 
 <script>
 (function initBellaFAB() {
+  // Escurece uma cor hex em N pontos (para o gradiente)
+  function darkenHex(hex, amt) {
+    amt = amt || 28;
+    const n = parseInt((hex || '#9B4D6A').replace('#',''), 16);
+    const r = Math.max(0, (n >> 16) - amt);
+    const g = Math.max(0, ((n >> 8) & 0xff) - amt);
+    const b = Math.max(0, (n & 0xff) - amt);
+    return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+  }
+
   // Aguarda o _tenantConfig estar disponível (carregado por /api/config)
   function tryInit() {
     const cfg = window._tenantConfig;
@@ -9408,6 +9418,17 @@ async function resetBiometric() {
     const fab = document.getElementById('bella-fab');
     const label = document.getElementById('bella-fab-label');
     const msgEl = document.getElementById('bella-modal-msg');
+
+    // Aplica cores do tenant nos elementos do FAB
+    const p  = cfg.primary_color || '#9B4D6A';
+    const pd = darkenHex(p);
+    const grad = `linear-gradient(135deg, ${p}, ${pd})`;
+    const fabBtn  = document.getElementById('bella-fab-btn');
+    const fabCta  = document.getElementById('bella-modal-cta');
+    const fabAv   = document.querySelector('.bella-modal-avatar');
+    if (fabBtn) fabBtn.style.background = grad;
+    if (fabCta) fabCta.style.background = grad;
+    if (fabAv)  fabAv.style.background  = grad;
 
     // Personaliza mensagem com nome do negócio
     const biz = cfg.business_name || 'nosso espaço';
