@@ -572,26 +572,50 @@ async function startBookingFlow() {
   clearChips();
   setInputEnabled(false);
 
+  // Tenta carregar categorias — se não tiver, vai direto para os procedimentos
   const t = showTyping();
   let cats = [];
   try {
     const r = await fetch('/api/bella/availability?step=categories');
     cats = await r.json();
+  } catch {}
+  t.remove();
+
+  if (cats.length > 0) {
+    bk.categories = cats;
+    addBellaHtml('Ótimo! Vamos agendar juntos 🗓️<br><br>Qual <strong>categoria</strong> de serviço você procura?');
+    setChips(cats.map(c => ({ label: c.name, action: () => pickCategory(c) })));
+  } else {
+    // Sem categorias — lista todos os procedimentos diretamente
+    await loadServicesDirectly();
+  }
+}
+
+async function loadServicesDirectly() {
+  bk.step = 'service';
+  const t = showTyping();
+  let svcs = [];
+  try {
+    const r = await fetch('/api/bella/availability?step=services');
+    svcs = await r.json();
     t.remove();
   } catch {
     t.remove();
-    addBellaHtml('Não consegui carregar as categorias. Tente novamente 🙏');
+    addBellaHtml('Não consegui carregar os serviços. Tente novamente 🙏');
     setDefaultChips(); setInputEnabled(true); return;
   }
 
-  if (!cats.length) {
-    addBellaHtml('Hmm, não encontrei categorias cadastradas no momento 😔');
+  if (!svcs.length) {
+    addBellaHtml('Não há serviços disponíveis no momento 😔<br><br>Entre em contato pelo WhatsApp para outras opções!');
     setDefaultChips(); setInputEnabled(true); return;
   }
-  bk.categories = cats;
+  bk.services = svcs;
 
-  addBellaHtml('Ótimo! Vamos agendar juntos 🗓️<br><br>Qual <strong>categoria</strong> de serviço você procura?');
-  setChips(cats.map(c => ({ label: c.name, action: () => pickCategory(c) })));
+  addBellaHtml('Ótimo! Vamos agendar juntos 🗓️<br><br>Qual <strong>serviço</strong> você deseja?');
+  setChips(svcs.map(s => ({
+    label: s.dur ? `${s.name} (${s.dur}min)` : s.name,
+    action: () => pickService(s)
+  })));
 }
 
 async function pickCategory(cat) {
