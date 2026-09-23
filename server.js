@@ -323,6 +323,21 @@ async function createTenantSchema(schemaName) {
         appt_id VARCHAR(30), score SMALLINT NOT NULL CHECK (score BETWEEN 0 AND 10),
         comment VARCHAR(300), category VARCHAR(10) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`,
+      // v2.9.16: Bella Chat — sessões e mensagens por visitante
+      `CREATE TABLE IF NOT EXISTS bella_sessions (
+        id            VARCHAR(40)  PRIMARY KEY,
+        visitor_name  VARCHAR(100),
+        visitor_phone VARCHAR(30),
+        created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS bella_messages (
+        id         SERIAL       PRIMARY KEY,
+        session_id VARCHAR(40)  NOT NULL,
+        role       VARCHAR(10)  NOT NULL,
+        content    TEXT         NOT NULL,
+        created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )`,
     ];
 
     for (const sql of tables) {
@@ -1358,6 +1373,30 @@ async function initDB() {
     // Migração v2.9.15: tipo de plano e flag de acesso ao chat Bella
     await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS plan_type VARCHAR(20) NOT NULL DEFAULT 'profissional'`);
     await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS has_chat BOOLEAN NOT NULL DEFAULT FALSE`);
+
+    // Migração v2.9.16: tabelas Bella Chat em todos os schemas de tenant existentes
+    {
+      const { rows: bellaTenants } = await client.query(`SELECT schema_name FROM tenants WHERE schema_name IS NOT NULL`);
+      for (const { schema_name } of bellaTenants) {
+        try {
+          await client.query(`CREATE TABLE IF NOT EXISTS "${schema_name}".bella_sessions (
+            id            VARCHAR(40)  PRIMARY KEY,
+            visitor_name  VARCHAR(100),
+            visitor_phone VARCHAR(30),
+            created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+          )`);
+          await client.query(`CREATE TABLE IF NOT EXISTS "${schema_name}".bella_messages (
+            id         SERIAL       PRIMARY KEY,
+            session_id VARCHAR(40)  NOT NULL,
+            role       VARCHAR(10)  NOT NULL,
+            content    TEXT         NOT NULL,
+            created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+          )`);
+          await client.query(`CREATE INDEX IF NOT EXISTS idx_bella_msg_sess ON "${schema_name}".bella_messages(session_id, created_at)`);
+        } catch(e) { console.warn('[DB] bella_chat migration:', schema_name, e.message); }
+      }
+    }
 
     // Tabela de horários específicos bloqueados (agendamentos manuais / ausências parciais)
     await client.query(`
@@ -7200,6 +7239,197 @@ app.post('/api/push/subscribe/admin', requireAdmin, async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BELLA CHAT (v2.9.16)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Gera resposta da Bella com base na mensagem do visitante (flow scriptado)
+async function bellaRespond({ message, history, name, tenant, procedures }) {
+  const raw = message.toLowerCase();
+  const msg = raw.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const bizName  = tenant?.business_name || 'nosso espaço';
+  const greeting = name ? `${name.split(' ')[0]}, ` : '';
+
+  const bellaHistory = history.filter(h => h.role === 'bella');
+  const isFirst = bellaHistory.length === 0;
+  const lastBella = bellaHistory[bellaHistory.length - 1]?.content || '';
+
+  // — Primeira mensagem: pedir nome
+  if (isFirst && !name) {
+    return `Olá! 👋 Sou a Bella, assistente virtual de *${bizName}*.\n\nPara começar, como posso te chamar?`;
+  }
+
+  // — Resposta ao pedido de nome
+  if (!name && /como posso te chamar/.test(lastBella.toLowerCase())) {
+    const detected = message.trim().split(' ')[0];
+    return `Que prazer, *${detected}*! 🌸\n\nComo posso te ajudar hoje? Você pode me perguntar sobre:\n• 📅 Agendamento\n• 🌿 Serviços disponíveis\n• 💫 Preços e valores\n• 📍 Localização`;
+  }
+
+  // — Agendamento
+  if (/agendar|agenda|marcar|reservar|horario|horários|disponib|datas|vaga/.test(msg)) {
+    return `${greeting}Para agendar é super simples! 🗓️\n\nAcesse nossa página de agendamento — lá você escolhe o serviço, a data e o horário disponível!\n\n👉 [Agendar agora](/)`;
+  }
+
+  // — Serviços / procedimentos
+  if (/servic|procedimento|tratamento|ofere|opcao|opcoes|terapia|sessao|que voc|o que faz|atendimento|modalidade/.test(msg)) {
+    if (!procedures.length) {
+      return `${greeting}Temos diversas opções de atendimento disponíveis! 🌿\n\nAcesse nossa agenda para ver todos os serviços com valores e horários:\n\n👉 [Ver serviços](/)`;
+    }
+    const list = procedures.slice(0, 6).map(p => {
+      const price = p.price ? ` — R$ ${Number(p.price).toFixed(2).replace('.',',')}` : '';
+      return `• *${p.name}*${price}`;
+    }).join('\n');
+    const extra = procedures.length > 6 ? `\n_...e mais ${procedures.length - 6} opções disponíveis_` : '';
+    return `${greeting}Aqui estão alguns dos nossos serviços: 🌸\n\n${list}${extra}\n\nQuer saber mais sobre algum ou prefere já agendar?\n\n👉 [Ver tudo e agendar](/)`;
+  }
+
+  // — Preço / valor
+  if (/preco|precos|valor|quanto|custa|custo|investimento|pagar|tabela/.test(msg)) {
+    const withPrice = procedures.filter(p => p.price).slice(0, 5);
+    if (!withPrice.length) {
+      return `${greeting}Para conferir os valores dos atendimentos, acesse nossa agenda onde tudo está listado com preços atualizados! 💫\n\n👉 [Ver preços](/)`;
+    }
+    const list = withPrice.map(p => `• *${p.name}*: R$ ${Number(p.price).toFixed(2).replace('.',',')}`).join('\n');
+    return `${greeting}Valores dos nossos serviços: 💫\n\n${list}\n\nPara ver todos e agendar:\n\n👉 [Acessar agenda](/)`;
+  }
+
+  // — Endereço / localização
+  if (/enderec|local|onde|localizac|fica|cidade|bairro|maps|mapa/.test(msg)) {
+    return `${greeting}Nossos pontos de atendimento estão disponíveis na agenda online. Lá você seleciona o local mais próximo de você! 📍\n\n👉 [Ver locais](/)`;
+  }
+
+  // — WhatsApp / contato
+  if (/whatsapp|contato|telefone|ligar|falar|atendente|humano|pessoa|zap/.test(msg)) {
+    const wa = tenant?.whatsapp_number;
+    if (wa) {
+      const waClean = wa.replace(/\D/g, '');
+      const waLink  = `https://wa.me/55${waClean}`;
+      return `${greeting}Você pode falar diretamente pelo WhatsApp! 📱\n\n👉 [Chamar no WhatsApp](${waLink})\n\nOu agende online pela nossa agenda!`;
+    }
+    return `${greeting}Para falar com a equipe, acesse nossa agenda onde está disponível o contato direto! 😊\n\n👉 [Acessar agenda](/)`;
+  }
+
+  // — Cancelar / remarcar
+  if (/cancelar|cancelamento|desmarcar|remarcar|alterar agendamento|mudar horario/.test(msg)) {
+    const wa = tenant?.whatsapp_number;
+    const waPart = wa ? ` pelo WhatsApp (${wa})` : '';
+    return `${greeting}Para cancelar ou remarcar, entre em contato diretamente conosco${waPart} para que possamos ajudar com rapidez! 🙏`;
+  }
+
+  // — Saudações
+  if (/^(oi|ola|olá|hey|hello|bom dia|boa tarde|boa noite|tudo bem|td bem|oi bella|olá bella)/.test(msg)) {
+    const h = new Date().getHours();
+    const saud = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+    const nomeMsg = name ? `Que bom te ver por aqui, *${name.split(' ')[0]}*! 🌸` : `Como posso te ajudar? 🌸`;
+    return `${saud}! ${nomeMsg}\n\nEscolha uma opção ou me conta o que você precisa:\n• 📅 Agendar um atendimento\n• 🌿 Conhecer os serviços\n• 💫 Ver preços\n• 📍 Localização`;
+  }
+
+  // — Obrigado
+  if (/obrigad|valeu|thanks|grato|grata|muito obrigad/.test(msg)) {
+    return `Fico feliz em ajudar${name ? `, *${name.split(' ')[0]}*` : ''}! 🌸\n\nSe precisar de mais alguma coisa, é só chamar. Que seu dia seja incrível! ✨`;
+  }
+
+  // — Fallback
+  return `${greeting}Entendi! 😊 Posso te ajudar com:\n\n• 📅 *Agendamento* — marcar uma sessão\n• 🌿 *Serviços* — ver o que está disponível\n• 💫 *Preços* — consultar os valores\n• 📍 *Localização* — onde nos encontrar\n\nSobre o que você gostaria de saber?`;
+}
+
+// Serve a página de chat (apenas para tenants com has_chat=true)
+app.get('/chat', (req, res) => {
+  if (!req.tenant?.has_chat) return res.redirect('/');
+  res.sendFile(require('path').join(__dirname, 'public', 'chat.html'));
+});
+
+// Inicia ou retoma sessão de chat
+app.post('/api/chat/init', async (req, res) => {
+  if (!req.tenant?.has_chat) return res.status(403).json({ error: 'Chat não disponível' });
+  const { session_id } = req.body;
+  if (!session_id) return res.status(400).json({ error: 'session_id obrigatório' });
+  try {
+    await req.db(
+      `INSERT INTO bella_sessions(id) VALUES($1) ON CONFLICT(id) DO NOTHING`,
+      [session_id]
+    );
+    const sess = await req.db('SELECT visitor_name FROM bella_sessions WHERE id=$1', [session_id]);
+    const msgs = await req.db(
+      `SELECT role, content, created_at FROM bella_messages WHERE session_id=$1 ORDER BY created_at ASC LIMIT 60`,
+      [session_id]
+    );
+    res.json({
+      visitor_name:  sess.rows[0]?.visitor_name || null,
+      history:       msgs.rows,
+      business_name: req.tenant?.business_name || 'nosso espaço',
+    });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// Processa mensagem do visitante e retorna resposta da Bella
+app.post('/api/chat/message', async (req, res) => {
+  if (!req.tenant?.has_chat) return res.status(403).json({ error: 'Chat não disponível' });
+  const { session_id, message, visitor_name } = req.body;
+  if (!session_id || !message?.trim()) return res.status(400).json({ error: 'Dados inválidos' });
+  try {
+    // Cria/atualiza sessão
+    await req.db(
+      `INSERT INTO bella_sessions(id, visitor_name) VALUES($1, $2)
+       ON CONFLICT(id) DO UPDATE
+         SET visitor_name = COALESCE(NULLIF($2,''), bella_sessions.visitor_name),
+             updated_at   = NOW()`,
+      [session_id, visitor_name || null]
+    );
+    // Salva mensagem do visitante
+    await req.db(
+      `INSERT INTO bella_messages(session_id, role, content) VALUES($1,'user',$2)`,
+      [session_id, message.trim()]
+    );
+    // Histórico recente para contexto
+    const histRes = await req.db(
+      `SELECT role, content FROM bella_messages WHERE session_id=$1 ORDER BY created_at DESC LIMIT 12`,
+      [session_id]
+    );
+    const history = histRes.rows.reverse();
+    // Nome atual da sessão
+    const sessRes = await req.db('SELECT visitor_name FROM bella_sessions WHERE id=$1', [session_id]);
+    const currentName = sessRes.rows[0]?.visitor_name || null;
+    // Procedimentos ativos do tenant
+    let procedures = [];
+    try {
+      const pr = await req.db(
+        `SELECT name, description, price FROM procedures WHERE active=true ORDER BY sort_order, name LIMIT 30`
+      );
+      procedures = pr.rows;
+    } catch {}
+    // Detecta nome enviado nesta mensagem (se ainda não temos)
+    let resolvedName = currentName;
+    if (!resolvedName && visitor_name) resolvedName = visitor_name;
+    // Gera resposta
+    const response = await bellaRespond({
+      message: message.trim(),
+      history,
+      name:       resolvedName,
+      tenant:     req.tenant,
+      procedures,
+    });
+    // Salva resposta da Bella
+    await req.db(
+      `INSERT INTO bella_messages(session_id, role, content) VALUES($1,'bella',$2)`,
+      [session_id, response]
+    );
+    // Se a mensagem anterior da Bella pediu o nome e ainda não temos, tenta capturar
+    const lastBellaMsg = history.filter(h => h.role === 'bella').pop()?.content || '';
+    if (!currentName && /como posso te chamar/.test(lastBellaMsg.toLowerCase())) {
+      const detectedName = message.trim().split(' ')[0];
+      if (detectedName.length >= 2) {
+        await req.db(
+          `UPDATE bella_sessions SET visitor_name=$1, updated_at=NOW() WHERE id=$2`,
+          [detectedName, session_id]
+        );
+        resolvedName = detectedName;
+      }
+    }
+    res.json({ response, visitor_name: resolvedName });
+  } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Bella Chat</title>
+<meta name="theme-color" content="#9B4D6A">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#FAF7F2;--white:#FFFFFF;--rose:#9B4D6A;--rose-deep:#7A3554;--rose-light:#F5E8EE;
+  --rose-mid:#C98CA8;--gold:#C4994A;--gold-light:#F5EDD8;--dark:#1A1214;--text:#3D2B35;
+  --text-light:#8A6B76;--border:#E8D5DE;--border-light:#F0E2E8;
+  --sh-sm:0 2px 8px rgba(155,77,106,.08);--sh-md:0 4px 20px rgba(155,77,106,.12);
+  --r-sm:8px;--r-md:14px;--r-lg:22px;--r-xl:40px;
+  --primary:var(--rose);--primary-deep:var(--rose-deep);--primary-light:var(--rose-light);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;-webkit-text-size-adjust:100%}
+body{
+  font-family:'Nunito',sans-serif;background:var(--cream);color:var(--text);
+  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+}
+
+/* ── HEADER ── */
+.chat-header{
+  background:var(--white);border-bottom:1px solid var(--border);
+  padding:12px 16px;display:flex;align-items:center;gap:12px;
+  box-shadow:var(--sh-sm);flex-shrink:0;position:relative;
+}
+.back-btn{
+  background:none;border:none;cursor:pointer;padding:6px;border-radius:50%;
+  color:var(--text-light);display:flex;align-items:center;justify-content:center;
+  transition:background .2s;-webkit-tap-highlight-color:transparent;
+}
+.back-btn:active{background:var(--border-light)}
+.bella-avatar{
+  width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--rose-deep));
+  display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;
+  box-shadow:var(--sh-sm);
+}
+.bella-info{flex:1;min-width:0}
+.bella-name{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:600;color:var(--dark);line-height:1.2}
+.bella-status{font-size:11px;color:var(--text-light);display:flex;align-items:center;gap:5px}
+.online-dot{width:7px;height:7px;border-radius:50%;background:#2D7D52;display:inline-block}
+
+/* ── MESSAGES ── */
+.messages-wrap{flex:1;overflow-y:auto;padding:16px 14px 10px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.messages-wrap::-webkit-scrollbar{width:4px}
+.messages-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+.msg{max-width:80%;display:flex;flex-direction:column;gap:3px;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+.msg.bella{align-self:flex-start}
+.msg.user{align-self:flex-end}
+
+.msg-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--rose-deep));display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-bottom:2px}
+
+.msg-row{display:flex;align-items:flex-end;gap:7px}
+.msg.user .msg-row{flex-direction:row-reverse}
+
+.bubble{
+  padding:10px 14px;border-radius:18px;font-size:13.5px;line-height:1.65;
+  word-break:break-word;white-space:pre-wrap;
+}
+.msg.bella .bubble{
+  background:var(--white);color:var(--text);border-bottom-left-radius:4px;
+  box-shadow:var(--sh-sm);border:1px solid var(--border-light);
+}
+.msg.user .bubble{
+  background:linear-gradient(135deg,var(--rose),var(--rose-deep));
+  color:white;border-bottom-right-radius:4px;box-shadow:var(--sh-sm);
+}
+.bubble b,.bubble strong{font-weight:700}
+.bubble a{color:var(--rose);text-decoration:underline;font-weight:600}
+.msg.user .bubble a{color:rgba(255,255,255,.9)}
+.msg-time{font-size:10px;color:var(--text-light);padding:0 4px}
+.msg.user .msg-time{text-align:right}
+
+/* Typing indicator */
+.typing-bubble{
+  background:var(--white);border:1px solid var(--border-light);
+  padding:12px 16px;border-radius:18px;border-bottom-left-radius:4px;
+  box-shadow:var(--sh-sm);display:flex;align-items:center;gap:5px;
+}
+.typing-dot{width:7px;height:7px;border-radius:50%;background:var(--rose-mid);animation:blink 1.2s infinite}
+.typing-dot:nth-child(2){animation-delay:.2s}
+.typing-dot:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+
+/* ── QUICK REPLIES ── */
+.quick-replies{
+  display:flex;gap:7px;padding:6px 14px;overflow-x:auto;flex-shrink:0;
+  scrollbar-width:none;
+}
+.quick-replies::-webkit-scrollbar{display:none}
+.qr-btn{
+  white-space:nowrap;background:var(--white);border:1.5px solid var(--border);
+  border-radius:50px;padding:6px 13px;font-family:'Nunito',sans-serif;
+  font-size:12px;font-weight:600;color:var(--rose);cursor:pointer;
+  transition:all .2s;-webkit-tap-highlight-color:transparent;flex-shrink:0;
+}
+.qr-btn:active{background:var(--rose-light);border-color:var(--rose)}
+
+/* ── INPUT ── */
+.input-area{
+  background:var(--white);border-top:1px solid var(--border);
+  padding:10px 12px 14px;display:flex;align-items:flex-end;gap:9px;flex-shrink:0;
+}
+.input-field{
+  flex:1;border:1.5px solid var(--border);border-radius:22px;
+  padding:10px 16px;font-family:'Nunito',sans-serif;font-size:14px;
+  color:var(--text);background:var(--cream);resize:none;
+  outline:none;transition:border-color .2s;line-height:1.5;max-height:100px;
+  min-height:42px;overflow-y:auto;
+}
+.input-field:focus{border-color:var(--rose)}
+.input-field::placeholder{color:var(--text-light)}
+.send-btn{
+  width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--rose-deep));
+  border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:opacity .2s;box-shadow:var(--sh-sm);
+  -webkit-tap-highlight-color:transparent;
+}
+.send-btn:active{opacity:.8}
+.send-btn svg{width:18px;height:18px;fill:white}
+.send-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── LOADING INIT ── */
+.init-loader{
+  position:fixed;inset:0;background:var(--cream);z-index:100;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+}
+.init-loader .bella-avatar-lg{
+  width:72px;height:72px;border-radius:50%;
+  background:linear-gradient(135deg,var(--rose),var(--rose-deep));
+  display:flex;align-items:center;justify-content:center;font-size:36px;
+  box-shadow:var(--sh-md);
+}
+.init-loader p{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:var(--rose)}
+.init-loader span{font-size:12px;color:var(--text-light)}
+.spin{width:24px;height:24px;border:2.5px solid var(--border);border-top-color:var(--rose);border-radius:50%;animation:spin .7s linear infinite;margin-top:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--dark);color:white;padding:10px 18px;border-radius:50px;font-size:12px;font-weight:600;z-index:200;opacity:0;transition:all .3s;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{background:#C4564A}
+
+/* responsive */
+@media(max-width:420px){
+  .bubble{font-size:13px;padding:9px 12px}
+  .msg{max-width:88%}
+}
+</style>
+</head>
+<body>
+
+<div class="init-loader" id="loader">
+  <div class="bella-avatar-lg">🌸</div>
+  <p>Bella</p>
+  <span>Iniciando o chat…</span>
+  <div class="spin"></div>
+</div>
+
+<div id="chat-app" class="hidden" style="display:flex;flex-direction:column;height:100%">
+  <!-- Header -->
+  <div class="chat-header">
+    <button class="back-btn" onclick="history.length>1?history.back():location.href='/'" title="Voltar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="bella-avatar">🌸</div>
+    <div class="bella-info">
+      <div class="bella-name">Bella</div>
+      <div class="bella-status"><span class="online-dot"></span> Assistente virtual</div>
+    </div>
+  </div>
+
+  <!-- Messages -->
+  <div class="messages-wrap" id="messages"></div>
+
+  <!-- Quick replies -->
+  <div class="quick-replies" id="quickReplies">
+    <button class="qr-btn" onclick="sendQuick('📅 Quero agendar')">📅 Agendar</button>
+    <button class="qr-btn" onclick="sendQuick('🌿 Quais são os serviços?')">🌿 Serviços</button>
+    <button class="qr-btn" onclick="sendQuick('💫 Quais os preços?')">💫 Preços</button>
+    <button class="qr-btn" onclick="sendQuick('📍 Qual é a localização?')">📍 Localização</button>
+    <button class="qr-btn" onclick="sendQuick('📱 WhatsApp')">📱 WhatsApp</button>
+  </div>
+
+  <!-- Input -->
+  <div class="input-area">
+    <textarea class="input-field" id="msgInput" placeholder="Digite sua mensagem…" rows="1"></textarea>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+      <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let SESSION_ID = null;
+let VISITOR_NAME = null;
+let isSending = false;
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+(async function init() {
+  // Gera ou recupera session_id do localStorage
+  try { SESSION_ID = localStorage.getItem('bella_sid'); } catch {}
+  if (!SESSION_ID) {
+    SESSION_ID = 'b' + Date.now() + Math.random().toString(36).slice(2,8);
+    try { localStorage.setItem('bella_sid', SESSION_ID); } catch {}
+  }
+
+  try {
+    const r = await fetch('/api/chat/init', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ session_id: SESSION_ID })
+    });
+    const data = await r.json();
+    VISITOR_NAME = data.visitor_name || null;
+
+    // Renderiza histórico
+    if (data.history?.length) {
+      for (const m of data.history) renderMsg(m.role, m.content, false);
+    } else {
+      // Sem histórico → manda init para Bella cumprimentar
+      await sendToServer('__init__');
+    }
+    scrollBottom();
+  } catch(e) {
+    showToast('Erro ao conectar. Tente novamente.', true);
+  }
+
+  document.getElementById('loader').classList.add('hidden');
+  const app = document.getElementById('chat-app');
+  app.classList.remove('hidden');
+  app.style.display = 'flex';
+
+  const inp = document.getElementById('msgInput');
+  inp.addEventListener('input', onInput);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  autoGrow(inp);
+  document.getElementById('sendBtn').disabled = false;
+})();
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function scrollBottom() {
+  const w = document.getElementById('messages');
+  w.scrollTop = w.scrollHeight;
+}
+
+function fmtTime(d) {
+  const dt = d ? new Date(d) : new Date();
+  return dt.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+}
+
+function renderMarkdown(text) {
+  return text
+    .replace(/\*([^*]+)\*/g, '<b>$1</b>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_self">$1</a>');
+}
+
+function renderMsg(role, content, animate = true) {
+  const wrap = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  if (!animate) div.style.animation = 'none';
+
+  const row = document.createElement('div');
+  row.className = 'msg-row';
+
+  if (role === 'bella') {
+    const av = document.createElement('div');
+    av.className = 'msg-avatar';
+    av.textContent = '🌸';
+    row.appendChild(av);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = renderMarkdown(content);
+
+  row.appendChild(bubble);
+  div.appendChild(row);
+
+  const time = document.createElement('div');
+  time.className = 'msg-time';
+  time.textContent = fmtTime();
+  div.appendChild(time);
+
+  wrap.appendChild(div);
+  scrollBottom();
+  return div;
+}
+
+function showTyping() {
+  const wrap = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg bella';
+  div.id = 'typing-ind';
+  const row = document.createElement('div');
+  row.className = 'msg-row';
+  const av = document.createElement('div');
+  av.className = 'msg-avatar';
+  av.textContent = '🌸';
+  const tb = document.createElement('div');
+  tb.className = 'typing-bubble';
+  tb.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+  row.appendChild(av);
+  row.appendChild(tb);
+  div.appendChild(row);
+  wrap.appendChild(div);
+  scrollBottom();
+}
+
+function hideTyping() {
+  const el = document.getElementById('typing-ind');
+  if (el) el.remove();
+}
+
+function showToast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (err ? ' err' : '') + ' show';
+  setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+
+function onInput(e) {
+  autoGrow(e.target);
+  document.getElementById('sendBtn').disabled = !e.target.value.trim();
+}
+
+// ── Send ─────────────────────────────────────────────────────────────────────
+async function sendToServer(message) {
+  try {
+    const r = await fetch('/api/chat/message', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        session_id: SESSION_ID,
+        message,
+        visitor_name: VISITOR_NAME || undefined
+      })
+    });
+    const data = await r.json();
+    if (data.visitor_name) VISITOR_NAME = data.visitor_name;
+    return data.response || null;
+  } catch(e) { return null; }
+}
+
+async function sendMessage() {
+  const inp = document.getElementById('msgInput');
+  const text = inp.value.trim();
+  if (!text || isSending) return;
+
+  isSending = true;
+  inp.value = '';
+  inp.style.height = 'auto';
+  document.getElementById('sendBtn').disabled = true;
+
+  renderMsg('user', text);
+  showTyping();
+
+  const response = await sendToServer(text);
+  hideTyping();
+
+  if (response) {
+    renderMsg('bella', response);
+  } else {
+    showToast('Não consegui responder agora. Tente novamente.', true);
+  }
+
+  isSending = false;
+  document.getElementById('sendBtn').disabled = false;
+  inp.focus();
+}
+
+async function sendQuick(text) {
+  if (isSending) return;
+  document.getElementById('msgInput').value = text;
+  document.getElementById('sendBtn').disabled = false;
+  await sendMessage();
+}
+</script>
+</body>
+</html>
