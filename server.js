@@ -7369,6 +7369,31 @@ app.post('/api/chat/message', async (req, res) => {
   if (!req.tenant?.has_chat) return res.status(403).json({ error: 'Chat não disponível' });
   const { session_id, message, visitor_name } = req.body;
   if (!session_id || !message?.trim()) return res.status(400).json({ error: 'Dados inválidos' });
+
+  // Mensagem técnica de greeting: apenas persiste a saudação da Bella no banco (não salva msg do visitante)
+  const isGreeting = message.trim() === '__greeting__';
+  if (isGreeting) {
+    try {
+      await req.db(
+        `INSERT INTO bella_sessions(id) VALUES($1) ON CONFLICT(id) DO NOTHING`,
+        [session_id]
+      );
+      const bizName = req.tenant?.business_name || 'nosso espaço';
+      const greetingMsg = `Olá! 👋 Sou a Bella, assistente virtual de *${bizName}*.\n\nPara começar, como posso te chamar?`;
+      // Só salva se ainda não há mensagens nesta sessão
+      const existing = await req.db(
+        `SELECT id FROM bella_messages WHERE session_id=$1 LIMIT 1`, [session_id]
+      );
+      if (!existing.rows.length) {
+        await req.db(
+          `INSERT INTO bella_messages(session_id, role, content) VALUES($1,'bella',$2)`,
+          [session_id, greetingMsg]
+        );
+      }
+      return res.json({ response: greetingMsg, visitor_name: null });
+    } catch(err) { return res.status(500).json({ error: err.message }); }
+  }
+
   try {
     // Cria/atualiza sessão
     await req.db(

@@ -211,9 +211,19 @@ let VISITOR_NAME = null;
 let isSending = false;
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+const HISTORY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 (async function init() {
-  // Gera ou recupera session_id do localStorage
-  try { SESSION_ID = localStorage.getItem('bella_sid'); } catch {}
+  // Gera ou recupera session_id; limpa se mais de 24h sem atividade
+  try {
+    const lastActivity = parseInt(localStorage.getItem('bella_last') || '0', 10);
+    if (lastActivity && Date.now() - lastActivity > HISTORY_TTL_MS) {
+      localStorage.removeItem('bella_sid');
+      localStorage.removeItem('bella_last');
+    }
+    SESSION_ID = localStorage.getItem('bella_sid');
+  } catch {}
+
   if (!SESSION_ID) {
     SESSION_ID = 'b' + Date.now() + Math.random().toString(36).slice(2,8);
     try { localStorage.setItem('bella_sid', SESSION_ID); } catch {}
@@ -227,14 +237,25 @@ let isSending = false;
     const data = await r.json();
     VISITOR_NAME = data.visitor_name || null;
 
-    // Renderiza histórico
     if (data.history?.length) {
-      for (const m of data.history) renderMsg(m.role, m.content, false);
+      // Retoma histórico existente (filtra mensagens técnicas)
+      for (const m of data.history) {
+        if (m.content === '__init__') continue;
+        renderMsg(m.role, m.content, false);
+      }
     } else {
-      // Sem histórico → manda init para Bella cumprimentar
-      await sendToServer('__init__');
+      // Sem histórico — exibe saudação diretamente (sem chamar o servidor)
+      const bizName = data.business_name || 'nosso espaço';
+      const greeting = `Olá! 👋 Sou a Bella, assistente virtual de *${bizName}*.\n\nPara começar, como posso te chamar?`;
+      renderMsg('bella', greeting, true);
+      // Salva saudação no banco para que o fluxo de nome funcione
+      fetch('/api/chat/message', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id: SESSION_ID, message: '__greeting__', visitor_name: null })
+      }).catch(()=>{});
     }
     scrollBottom();
+    try { localStorage.setItem('bella_last', String(Date.now())); } catch {}
   } catch(e) {
     showToast('Erro ao conectar. Tente novamente.', true);
   }
@@ -267,7 +288,7 @@ function fmtTime(d) {
 function renderMarkdown(text) {
   return text
     .replace(/\*([^*]+)\*/g, '<b>$1</b>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_self">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
 }
 
 function renderMsg(role, content, animate = true) {
