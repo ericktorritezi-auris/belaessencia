@@ -2114,7 +2114,7 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
 // ══════════════════════════════════════════════════
 // VERSÃO — altere APENAS aqui; atualiza todos os rodapés
 // ══════════════════════════════════════════════════
-const APP_VERSION  = '2.9.10';
+const APP_VERSION  = '2.9.17';
 const APP_COPY     = `Versão: ${APP_VERSION} | ${(window._tenantConfig?.business_name || 'Belle Planner')} © ${new Date().getFullYear()}`;
 
 function renderFooters() {
@@ -9304,6 +9304,158 @@ async function resetBiometric() {
     <div class="pm-body" id="cm-body" style="white-space:normal"></div>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     BELLA CHAT BUTTON (v2.9.17) — exibido apenas quando has_chat=true
+     ══════════════════════════════════════════════════════════════════════════ -->
+<style>
+#bella-fab{
+  position:fixed;bottom:24px;right:20px;z-index:9990;
+  display:none;flex-direction:column;align-items:flex-end;gap:10px;
+}
+#bella-fab-btn{
+  width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--primary,#9B4D6A),var(--primary-dark,#7A3554));
+  box-shadow:0 4px 18px rgba(155,77,106,.35);
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .2s,box-shadow .2s;
+  -webkit-tap-highlight-color:transparent;position:relative;
+}
+#bella-fab-btn:active{transform:scale(.94)}
+#bella-fab-btn::after{
+  content:'';position:absolute;inset:-4px;border-radius:50%;
+  border:2px solid rgba(155,77,106,.3);
+  animation:bella-pulse 2.2s ease-in-out infinite;
+}
+@keyframes bella-pulse{
+  0%{transform:scale(1);opacity:.6}
+  50%{transform:scale(1.18);opacity:0}
+  100%{transform:scale(1);opacity:.6}
+}
+#bella-fab-btn svg{width:26px;height:26px;fill:white;flex-shrink:0}
+#bella-fab-label{
+  background:rgba(26,18,20,.82);color:#fff;
+  font-family:'Nunito',sans-serif;font-size:12px;font-weight:600;
+  padding:5px 11px;border-radius:20px;white-space:nowrap;
+  backdrop-filter:blur(6px);pointer-events:none;
+  animation:bella-label-in .35s ease;
+}
+@keyframes bella-label-in{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:none}}
+
+/* Mini-modal */
+#bella-modal{
+  position:fixed;bottom:96px;right:20px;z-index:9991;
+  background:#fff;border-radius:18px;width:270px;
+  box-shadow:0 8px 32px rgba(26,18,20,.18);
+  padding:20px 18px 16px;
+  display:none;flex-direction:column;gap:14px;
+  animation:bella-modal-in .25s ease;
+}
+@keyframes bella-modal-in{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:none}}
+#bella-modal-close{
+  position:absolute;top:10px;right:12px;background:none;border:none;
+  cursor:pointer;color:#8A6B76;font-size:18px;line-height:1;padding:4px;
+}
+.bella-modal-avatar{
+  width:44px;height:44px;border-radius:50%;
+  background:linear-gradient(135deg,var(--primary,#9B4D6A),var(--primary-dark,#7A3554));
+  display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;
+}
+.bella-modal-head{display:flex;align-items:center;gap:10px}
+.bella-modal-name{font-family:'Cormorant Garamond',Georgia,serif;font-size:17px;font-weight:600;color:#1A1214;line-height:1.2}
+.bella-modal-sub{font-size:11px;color:#8A6B76;display:flex;align-items:center;gap:4px;margin-top:1px}
+.bella-modal-dot{width:7px;height:7px;border-radius:50%;background:#2D7D52;display:inline-block}
+.bella-modal-msg{font-size:13px;color:#3D2B35;line-height:1.55;background:#FAF7F2;border-radius:12px;padding:10px 12px}
+#bella-modal-cta{
+  width:100%;background:linear-gradient(135deg,var(--primary,#9B4D6A),var(--primary-dark,#7A3554));
+  color:#fff;border:none;border-radius:50px;padding:11px;
+  font-family:'Nunito',sans-serif;font-size:13.5px;font-weight:700;
+  cursor:pointer;transition:opacity .2s;
+}
+#bella-modal-cta:active{opacity:.85}
+</style>
+
+<div id="bella-fab" aria-label="Falar com Bella">
+  <div id="bella-modal" role="dialog" aria-modal="true" aria-label="Chat com Bella">
+    <button id="bella-modal-close" onclick="closeBellaModal()" aria-label="Fechar">×</button>
+    <div class="bella-modal-head">
+      <div class="bella-modal-avatar">🌸</div>
+      <div>
+        <div class="bella-modal-name">Bella</div>
+        <div class="bella-modal-sub"><span class="bella-modal-dot"></span> Online agora</div>
+      </div>
+    </div>
+    <div class="bella-modal-msg" id="bella-modal-msg">Olá! Posso te ajudar a agendar ou tirar dúvidas sobre nossos serviços. 😊</div>
+    <button id="bella-modal-cta" onclick="goToChat()">💬 Iniciar conversa</button>
+  </div>
+
+  <div id="bella-fab-label" style="display:none">Falar com Bella 🌸</div>
+  <button id="bella-fab-btn" onclick="toggleBellaModal()" aria-label="Abrir chat com Bella">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20 2H4C2.9 2 2 2.9 2 4v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+(function initBellaFAB() {
+  // Aguarda o _tenantConfig estar disponível (carregado por /api/config)
+  function tryInit() {
+    const cfg = window._tenantConfig;
+    if (!cfg) { setTimeout(tryInit, 300); return; }
+    if (!cfg.has_chat) return; // tenant sem chat — não exibe nada
+
+    const fab = document.getElementById('bella-fab');
+    const label = document.getElementById('bella-fab-label');
+    const msgEl = document.getElementById('bella-modal-msg');
+
+    // Personaliza mensagem com nome do negócio
+    const biz = cfg.business_name || 'nosso espaço';
+    if (msgEl) msgEl.textContent = `Olá! Sou a Bella, assistente de ${biz}. Posso ajudar com agendamento, serviços e preços! 🌸`;
+
+    // Exibe FAB com animação suave após 1.5s
+    fab.style.display = 'flex';
+    fab.style.opacity = '0';
+    fab.style.transition = 'opacity .4s';
+    setTimeout(() => { fab.style.opacity = '1'; }, 1500);
+
+    // Exibe label por 4s, depois some
+    setTimeout(() => {
+      label.style.display = 'block';
+      setTimeout(() => {
+        label.style.transition = 'opacity .5s';
+        label.style.opacity = '0';
+        setTimeout(() => { label.style.display = 'none'; label.style.opacity = '1'; }, 500);
+      }, 4000);
+    }, 2000);
+  }
+  tryInit();
+})();
+
+let _bellaModalOpen = false;
+function toggleBellaModal() {
+  _bellaModalOpen ? closeBellaModal() : openBellaModal();
+}
+function openBellaModal() {
+  const m = document.getElementById('bella-modal');
+  m.style.display = 'flex';
+  _bellaModalOpen = true;
+}
+function closeBellaModal() {
+  const m = document.getElementById('bella-modal');
+  m.style.display = 'none';
+  _bellaModalOpen = false;
+}
+function goToChat() {
+  window.location.href = '/chat';
+}
+// Fecha modal ao clicar fora
+document.addEventListener('click', function(e) {
+  if (!_bellaModalOpen) return;
+  const fab = document.getElementById('bella-fab');
+  if (!fab.contains(e.target)) closeBellaModal();
+});
+</script>
 
 </body>
 </html>

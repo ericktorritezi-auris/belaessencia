@@ -6689,6 +6689,7 @@ app.get('/api/config', async (req, res) => {
         prof_city:       req.tenant.prof_city        || null,
         prof_bio:        req.tenant.prof_bio         || null,
         prof_specialties:req.tenant.prof_specialties || null,
+        has_chat:        req.tenant.has_chat         || false,
       });
     }
     res.json({
