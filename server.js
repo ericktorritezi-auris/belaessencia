@@ -3908,15 +3908,31 @@ app.get('/api/bella/availability', async (req, res) => {
   try {
     // ── STEP: categories ────────────────────────────────────────────────────
     if (step === 'categories') {
-      // Lista categorias que têm pelo menos 1 procedimento ativo
-      const r = await req.db(
-        `SELECT DISTINCT c.id, c.name, c.sort_order
-         FROM proc_categories c
-         INNER JOIN proc_category_links l ON l.category_id = c.id
-         INNER JOIN procedures p ON p.id = l.proc_id AND p.active = true
-         ORDER BY c.sort_order, c.name
-         LIMIT 20`
-      );
+      // Lista categorias que têm pelo menos 1 procedimento ativo.
+      // Se cityId informado (fluxo v3.0), filtra por procedimentos habilitados naquela cidade.
+      let r;
+      if (cityId) {
+        r = await req.db(
+          `SELECT DISTINCT c.id, c.name, c.sort_order
+           FROM proc_categories c
+           INNER JOIN proc_category_links l ON l.category_id = c.id
+           INNER JOIN procedures p ON p.id = l.proc_id AND p.active = true
+           LEFT JOIN city_procedures cp ON cp.proc_id = p.id AND cp.city_id = $1
+           WHERE COALESCE(cp.enabled, true) = true
+           ORDER BY c.sort_order, c.name
+           LIMIT 20`,
+          [Number(cityId)]
+        );
+      } else {
+        r = await req.db(
+          `SELECT DISTINCT c.id, c.name, c.sort_order
+           FROM proc_categories c
+           INNER JOIN proc_category_links l ON l.category_id = c.id
+           INNER JOIN procedures p ON p.id = l.proc_id AND p.active = true
+           ORDER BY c.sort_order, c.name
+           LIMIT 20`
+        );
+      }
       return res.json(r.rows);
     }
 
