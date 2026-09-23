@@ -3971,10 +3971,72 @@ app.get('/api/bella/availability', async (req, res) => {
 
     // ── STEP: cities ────────────────────────────────────────────────────────
     if (step === 'cities') {
+      // Retorna cidades ativas com endereço para o resumo de confirmação
       const r = await req.db(
-        `SELECT id, name FROM cities ORDER BY name LIMIT 20`
+        `SELECT id, name,
+                COALESCE(address,'')      AS address,
+                COALESCE(number,'')       AS number,
+                COALESCE(complement,'')   AS complement,
+                COALESCE(neighborhood,'') AS neighborhood
+         FROM cities WHERE is_active=true ORDER BY name LIMIT 20`
       );
-      return res.json(r.rows);
+      let cities = r.rows;
+
+      // Se procId informado, filtra cidades com disponibilidade real nos próximos 21 dias
+      if (procId && cities.length > 0) {
+        const nowBRT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+        const available = [];
+        for (const city of cities) {
+          let hasDate = false;
+          for (let i = 0; i <= 21 && !hasDate; i++) {
+            const d = new Date(nowBRT);
+            d.setDate(d.getDate() + i);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            const dayOfWeek = d.getDay();
+            const cfg = await resolveWorkConfig(city.id, dayOfWeek);
+            const blk = await req.db(
+              `SELECT 1 FROM blocked_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+              [dateStr, city.id]);
+            if (blk.rowCount > 0) continue;
+            const excl = await req.db(
+              `SELECT 1 FROM released_dates WHERE date=$1 AND cardinality(city_ids)>0 AND NOT ($2=ANY(city_ids)) LIMIT 1`,
+              [dateStr, city.id]);
+            if (excl.rowCount > 0) continue;
+            if (!cfg.is_active || !cfg.work_start) {
+              const rel = await req.db(
+                `SELECT 1 FROM released_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+                [dateStr, city.id]);
+              const relS = await req.db(
+                `SELECT 1 FROM released_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+                [dateStr, city.id]);
+              if (!rel.rowCount && !relS.rowCount) continue;
+            }
+            const pRow = await req.db(
+              `SELECT p.dur FROM procedures p
+               LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$2
+               WHERE p.id=$1 AND p.active=TRUE AND COALESCE(cp.enabled,true)=true LIMIT 1`,
+              [Number(procId), city.id]);
+            if (!pRow.rowCount) continue;
+            const dur = pRow.rows[0].dur;
+            const appts  = await req.db(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [dateStr]);
+            const bkSlts = await req.db(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [dateStr, city.id]);
+            const busy   = [...appts.rows, ...bkSlts.rows].map(row => ({ s: timeToMin(row.st), e: timeToMin(row.et) }));
+            const wStart = timeToMin(cfg.work_start || '08:00');
+            const wEnd   = timeToMin(cfg.work_end   || '18:00');
+            const nowMin = (i === 0) ? nowBRT.getHours()*60 + nowBRT.getMinutes() : 0;
+            const brks   = (cfg.breaks || []).filter(b => b && b.s && b.e).map(b => ({ s: timeToMin(b.s), e: timeToMin(b.e) }));
+            for (let s = wStart; s + dur <= wEnd; s += 30) {
+              if (s <= nowMin) continue;
+              if (brks.some(b => s < b.e && s + dur > b.s)) continue;
+              if (!busy.some(b => s < b.e && s + dur > b.s)) { hasDate = true; break; }
+            }
+          }
+          if (hasDate) available.push(city);
+        }
+        cities = available;
+      }
+
+      return res.json(cities);
     }
 
     // ── STEP: dates ─────────────────────────────────────────────────────────

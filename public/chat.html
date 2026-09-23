@@ -7,21 +7,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap">
   <style>
+    /* ── Design tokens — LIGHT ONLY (sem dark mode) ──────────────────── */
     :root {
-      --cream: #FAF7F2;
-      --rose:  #9B4D6A;
-      --rose-light: #c47a97;
-      --gold:  #C4994A;
-      --dark:  #1A1214;
-      --text:  #3D2B35;
-      --muted: #7a6370;
-      --chip-bg: #f3ede8;
-      --chip-border: #d4bcc8;
-      --chip-color: #9B4D6A;
-      --surface: #fff;
-      --shadow: rgba(155,77,106,0.12);
+      --cream:        #FAFAF8;
+      --rose:         #9B4D6A;
+      --rose-rgb:     155, 77, 106;
+      --rose-light:   #c47a97;
+      --gold:         #C4994A;
+      --dark:         #1A1214;
+      --text:         #3D2B35;
+      --muted:        #7a6370;
+      --chip-bg:      #f3ede8;
+      --chip-border:  #d4bcc8;
+      --chip-color:   #9B4D6A;
+      --surface:      #fff;
+      --shadow:       rgba(155,77,106,0.12);
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     html, body {
       height: 100%;
       font-family: 'Nunito', sans-serif;
@@ -29,6 +33,7 @@
       color: var(--text);
       overflow: hidden;
     }
+
     #app {
       display: flex;
       flex-direction: column;
@@ -38,7 +43,7 @@
       background: var(--cream);
     }
 
-    /* Header */
+    /* ── Header ──────────────────────────────────────────────────────── */
     #header {
       display: flex;
       align-items: center;
@@ -71,7 +76,7 @@
     }
     #btn-close:hover { background: rgba(255,255,255,.15); }
 
-    /* Mensagens */
+    /* ── Mensagens ───────────────────────────────────────────────────── */
     #messages {
       flex: 1;
       overflow-y: auto;
@@ -105,19 +110,21 @@
       font-size: 14.5px; line-height: 1.55;
       word-break: break-word;
     }
+    /* Bella: fundo levíssimo na cor do tenant — sempre claro */
     .msg.bella .bubble {
-      background: var(--surface);
-      color: var(--text);
+      background: rgba(var(--rose-rgb), 0.09);
+      color: #1A1214;
       border-bottom-left-radius: 5px;
-      box-shadow: 0 1px 4px var(--shadow);
+      box-shadow: 0 1px 4px rgba(var(--rose-rgb), 0.10);
     }
+    /* Usuário: sólido na cor do tenant, texto branco */
     .msg.user .bubble {
       background: var(--rose);
       color: #fff;
       border-bottom-right-radius: 5px;
     }
 
-    /* Typing */
+    /* ── Typing ──────────────────────────────────────────────────────── */
     .typing-dots { display: flex; gap: 4px; padding: 4px 2px; }
     .typing-dots span {
       width: 8px; height: 8px; border-radius: 50%;
@@ -131,14 +138,14 @@
       40%          { transform: translateY(-6px); }
     }
 
-    /* Chips */
+    /* ── Chips ───────────────────────────────────────────────────────── */
     #chip-area {
       flex-shrink: 0;
       padding: 8px 14px 6px;
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      border-top: 1px solid rgba(155,77,106,.1);
+      border-top: 1px solid rgba(var(--rose-rgb), .10);
       background: var(--cream);
       min-height: 52px;
       align-items: center;
@@ -157,21 +164,23 @@
       white-space: nowrap;
       letter-spacing: .1px;
     }
-    .chip:hover  {
-      background: rgba(155,77,106,0.22);
+    .chip:hover {
+      background: rgba(var(--rose-rgb), 0.18);
       border-color: var(--rose);
-      opacity: 1;
     }
     .chip:active { transform: scale(.96); }
     .chip.primary {
       background: var(--rose);
       border-color: var(--rose);
       color: #fff;
-      box-shadow: 0 2px 8px rgba(155,77,106,0.35);
+      box-shadow: 0 2px 8px rgba(var(--rose-rgb), 0.32);
     }
-    .chip.primary:hover { background: #883060; }
+    .chip.primary:hover {
+      background: rgba(var(--rose-rgb), 0.85);
+      filter: brightness(0.92);
+    }
 
-    /* Input */
+    /* ── Input ───────────────────────────────────────────────────────── */
     #input-area {
       flex-shrink: 0;
       display: flex;
@@ -179,7 +188,7 @@
       gap: 8px;
       padding: 8px 14px calc(8px + env(safe-area-inset-bottom, 0px));
       background: var(--cream);
-      border-top: 1px solid rgba(155,77,106,.1);
+      border-top: 1px solid rgba(var(--rose-rgb), .10);
       flex-wrap: wrap;
     }
     #msg-input {
@@ -209,11 +218,11 @@
       cursor: pointer; transition: background .15s, transform .1s;
       font-size: 18px;
     }
-    #btn-send:hover  { background: #883060; }
+    #btn-send:hover  { filter: brightness(0.88); }
     #btn-send:active { transform: scale(.92); }
     #btn-send:disabled { background: #ccc; cursor: default; }
 
-    /* Botão encerrar */
+    /* ── Botão encerrar ──────────────────────────────────────────────── */
     #btn-end-chat {
       display: none;
       width: 100%;
@@ -231,7 +240,7 @@
     }
     #btn-end-chat:hover { background: #3d1a25; }
 
-    /* Summary card */
+    /* ── Summary card ────────────────────────────────────────────────── */
     .summary-card {
       background: var(--surface);
       border: 1.5px solid var(--chip-border);
@@ -249,28 +258,36 @@
     .summary-row { display: flex; gap: 8px; }
     .summary-label { color: var(--muted); min-width: 70px; }
 
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) {
-        --cream: #1e1218;
-        --surface: #2c1e26;
-        --chip-bg: rgba(155,77,106,0.18);
-        --chip-border: rgba(155,77,106,0.55);
-        --chip-color: #f0c8d8;
-        --text: #f0dce8;
-        --muted: #b090a0;
-        --shadow: rgba(0,0,0,.35);
-      }
+    /* ── Ações pós-confirmação ───────────────────────────────────────── */
+    .post-booking-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
     }
-    :root[data-theme="dark"] {
-      --cream: #1e1218;
-      --surface: #2c1e26;
-      --chip-bg: rgba(155,77,106,0.18);
-      --chip-border: rgba(155,77,106,0.55);
-      --chip-color: #f0c8d8;
-      --text: #f0dce8;
-      --muted: #b090a0;
-      --shadow: rgba(0,0,0,.35);
+    .post-booking-actions a {
+      display: block;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-family: 'Nunito', sans-serif;
+      font-size: 14px; font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      transition: filter .15s, transform .1s;
     }
+    .post-booking-actions a:active { transform: scale(.97); }
+    .btn-whatsapp {
+      background: #25D366;
+      color: #fff !important;
+    }
+    .btn-whatsapp:hover { filter: brightness(0.90); }
+    .btn-calendar {
+      background: rgba(var(--rose-rgb), 0.09);
+      color: var(--rose) !important;
+      border: 1.5px solid rgba(var(--rose-rgb), 0.3);
+    }
+    .btn-calendar:hover { background: rgba(var(--rose-rgb), 0.17); }
   </style>
 </head>
 <body>
@@ -308,7 +325,7 @@ const bk = {
   categories: [], services: [], cities: [],
   categoryId: null, categoryName: null,
   procId: null, procName: null, procDur: null,
-  cityId: null, cityName: null,
+  cityId: null, cityName: null, cityAddress: null,
   date: null, slot: null,
 };
 
@@ -404,6 +421,20 @@ function closeApp() {
   setTimeout(() => { history.back(); }, 300);
 }
 
+// ── Despedida e encerramento (helper reutilizável) ───────────────────
+async function farewell() {
+  setInputEnabled(false);
+  const first = visitorName ? visitorName.split(' ')[0] : '';
+  const dateInfo = bk.date
+    ? `Sua agenda foi confirmada para <strong>${fmtDate(bk.date)}</strong> às <strong>${bk.slot}</strong>.<br><br>` : '';
+  await bellaDelay(
+    `Muito obrigada, <strong>${first}</strong>! 🌸<br><br>${dateInfo}Te aguardamos com carinho! Até logo 💕`,
+    750
+  );
+  await new Promise(r => setTimeout(r, 500));
+  showEndButton();
+}
+
 // ── Inicialização ────────────────────────────────────────────────────
 async function init() {
   try {
@@ -411,10 +442,22 @@ async function init() {
     cfg = await r.json();
     if (cfg.primary_color) {
       document.documentElement.style.setProperty('--rose', cfg.primary_color);
+      // Converte hex → RGB para uso em rgba() com opacidade
+      const hex = cfg.primary_color.replace('#', '');
+      const r2 = parseInt(hex.slice(0,2), 16);
+      const g  = parseInt(hex.slice(2,4), 16);
+      const b  = parseInt(hex.slice(4,6), 16);
+      if (!isNaN(r2) && !isNaN(g) && !isNaN(b)) {
+        document.documentElement.style.setProperty('--rose-rgb', `${r2},${g},${b}`);
+        document.documentElement.style.setProperty('--chip-color', cfg.primary_color);
+        document.documentElement.style.setProperty('--chip-border', `rgba(${r2},${g},${b},0.4)`);
+      }
+    }
+    if (cfg.business_name) {
+      document.getElementById('header-name').textContent = 'Bella – ' + cfg.business_name;
     }
   } catch {}
 
-  // Nova sessão a cada visita — sem TTL
   try {
     session_id = crypto.randomUUID();
   } catch {
@@ -477,8 +520,26 @@ async function askPhone() {
         body: JSON.stringify({ session_id, visitor_name: visitorName, visitor_phone: visitorPhone })
       });
     } catch {}
-    await startMainFlow();
+    await askLgpdConsent();
   };
+}
+
+// ── LGPD: consentimento obrigatório antes do fluxo principal ────────
+async function askLgpdConsent() {
+  const termsUrl = cfg.terms_url || '/termos';
+  await bellaDelay(
+    `Para prosseguir, preciso da sua confirmação 🔒<br><br>` +
+    `Ao continuar, você concorda com nossa <a href="${termsUrl}" target="_blank" style="color:var(--rose);text-decoration:underline;">Política de Privacidade e Termos de Uso</a>, ` +
+    `conforme a <strong>LGPD (Lei 13.709/2018)</strong>.`,
+    700
+  );
+  setChips([
+    { label: '✓ Li e concordo', primary: true, action: async () => {
+        clearChips();
+        addUserMsg('Li e concordo com os termos');
+        await startMainFlow();
+    }},
+  ]);
 }
 
 // ── Confirmação de retorno ───────────────────────────────────────────
@@ -583,13 +644,12 @@ async function startBookingFlow() {
   Object.assign(bk, {
     categoryId: null, categoryName: null,
     procId: null, procName: null, procDur: null,
-    cityId: null, cityName: null,
+    cityId: null, cityName: null, cityAddress: null,
     date: null, slot: null,
   });
   clearChips();
   setInputEnabled(false);
 
-  // Tenta carregar categorias — se não tiver, vai direto para os procedimentos
   const t = showTyping();
   let cats = [];
   try {
@@ -603,7 +663,6 @@ async function startBookingFlow() {
     addBellaHtml('Ótimo! Vamos agendar juntos 🗓️<br><br>Qual <strong>categoria</strong> de serviço você procura?');
     setChips(cats.map(c => ({ label: c.name, action: () => pickCategory(c) })));
   } else {
-    // Sem categorias — lista todos os procedimentos diretamente
     await loadServicesDirectly();
   }
 }
@@ -678,7 +737,8 @@ async function pickService(svc) {
   const t = showTyping();
   let cities = [];
   try {
-    const r = await fetch('/api/bella/availability?step=cities');
+    // Passa procId → server filtra cidades com disponibilidade real
+    const r = await fetch(`/api/bella/availability?step=cities&procId=${bk.procId}`);
     cities = await r.json();
     t.remove();
   } catch {
@@ -688,9 +748,16 @@ async function pickService(svc) {
   }
   bk.cities = cities;
 
-  if (cities.length <= 1) {
-    bk.cityId   = cities[0]?.id   || null;
-    bk.cityName = cities[0]?.name || null;
+  if (!cities.length) {
+    addBellaHtml('Não há disponibilidade para este serviço no momento 😔<br><br>Entre em contato pelo WhatsApp para outras opções!');
+    setDefaultChips(); setInputEnabled(true); return;
+  }
+
+  if (cities.length === 1) {
+    // Única cidade — pula a escolha
+    bk.cityId      = cities[0].id;
+    bk.cityName    = cities[0].name;
+    bk.cityAddress = buildAddress(cities[0]);
     await askDate();
   } else {
     addBellaHtml('Em qual <strong>cidade</strong> você prefere ser atendida?');
@@ -698,8 +765,20 @@ async function pickService(svc) {
   }
 }
 
+function buildAddress(city) {
+  const parts = [
+    city.address,
+    city.number ? `nº ${city.number}` : null,
+    city.complement || null,
+    city.neighborhood || null,
+  ].filter(Boolean);
+  return parts.join(', ') || null;
+}
+
 async function pickCity(city) {
-  bk.cityId = city.id; bk.cityName = city.name;
+  bk.cityId      = city.id;
+  bk.cityName    = city.name;
+  bk.cityAddress = buildAddress(city);
   addUserMsg(city.name);
   clearChips();
   await askDate();
@@ -760,15 +839,18 @@ async function pickSlot(slot) {
   addUserMsg(slot);
   clearChips();
 
+  const addrRow = bk.cityAddress
+    ? `<div class="summary-row"><span class="summary-label">Endereço</span><span>${bk.cityAddress}</span></div>` : '';
   const cityRow = bk.cityName
-    ? `<div class="summary-row"><span class="summary-label">Cidade</span><span>${bk.cityName}</span></div>` : '';
+    ? `<div class="summary-row"><span class="summary-label">Local</span><span>${bk.cityName}</span></div>` : '';
+
   addBellaHtml(
     `Aqui está o resumo do seu agendamento:<div class="summary-card">
       <h4>✨ Resumo</h4>
       <div class="summary-row"><span class="summary-label">Serviço</span><span>${bk.procName}</span></div>
       <div class="summary-row"><span class="summary-label">Data</span><span>${fmtDate(bk.date)}</span></div>
       <div class="summary-row"><span class="summary-label">Horário</span><span>${bk.slot}</span></div>
-      ${cityRow}
+      ${cityRow}${addrRow}
     </div>`
   );
 
@@ -780,6 +862,66 @@ async function pickSlot(slot) {
   ]);
 }
 
+// ── ICS: geração e download automático ──────────────────────────────
+function downloadICS() {
+  try {
+    const [y, m, d] = bk.date.split('-').map(Number);
+    const [h, min]  = bk.slot.split(':').map(Number);
+    const dur        = bk.procDur || 60;
+    const endMin     = h*60 + min + dur;
+    const endH       = Math.floor(endMin / 60);
+    const endM       = endMin % 60;
+    const pad        = n => String(n).padStart(2, '0');
+    const dtStart    = `${y}${pad(m)}${pad(d)}T${pad(h)}${pad(min)}00`;
+    const dtEnd      = `${y}${pad(m)}${pad(d)}T${pad(endH)}${pad(endM)}00`;
+    const stamp      = new Date().toISOString().replace(/[-:]/g,'').replace(/\..*/,'Z');
+    const location   = [bk.cityName, bk.cityAddress].filter(Boolean).join(' — ');
+    const escLoc     = location.replace(/,/g, '\\,');
+    const summary    = bk.procName.replace(/,/g, '\\,');
+
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Belle Planner//Bella Chat//PT',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:bella-${session_id}@belleplanner`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;TZID=America/Sao_Paulo:${dtStart}`,
+      `DTEND;TZID=America/Sao_Paulo:${dtEnd}`,
+      `SUMMARY:${summary}`,
+      escLoc ? `LOCATION:${escLoc}` : '',
+      'DESCRIPTION:Agendamento confirmado pela Bella \\u2014 Belle Planner',
+      'BEGIN:VALARM',
+      'TRIGGER:-P1D',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:Lembrete: ${bk.procName} amanhã!`,
+      'END:VALARM',
+      'BEGIN:VALARM',
+      'TRIGGER:-PT3H',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:Lembrete: ${bk.procName} em 3 horas!`,
+      'END:VALARM',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].filter(l => l !== '').join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'agendamento-bella.ics';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) {
+    console.warn('Erro ao gerar ICS:', e);
+  }
+}
+
+// ── Confirmação real no DB ───────────────────────────────────────────
 async function confirmBooking() {
   clearChips();
   addUserMsg('Confirmar!');
@@ -789,16 +931,102 @@ async function confirmBooking() {
   await new Promise(r => setTimeout(r, 800));
   t.remove();
 
-  // TODO v2.9.19 — salvar appointment no DB
+  // Calcula et (end time) a partir do slot + duração
+  const [h, min] = bk.slot.split(':').map(Number);
+  const dur       = bk.procDur || 60;
+  const endMin    = h*60 + min + dur;
+  const et        = `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
+
+  // Tenta salvar no banco
+  let saved = false;
+  try {
+    const resp = await fetch('/api/appointments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cityId:          bk.cityId,
+        cityName:        bk.cityName,
+        procId:          bk.procId,
+        procName:        bk.procName,
+        date:            bk.date,
+        st:              bk.slot,
+        et:              et,
+        name:            visitorName,
+        phone:           visitorPhone,
+        price:           null,
+        pt:              'chat',
+        privacy_consent: true,
+      })
+    });
+    if (resp.status === 409) {
+      // Slot tomado por outra pessoa
+      addBellaHtml(
+        `⚠️ Ops! Este horário acabou de ser reservado por outra pessoa 😔<br><br>` +
+        `Vamos escolher outro horário?`
+      );
+      await new Promise(r => setTimeout(r, 400));
+      bk.step = 'slot'; bk.active = true;
+      await askDate();
+      return;
+    }
+    if (resp.ok) saved = true;
+  } catch (e) {
+    console.warn('Erro ao salvar appointment:', e);
+  }
+
+  // Monta endereço para a confirmação
+  const addrRow = bk.cityAddress
+    ? `<div class="summary-row"><span class="summary-label">Endereço</span><span>${bk.cityAddress}</span></div>` : '';
+  const cityRow = bk.cityName
+    ? `<div class="summary-row"><span class="summary-label">Local</span><span>${bk.cityName}</span></div>` : '';
+
   const first = visitorName.split(' ')[0];
   addBellaHtml(
     `🎉 <strong>Perfeito, ${first}!</strong><br><br>` +
-    `Seu agendamento de <strong>${bk.procName}</strong> está confirmado para ` +
-    `<strong>${fmtDate(bk.date)}</strong> às <strong>${bk.slot}</strong>.<br><br>` +
-    `Em breve você receberá uma confirmação. Te aguardamos! 🌸`
+    `Seu agendamento está ${saved ? 'confirmado' : 'registrado'}!` +
+    `<div class="summary-card">
+      <h4>✨ Confirmação</h4>
+      <div class="summary-row"><span class="summary-label">Serviço</span><span>${bk.procName}</span></div>
+      <div class="summary-row"><span class="summary-label">Data</span><span>${fmtDate(bk.date)}</span></div>
+      <div class="summary-row"><span class="summary-label">Horário</span><span>${bk.slot}</span></div>
+      ${cityRow}${addrRow}
+    </div>`
   );
 
-  await new Promise(r => setTimeout(r, 600));
+  // Download ICS automático (adiciona ao calendário com alarmes)
+  setTimeout(() => downloadICS(), 600);
+
+  // Link WhatsApp + botão agenda
+  const whaNum = (cfg.whatsapp_number || '').replace(/\D/g, '');
+  const whaText = encodeURIComponent(
+    `Olá! Confirmei meu agendamento pela Bella 🌸\n\n` +
+    `📋 Serviço: ${bk.procName}\n` +
+    `📅 Data: ${fmtDate(bk.date)}\n` +
+    `⏰ Horário: ${bk.slot}\n` +
+    (bk.cityName ? `📍 Local: ${bk.cityName}\n` : '') +
+    (bk.cityAddress ? `🗺️ ${bk.cityAddress}\n` : '') +
+    `\nAté logo! 💕`
+  );
+  const whaHref = whaNum
+    ? `https://wa.me/${whaNum.startsWith('55') ? whaNum : '55' + whaNum}?text=${whaText}`
+    : null;
+
+  await new Promise(r => setTimeout(r, 500));
+
+  addBellaHtml(
+    `📲 Você pode nos enviar uma mensagem no WhatsApp para confirmar ou tirar dúvidas. ` +
+    `E seu agendamento já foi <strong>adicionado à sua agenda</strong> com lembretes 🔔` +
+    (whaHref
+      ? `<div class="post-booking-actions">
+           <a href="${whaHref}" target="_blank" class="btn-whatsapp">📲 Enviar confirmação no WhatsApp</a>
+           <a onclick="downloadICS()" class="btn-calendar">📅 Baixar novamente (Agenda)</a>
+         </div>`
+      : `<div class="post-booking-actions">
+           <a onclick="downloadICS()" class="btn-calendar">📅 Baixar (.ics) para a Agenda</a>
+         </div>`)
+  );
+
+  await new Promise(r => setTimeout(r, 700));
   await askAnythingElse();
 }
 
@@ -819,8 +1047,13 @@ async function askAnythingElse() {
               await new Promise(r => setTimeout(r, 200));
               startBookingFlow();
           }},
-          { label: 'Não, outra coisa', action: async () => {
-              addUserMsg('Não, outra coisa');
+          { label: 'Não preciso de ajuda', action: async () => {
+              addUserMsg('Não preciso de ajuda');
+              clearChips();
+              await farewell();
+          }},
+          { label: 'Outra dúvida', action: async () => {
+              addUserMsg('Outra dúvida');
               clearChips();
               await bellaDelay('Em que mais posso te ajudar? 😊', 400);
               setDefaultChips();
@@ -831,16 +1064,7 @@ async function askAnythingElse() {
     { label: 'Não', action: async () => {
         addUserMsg('Não');
         clearChips();
-        setInputEnabled(false);
-        const first = visitorName.split(' ')[0];
-        await bellaDelay(
-          `Muito obrigada, <strong>${first}</strong>! 🌸<br><br>` +
-          `Sua agenda foi confirmada para <strong>${fmtDate(bk.date)}</strong> às <strong>${bk.slot}</strong>.<br><br>` +
-          `Te aguardamos com carinho! Até logo 💕`,
-          750
-        );
-        await new Promise(r => setTimeout(r, 500));
-        showEndButton();
+        await farewell();
     }},
   ]);
 }
