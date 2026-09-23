@@ -797,7 +797,8 @@ async function loadServicesForCity() {
   const t = showTyping();
   let cats = [];
   try {
-    const r = await fetch('/api/bella/availability?step=categories');
+    const cityParam = bk.cityId ? `&cityId=${bk.cityId}` : '';
+    const r = await fetch(`/api/bella/availability?step=categories${cityParam}`);
     cats = await r.json();
   } catch {}
   t.remove();
