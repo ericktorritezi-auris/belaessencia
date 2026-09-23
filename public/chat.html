@@ -164,6 +164,16 @@
       white-space: nowrap;
       letter-spacing: .1px;
     }
+    /* No mobile, chips longos quebram texto para não sair da tela */
+    @media (max-width: 480px) {
+      .chip {
+        white-space: normal;
+        word-break: break-word;
+        text-align: left;
+        border-radius: 16px;
+        max-width: 100%;
+      }
+    }
     .chip:hover {
       background: rgba(var(--rose-rgb), 0.18);
       border-color: var(--rose);
@@ -294,6 +304,43 @@
       border: 1.5px solid #ddd;
     }
     .btn-gcal:hover { background: #f5f5f5; }
+
+    /* ── Tabela de preços ────────────────────────────────────────────── */
+    .price-table {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1.5px solid rgba(var(--rose-rgb), 0.15);
+    }
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 14px;
+      font-size: 13px;
+      gap: 8px;
+    }
+    .price-row:nth-child(odd)  { background: rgba(var(--rose-rgb), 0.04); }
+    .price-row:nth-child(even) { background: rgba(var(--rose-rgb), 0.09); }
+    .price-name {
+      flex: 1;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.35;
+    }
+    .price-name small {
+      font-weight: 400;
+      opacity: .7;
+    }
+    .price-value {
+      white-space: nowrap;
+      font-weight: 700;
+      color: var(--rose);
+      font-size: 13.5px;
+    }
   </style>
 </head>
 <body>
@@ -582,11 +629,55 @@ async function startMainFlow() {
 
 function setDefaultChips() {
   setChips([
-    { label: '📅 Agendar',    primary: true, action: () => startBookingFlow() },
-    { label: '📍 Localização',             action: () => handleChipMsg('Onde vocês ficam?') },
-    { label: '⏰ Horários',                action: () => handleChipMsg('Quais são os horários de atendimento?') },
-    { label: '💬 WhatsApp',               action: () => handleChipMsg('whatsapp') },
-    { label: '👋 Encerrar',               action: () => { addUserMsg('Encerrar atendimento'); farewell(); } },
+    { label: '📅 Agendar',      primary: true, action: () => startBookingFlow() },
+    { label: '💰 Ver preços',                  action: () => showPrices() },
+    { label: '📍 Localização',                 action: () => handleChipMsg('Onde vocês ficam?') },
+    { label: '⏰ Horários',                    action: () => handleChipMsg('Quais são os horários de atendimento?') },
+    { label: '💬 WhatsApp',                   action: () => handleChipMsg('whatsapp') },
+    { label: '👋 Encerrar',                   action: () => { addUserMsg('Encerrar atendimento'); farewell(); } },
+  ]);
+}
+
+async function showPrices() {
+  clearChips();
+  addUserMsg('Ver preços');
+  const t = showTyping();
+  let svcs = [];
+  try {
+    const r = await fetch('/api/bella/availability?step=services');
+    svcs = await r.json();
+    t.remove();
+  } catch {
+    t.remove();
+    addBellaHtml('Não consegui carregar os preços agora. Tente novamente 🙏');
+    setDefaultChips(); return;
+  }
+
+  if (!svcs.length) {
+    addBellaHtml('Não há serviços cadastrados no momento.');
+    setDefaultChips(); return;
+  }
+
+  // Formata preços: se price for null exibe "consultar"
+  const fmtPrice = p => p != null
+    ? `R$ ${Number(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+    : 'Consultar';
+
+  const rows = svcs.map(s =>
+    `<div class="price-row">
+       <span class="price-name">${s.name}${s.dur ? ` <small>(${s.dur}min)</small>` : ''}</span>
+       <span class="price-value">${fmtPrice(s.price)}</span>
+     </div>`
+  ).join('');
+
+  addBellaHtml(
+    `Aqui estão nossos serviços e valores 💰` +
+    `<div class="price-table">${rows}</div>`
+  );
+
+  setChips([
+    { label: '📅 Agendar agora', primary: true, action: () => startBookingFlow() },
+    { label: '← Voltar',                        action: () => { addUserMsg('Voltar'); setDefaultChips(); } },
   ]);
 }
 
@@ -739,7 +830,7 @@ async function pickCategory(cat) {
 }
 
 async function pickService(svc) {
-  bk.procId = svc.id; bk.procName = svc.name; bk.procDur = svc.dur;
+  bk.procId = svc.id; bk.procName = svc.name; bk.procDur = svc.dur; bk.procPrice = svc.price ?? null;
   bk.step = 'city';
   addUserMsg(svc.name);
   clearChips();
@@ -984,7 +1075,7 @@ async function confirmBooking() {
         et:              et,
         name:            visitorName,
         phone:           visitorPhone,
-        price:           null,
+        price:           bk.procPrice ?? null,
         pt:              'chat',
         privacy_consent: true,
       })
@@ -1057,8 +1148,10 @@ async function confirmBooking() {
     (gcalLoc ? `&location=${gcalLoc}` : '') +
     `&sf=true&output=xml`;
 
-  // ── Download ICS automático (iOS captura e oferece "Adicionar à Agenda") ─
-  setTimeout(() => downloadICS(), 600);
+  // ── Download ICS automático apenas no desktop (mobile usa os botões abaixo) ─
+  if (!/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    setTimeout(() => downloadICS(), 600);
+  }
 
   await new Promise(r => setTimeout(r, 500));
 
