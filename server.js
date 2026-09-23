@@ -4184,25 +4184,36 @@ app.get('/api/bella/availability', async (req, res) => {
         }
         if (hasSlot) availDates.push(dateStr);
       }
-      // hasMore: verifica se há pelo menos mais 1 data disponível além das 7 retornadas
-      // (busca apenas 1 extra para decidir sem custo excessivo)
+      // hasMore: verifica se há pelo menos mais 1 data disponível além da janela atual.
+      // Roda SEMPRE (não só quando 7 datas foram encontradas) para que cidades com
+      // disponibilidade limitada também mostrem o botão "Mais datas →".
       let hasMore = false;
-      if (availDates.length === 7) {
-        const nextOffset = offset + 22;
-        for (let i = nextOffset; i <= nextOffset + 7 && !hasMore; i++) {
-          const d2 = new Date(nowBRT);
-          d2.setDate(d2.getDate() + i);
-          const ds2 = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`;
-          const dow2 = d2.getDay();
-          const cfg2 = await resolveWorkConfig(Number(cityId), dow2);
-          const blk2 = await req.db(`SELECT 1 FROM blocked_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`, [ds2, Number(cityId)]);
-          if (blk2.rowCount > 0) continue;
-          if (!cfg2.is_active || !cfg2.work_start) {
-            const rel2 = await req.db(`SELECT 1 FROM released_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`, [ds2, Number(cityId)]);
-            if (!rel2.rowCount) continue;
-          }
-          hasMore = true;
+      const nextOffset = offset + 22;
+      for (let i = nextOffset; i <= nextOffset + 21 && !hasMore; i++) {
+        const d2 = new Date(nowBRT);
+        d2.setDate(d2.getDate() + i);
+        const ds2 = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}`;
+        const dow2 = d2.getDay();
+        const cfg2 = await resolveWorkConfig(Number(cityId), dow2);
+        const blk2 = await req.db(`SELECT 1 FROM blocked_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`, [ds2, Number(cityId)]);
+        if (blk2.rowCount > 0) continue;
+        const excl2 = await req.db(`SELECT 1 FROM released_dates WHERE date=$1 AND cardinality(city_ids)>0 AND NOT ($2=ANY(city_ids)) LIMIT 1`, [ds2, Number(cityId)]);
+        if (excl2.rowCount > 0) continue;
+        if (!cfg2.is_active || !cfg2.work_start) {
+          const rel2 = await req.db(`SELECT 1 FROM released_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`, [ds2, Number(cityId)]);
+          const relS2 = await req.db(`SELECT 1 FROM released_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`, [ds2, Number(cityId)]);
+          if (!rel2.rowCount && !relS2.rowCount) continue;
         }
+        // Bloqueio por evento promo (mesmo critério do loop principal)
+        try {
+          const pb2 = await req.db(
+            `SELECT id FROM procedures WHERE is_promo=TRUE AND active=TRUE AND promo_date=$1
+               AND (promo_city_ids IS NULL OR cardinality(promo_city_ids)=0 OR $2=ANY(promo_city_ids)) LIMIT 1`,
+            [ds2, Number(cityId)]
+          );
+          if (pb2.rowCount > 0 && Number(pb2.rows[0].id) !== Number(procId)) continue;
+        } catch(e) {}
+        hasMore = true;
       }
       return res.json({ dates: availDates, hasMore, nextOffset: offset + 22 });
     }
@@ -4269,7 +4280,7 @@ app.get('/api/bella/availability', async (req, res) => {
           const busy  = [...appts.rows, ...bkS.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
           const slots = [];
           for (const row of relS.rows) {
-            for (let s = timeToMin(row.st); s + dur <= timeToMin(row.et); s += interval) {
+            for (let s = timeToMin(row.st); s <= timeToMin(row.et); s += interval) {
               if (s > nowMinBRT && !busy.some(b => s < b.e && s+dur > b.s)) slots.push(minToTime(s));
             }
           }
@@ -4291,7 +4302,7 @@ app.get('/api/bella/availability', async (req, res) => {
         const bkS2   = await req.db(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]);
         const busy2  = [...appts2.rows, ...bkS2.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
         const slots2 = [];
-        for (let s = rStart; s + dur <= rEnd; s += interval) {
+        for (let s = rStart; s <= rEnd; s += interval) {
           if (s <= nowMinBRT) continue;
           if (rBrks.some(b => s < b.e && s+dur > b.s)) continue;
           if (!busy2.some(b => s < b.e && s+dur > b.s)) slots2.push(minToTime(s));
@@ -4321,7 +4332,7 @@ app.get('/api/bella/availability', async (req, res) => {
       const busy   = [...appts.rows, ...bkS.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
       const released = relSl.rows.map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
       const slots = [];
-      for (let s = wStart; s + dur <= wEnd; s += interval) {
+      for (let s = wStart; s <= wEnd; s += interval) {
         if (s <= nowMinBRT) continue;
         if (brks.some(b => s < b.e && s+dur > b.s)) continue;
         const inRel = released.some(r => s >= r.s && s+dur <= r.e);
