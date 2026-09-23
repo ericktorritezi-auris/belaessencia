@@ -3982,11 +3982,37 @@ app.get('/api/bella/availability', async (req, res) => {
       );
       let cities = r.rows;
 
-      // Se procId informado, filtra cidades com disponibilidade real nos próximos 21 dias
-      if (procId && cities.length > 0) {
+      // Filtra cidades com disponibilidade real nos próximos 21 dias.
+      // Se procId informado, usa esse procedimento específico.
+      // Se não (fluxo v3.0 cidade-primeiro), usa qualquer procedimento ativo da cidade.
+      if (cities.length > 0) {
         const nowBRT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
         const available = [];
         for (const city of cities) {
+          // Determina o procedimento a usar na verificação
+          let checkProcId, checkDur;
+          if (procId) {
+            const pRow = await req.db(
+              `SELECT p.dur FROM procedures p
+               LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$2
+               WHERE p.id=$1 AND p.active=TRUE AND COALESCE(cp.enabled,true)=true LIMIT 1`,
+              [Number(procId), city.id]);
+            if (!pRow.rowCount) continue; // proc não disponível nesta cidade
+            checkProcId = Number(procId);
+            checkDur    = pRow.rows[0].dur;
+          } else {
+            // Pega qualquer procedimento ativo disponível na cidade
+            const anyP = await req.db(
+              `SELECT p.id, p.dur FROM procedures p
+               LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$1
+               WHERE p.active=TRUE AND COALESCE(cp.enabled,true)=true
+               ORDER BY p.sort_order, p.name LIMIT 1`,
+              [city.id]);
+            if (!anyP.rowCount) continue; // cidade sem procedimentos → oculta
+            checkProcId = anyP.rows[0].id;
+            checkDur    = anyP.rows[0].dur;
+          }
+
           let hasDate = false;
           for (let i = 0; i <= 21 && !hasDate; i++) {
             const d = new Date(nowBRT);
@@ -4011,13 +4037,7 @@ app.get('/api/bella/availability', async (req, res) => {
                 [dateStr, city.id]);
               if (!rel.rowCount && !relS.rowCount) continue;
             }
-            const pRow = await req.db(
-              `SELECT p.dur FROM procedures p
-               LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$2
-               WHERE p.id=$1 AND p.active=TRUE AND COALESCE(cp.enabled,true)=true LIMIT 1`,
-              [Number(procId), city.id]);
-            if (!pRow.rowCount) continue;
-            const dur = pRow.rows[0].dur;
+            const dur    = checkDur;
             const appts  = await req.db(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [dateStr]);
             const bkSlts = await req.db(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [dateStr, city.id]);
             const busy   = [...appts.rows, ...bkSlts.rows].map(row => ({ s: timeToMin(row.st), e: timeToMin(row.et) }));
