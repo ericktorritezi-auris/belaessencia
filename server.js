@@ -3945,40 +3945,64 @@ app.get('/api/bella/availability', async (req, res) => {
       if (cityId && categoryId) {
         const r = await req.db(
           `SELECT p.id, p.name, p.dur, p.price,
+                  p.is_promo, p.promo_limit, p.promo_used,
+                  p.promo_end_date::text AS promo_end_date,
+                  p.promo_date::text     AS promo_date,
+                  p.promo_city_ids,
                   COALESCE(cp.enabled, true) as enabled
            FROM procedures p
            INNER JOIN proc_category_links l ON l.proc_id = p.id AND l.category_id = $2
            LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$1
            WHERE p.active=true AND COALESCE(cp.enabled, true)=true
-           ORDER BY p.sort_order, p.name LIMIT 30`,
+             AND (p.is_promo = FALSE OR p.is_promo IS NULL
+               OR cardinality(COALESCE(p.promo_city_ids, ARRAY[]::int[])) = 0
+               OR $1 = ANY(p.promo_city_ids))
+           ORDER BY p.is_promo DESC NULLS LAST, p.sort_order, p.name LIMIT 30`,
           [Number(cityId), Number(categoryId)]
         );
         rows = r.rows;
       } else if (categoryId) {
         const r = await req.db(
-          `SELECT p.id, p.name, p.dur, p.price
+          `SELECT p.id, p.name, p.dur, p.price,
+                  p.is_promo, p.promo_limit, p.promo_used,
+                  p.promo_end_date::text AS promo_end_date,
+                  p.promo_date::text     AS promo_date,
+                  p.promo_city_ids
            FROM procedures p
            INNER JOIN proc_category_links l ON l.proc_id = p.id AND l.category_id = $1
            WHERE p.active=true
-           ORDER BY p.sort_order, p.name LIMIT 30`,
+           ORDER BY p.is_promo DESC NULLS LAST, p.sort_order, p.name LIMIT 30`,
           [Number(categoryId)]
         );
         rows = r.rows;
       } else if (cityId) {
         const r = await req.db(
           `SELECT p.id, p.name, p.dur, p.price,
+                  p.is_promo, p.promo_limit, p.promo_used,
+                  p.promo_end_date::text AS promo_end_date,
+                  p.promo_date::text     AS promo_date,
+                  p.promo_city_ids,
                   COALESCE(cp.enabled, true) as enabled
            FROM procedures p
            LEFT JOIN city_procedures cp ON cp.proc_id=p.id AND cp.city_id=$1
            WHERE p.active=true AND COALESCE(cp.enabled, true)=true
-           ORDER BY p.sort_order, p.name LIMIT 30`,
+             AND (p.is_promo = FALSE OR p.is_promo IS NULL
+               OR cardinality(COALESCE(p.promo_city_ids, ARRAY[]::int[])) = 0
+               OR $1 = ANY(p.promo_city_ids))
+           ORDER BY p.is_promo DESC NULLS LAST, p.sort_order, p.name LIMIT 30`,
           [Number(cityId)]
         );
         rows = r.rows;
       } else {
         const r = await req.db(
-          `SELECT id, name, dur, price FROM procedures
-           WHERE active=true ORDER BY sort_order, name LIMIT 30`
+          `SELECT id, name, dur, price,
+                  is_promo, promo_limit, promo_used,
+                  promo_end_date::text AS promo_end_date,
+                  promo_date::text     AS promo_date,
+                  promo_city_ids
+           FROM procedures
+           WHERE active=true
+           ORDER BY is_promo DESC NULLS LAST, sort_order, name LIMIT 30`
         );
         rows = r.rows;
       }
@@ -4106,6 +4130,17 @@ app.get('/api/bella/availability', async (req, res) => {
           [dateStr, Number(cityId)]
         );
         if (excl.rowCount > 0) continue;
+        // Bloqueio por evento promo exclusivo nesta data/cidade
+        try {
+          const promoBlock = await req.db(
+            `SELECT id FROM procedures
+             WHERE is_promo=TRUE AND active=TRUE AND promo_date=$1
+               AND (promo_city_ids IS NULL OR cardinality(promo_city_ids)=0 OR $2=ANY(promo_city_ids))
+             LIMIT 1`,
+            [dateStr, Number(cityId)]
+          );
+          if (promoBlock.rowCount > 0 && Number(promoBlock.rows[0].id) !== Number(procId)) continue;
+        } catch(e) {}
         // Dia ativo?
         if (!cfg.is_active || !cfg.work_start) {
           // Verifica released_dates ou released_slots específicos
@@ -4201,6 +4236,20 @@ app.get('/api/bella/availability', async (req, res) => {
       if (!pRow.rowCount) return res.json([]);
       const dur = pRow.rows[0].dur;
 
+      // Bloqueio por evento promo exclusivo nesta data/cidade
+      try {
+        const promoBlock = await req.db(
+          `SELECT id FROM procedures
+           WHERE is_promo=TRUE AND active=TRUE AND promo_date=$1
+             AND (promo_city_ids IS NULL OR cardinality(promo_city_ids)=0 OR $2=ANY(promo_city_ids))
+           LIMIT 1`,
+          [date, Number(cityId)]
+        );
+        if (promoBlock.rowCount > 0 && Number(promoBlock.rows[0].id) !== Number(procId)) {
+          return res.json([]);
+        }
+      } catch(e) {}
+
       const [y,m,dd] = date.split('-').map(Number);
       const cfg = await resolveWorkConfig(Number(cityId), new Date(y,m-1,dd).getDay());
 
@@ -4209,26 +4258,63 @@ app.get('/api/bella/availability', async (req, res) => {
       const interval = parseInt(siRow.rows[0]?.slot_interval) || 30;
 
       if (!cfg.is_active || !cfg.work_start) {
+        // 1. Tenta released_slots (horários específicos liberados para esta cidade)
         const relS = await req.db(
           `SELECT st, et FROM released_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`,
           [date, Number(cityId)]
         );
-        if (!relS.rowCount) return res.json([]);
-        const appts = await req.db(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]);
-        const bkS   = await req.db(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]);
-        const busy  = [...appts.rows, ...bkS.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
-        const slots = [];
-        for (const row of relS.rows) {
-          for (let s = timeToMin(row.st); s + dur <= timeToMin(row.et); s += interval) {
-            if (s > nowMinBRT && !busy.some(b => s < b.e && s+dur > b.s)) slots.push(minToTime(s));
+        if (relS.rowCount) {
+          const appts = await req.db(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]);
+          const bkS   = await req.db(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]);
+          const busy  = [...appts.rows, ...bkS.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
+          const slots = [];
+          for (const row of relS.rows) {
+            for (let s = timeToMin(row.st); s + dur <= timeToMin(row.et); s += interval) {
+              if (s > nowMinBRT && !busy.some(b => s < b.e && s+dur > b.s)) slots.push(minToTime(s));
+            }
           }
+          return res.json(slots);
         }
-        return res.json(slots);
+        // 2. Tenta released_dates (dia inteiro liberado com horários próprios — ex.: evento especial)
+        const relDay = await req.db(
+          `SELECT work_start, work_end, break_start, break_end FROM released_dates
+           WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+          [date, Number(cityId)]
+        );
+        if (!relDay.rowCount) return res.json([]);
+        const rel    = relDay.rows[0];
+        const rStart = timeToMin(rel.work_start);
+        const rEnd   = timeToMin(rel.work_end);
+        const rBrks  = (rel.break_start && rel.break_end)
+          ? [{ s: timeToMin(rel.break_start), e: timeToMin(rel.break_end) }] : [];
+        const appts2 = await req.db(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]);
+        const bkS2   = await req.db(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]);
+        const busy2  = [...appts2.rows, ...bkS2.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
+        const slots2 = [];
+        for (let s = rStart; s + dur <= rEnd; s += interval) {
+          if (s <= nowMinBRT) continue;
+          if (rBrks.some(b => s < b.e && s+dur > b.s)) continue;
+          if (!busy2.some(b => s < b.e && s+dur > b.s)) slots2.push(minToTime(s));
+        }
+        return res.json(slots2);
       }
 
-      const wStart = timeToMin(cfg.work_start);
-      const wEnd   = timeToMin(cfg.work_end);
-      const brks   = (cfg.breaks || []).filter(b => b && b.s && b.e).map(b => ({ s: timeToMin(b.s), e: timeToMin(b.e) }));
+      let wStart = timeToMin(cfg.work_start);
+      let wEnd   = timeToMin(cfg.work_end);
+      let brks   = (cfg.breaks || []).filter(b => b && b.s && b.e).map(b => ({ s: timeToMin(b.s), e: timeToMin(b.e) }));
+      // Override de horários para procedimento promo com data/horário específico
+      try {
+        const pdr = await req.db(
+          `SELECT promo_start_time::text as pst, promo_end_time::text as pet
+           FROM procedures WHERE id=$1 AND is_promo=TRUE LIMIT 1`,
+          [Number(procId)]
+        );
+        if (pdr.rowCount > 0 && pdr.rows[0].pst && pdr.rows[0].pet) {
+          wStart = timeToMin(pdr.rows[0].pst);
+          wEnd   = timeToMin(pdr.rows[0].pet);
+          brks   = [];
+        }
+      } catch(e) {}
       const appts  = await req.db(`SELECT st, et FROM appointments WHERE date=$1 AND status!='cancelled'`, [date]);
       const bkS    = await req.db(`SELECT st, et FROM blocked_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]);
       const relSl  = await req.db(`SELECT st, et FROM released_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids))`, [date, Number(cityId)]);
