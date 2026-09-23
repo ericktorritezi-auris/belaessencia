@@ -483,7 +483,7 @@ async function farewell() {
   const dateInfo = bk.date
     ? `Sua agenda foi confirmada para <strong>${fmtDate(bk.date)}</strong> às <strong>${bk.slot}</strong>.<br><br>` : '';
   await bellaDelay(
-    `Muito obrigada, <strong>${first}</strong>! 🌸<br><br>${dateInfo}Te aguardamos com carinho! Até logo 💕`,
+    `Muito obrigado(a), <strong>${first}</strong>! 🌸<br><br>${dateInfo}Te aguardamos com carinho! Até logo 💕`,
     750
   );
   await new Promise(r => setTimeout(r, 500));
@@ -861,7 +861,7 @@ async function pickService(svc) {
     bk.cityAddress = buildAddress(cities[0]);
     await askDate();
   } else {
-    addBellaHtml('Em qual <strong>cidade</strong> você prefere ser atendida?');
+    addBellaHtml('Em qual <strong>cidade</strong> você prefere o atendimento?');
     setChips(cities.map(c => ({ label: c.name, action: () => pickCity(c) })));
   }
 }
