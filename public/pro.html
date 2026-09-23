@@ -351,58 +351,100 @@ section { position: relative; z-index: 1; padding: 72px 20px }
 
 /* ── PRICING ── */
 .pricing-wrap {
-  max-width: 480px; margin: 0 auto;
+  max-width: 880px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 24px; padding: 0 20px;
 }
+@media (max-width: 680px) { .pricing-wrap { grid-template-columns: 1fr; } }
 .pricing-card {
   background: linear-gradient(160deg, rgba(139,61,84,.15) 0%, rgba(8,4,8,.9) 100%);
   border: 1px solid rgba(200,117,142,.4);
   border-radius: 24px;
-  padding: 40px 28px;
+  padding: 36px 28px;
   text-align: center;
   position: relative; overflow: hidden;
-  box-shadow: 0 0 80px rgba(200,117,142,.12);
+  box-shadow: 0 0 60px rgba(200,117,142,.1);
+  display: flex; flex-direction: column;
+}
+.pricing-card.featured {
+  border-color: var(--gold);
+  box-shadow: 0 0 80px rgba(212,168,67,.18), 0 0 30px rgba(200,117,142,.15);
+  background: linear-gradient(160deg, rgba(139,61,84,.2) 0%, rgba(30,12,18,.95) 100%);
 }
 .pricing-card::before {
   content: '';
   position: absolute; top: 0; left: 0; right: 0; height: 3px;
   background: linear-gradient(90deg, transparent, var(--rose), var(--gold), var(--rose), transparent);
 }
+.pricing-card.featured::before {
+  background: linear-gradient(90deg, transparent, var(--gold), var(--rose), var(--gold), transparent);
+}
+.pricing-popular {
+  position: absolute; top: 18px; right: 18px;
+  background: linear-gradient(135deg, var(--gold), #f0c860);
+  color: #1a0a00; font-size: 10px; font-weight: 800;
+  letter-spacing: .12em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 50px;
+}
 .pricing-badge {
   display: inline-block;
   background: linear-gradient(135deg, var(--rose), var(--gold));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
-  font-weight: 800; font-size: 11px; letter-spacing: .2em;
-  text-transform: uppercase; margin-bottom: 24px;
+  font-weight: 800; font-size: 10px; letter-spacing: .18em;
+  text-transform: uppercase; margin-bottom: 20px;
 }
 .pricing-title {
   font-family: 'Playfair Display', serif;
-  font-size: 28px; font-weight: 800; margin-bottom: 6px;
+  font-size: 26px; font-weight: 800; margin-bottom: 6px;
 }
-.pricing-sub { font-size: 13px; color: var(--dim); margin-bottom: 32px }
+.pricing-sub { font-size: 12.5px; color: var(--dim); margin-bottom: 28px; line-height: 1.5 }
 .pricing-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 0; border-bottom: 1px solid var(--border);
+  padding: 13px 0; border-bottom: 1px solid var(--border);
 }
 .pricing-row:last-of-type { border-bottom: none }
-.pricing-row-label { font-size: 13px; color: var(--dim); text-align: left }
+.pricing-row-label { font-size: 12.5px; color: var(--dim); text-align: left }
 .pricing-row-val {
   font-family: 'Playfair Display', serif;
-  font-size: 20px; font-weight: 700; color: var(--white);
+  font-size: 19px; font-weight: 700; color: var(--white);
 }
 .pricing-row-val small { font-family: 'DM Sans'; font-size: 11px; color: var(--dim); display: block; text-align: right }
+.pricing-features {
+  margin: 20px 0 0;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--border);
+  text-align: left;
+  flex: 1;
+}
+.pricing-features ul {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.pricing-features li {
+  font-size: 12.5px; color: var(--dim);
+  display: flex; align-items: flex-start; gap: 8px; line-height: 1.4;
+}
+.pricing-features li::before { content: '✓'; color: var(--rose); font-weight: 800; flex-shrink: 0 }
+.pricing-features li.feat-plus::before { color: var(--gold) }
 .pricing-cta {
-  margin-top: 28px; width: 100%;
+  margin-top: 24px; width: 100%;
   background: linear-gradient(135deg, var(--rose), var(--rose-deep));
   color: #fff; border: none; border-radius: 50px;
-  padding: 16px; font-size: 15px; font-weight: 700;
+  padding: 15px; font-size: 14.5px; font-weight: 700;
   cursor: pointer; font-family: 'DM Sans', sans-serif;
   text-decoration: none; display: block; text-align: center;
   box-shadow: 0 8px 32px rgba(200,117,142,.35);
   transition: transform .2s, box-shadow .2s;
 }
+.pricing-card.featured .pricing-cta {
+  background: linear-gradient(135deg, var(--gold), #c8940a);
+  color: #1a0800;
+  box-shadow: 0 8px 32px rgba(212,168,67,.35);
+}
 .pricing-cta:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(200,117,142,.5) }
-.pricing-note { margin-top: 14px; font-size: 12px; color: var(--dim) }
+.pricing-card.featured .pricing-cta:hover { box-shadow: 0 12px 40px rgba(212,168,67,.5) }
+.pricing-note { margin-top: 12px; font-size: 11.5px; color: var(--dim) }
 
 /* ── FAQ ── */
 .faq-list { max-width: 640px; margin: 0 auto }
@@ -698,38 +740,81 @@ footer span { color: var(--rose) }
     <div class="tag">Investimento</div>
     <h2 class="section-title">Simples, <em>transparente</em>, justo</h2>
     <div class="divider"></div>
-    <p class="section-sub" style="margin-bottom:40px">Sem surpresas. Sem taxas por agendamento. Você paga uma vez para começar e uma mensalidade fixa para continuar crescendo.</p>
+    <p class="section-sub" style="margin-bottom:40px">Sem surpresas. Sem taxas por agendamento. Você paga uma vez para começar e uma mensalidade fixa para continuar crescendo.<br><span style="color:var(--gold);font-size:13px;font-weight:600">✦ Pro Plus inclui Bella Chat — sua assistente IA que agenda por conversa.</span></p>
   </div>
-  <div class="pricing-wrap reveal">
-    <div class="pricing-card">
-      <div class="pricing-badge">✦ Plano Profissional Belle Planner ✦</div>
-      <div class="pricing-title">Tudo incluído</div>
-      <div class="pricing-sub">Agenda + Financeiro + Marketing + Suporte</div>
+  <div class="pricing-wrap">
+
+    <!-- PLANO PROFISSIONAL -->
+    <div class="pricing-card reveal">
+      <div class="pricing-badge">✦ Plano Profissional ✦</div>
+      <div class="pricing-title">Profissional</div>
+      <div class="pricing-sub">Agenda inteligente + Financeiro + Marketing + Suporte</div>
       <div class="pricing-row">
         <div class="pricing-row-label">
-          <strong style="font-size:14px;color:var(--white)">Implantação</strong><br>
+          <strong style="font-size:13.5px;color:var(--white)">Implantação</strong><br>
           <span style="font-size:11px">Configuração completa + treinamento</span>
         </div>
-        <div class="pricing-row-val">
-          R$ 247
-          <small>pagamento único</small>
-        </div>
+        <div class="pricing-row-val">R$ 247<small>pagamento único</small></div>
       </div>
       <div class="pricing-row">
         <div class="pricing-row-label">
-          <strong style="font-size:14px;color:var(--white)">Mensalidade</strong><br>
+          <strong style="font-size:13.5px;color:var(--white)">Mensalidade</strong><br>
           <span style="font-size:11px">Acesso completo à plataforma</span>
         </div>
-        <div class="pricing-row-val">
-          R$ 149
-          <small>por mês</small>
-        </div>
+        <div class="pricing-row-val">R$ 149<small>por mês</small></div>
       </div>
-      <a href="https://wa.me/5511949851250?text=Olá,%20quero%20contratar%20o%20Belle%20Planner" class="pricing-cta" target="_blank">
-        💬 Contratar agora via WhatsApp
+      <div class="pricing-features">
+        <ul>
+          <li>Agenda online personalizada com sua identidade</li>
+          <li>Múltiplas cidades e horários independentes</li>
+          <li>Gestão financeira de agendamentos</li>
+          <li>Notificações push para clientes</li>
+          <li>Painel administrativo completo</li>
+          <li>Suporte via WhatsApp incluso</li>
+        </ul>
+      </div>
+      <a href="https://wa.me/5511949851250?text=Olá,%20quero%20contratar%20o%20Plano%20Profissional%20Belle%20Planner" class="pricing-cta" target="_blank">
+        💬 Quero o Plano Profissional
       </a>
-      <p class="pricing-note">⚡ Implantação em até 48h após a confirmação · Suporte via WhatsApp incluso</p>
+      <p class="pricing-note">⚡ Agenda no ar em até 48h após confirmação</p>
     </div>
+
+    <!-- PLANO PRO PLUS -->
+    <div class="pricing-card featured reveal">
+      <div class="pricing-popular">✦ Mais Completo</div>
+      <div class="pricing-badge">✦ Plano Pro Plus ✦</div>
+      <div class="pricing-title">Pro Plus</div>
+      <div class="pricing-sub">Tudo do Profissional + Bella Chat IA + Suporte Prioritário</div>
+      <div class="pricing-row">
+        <div class="pricing-row-label">
+          <strong style="font-size:13.5px;color:var(--white)">Implantação</strong><br>
+          <span style="font-size:11px">Configuração completa + treinamento</span>
+        </div>
+        <div class="pricing-row-val">R$ 287<small>pagamento único</small></div>
+      </div>
+      <div class="pricing-row">
+        <div class="pricing-row-label">
+          <strong style="font-size:13.5px;color:var(--white)">Mensalidade</strong><br>
+          <span style="font-size:11px">Acesso completo à plataforma</span>
+        </div>
+        <div class="pricing-row-val">R$ 189<small>por mês</small></div>
+      </div>
+      <div class="pricing-features">
+        <ul>
+          <li>Tudo do Plano Profissional</li>
+          <li class="feat-plus"><strong style="color:var(--gold)">Bella Chat</strong> — assistente IA que agenda pelo WhatsApp</li>
+          <li class="feat-plus">Clientes agendam conversando, sem navegar por menus</li>
+          <li class="feat-plus">Integração com Google Agenda e Apple Calendar</li>
+          <li class="feat-plus">Suporte prioritário com atendimento preferencial</li>
+          <li class="feat-plus">Relatórios avançados de atendimento</li>
+        </ul>
+      </div>
+      <a href="https://wa.me/5511949851250?text=Olá,%20quero%20contratar%20o%20Plano%20Pro%20Plus%20Belle%20Planner" class="pricing-cta" target="_blank">
+        💬 Quero o Plano Pro Plus
+      </a>
+      <p class="pricing-note">⚡ Agenda no ar em até 48h · Bella Chat ativa no mesmo dia</p>
+    </div>
+
   </div>
 </section>
 

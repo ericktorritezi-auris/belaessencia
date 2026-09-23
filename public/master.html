@@ -1415,6 +1415,25 @@ async function openEditModal(id) {
       <div class="fg"><label>Mensalidade (R$)</label><input class="fi" id="e-monthly" type="number" value="${t.monthly_fee||100}" min="0" step="0.01"></div>
       <div class="fg"><label>Setup (R$)</label><input class="fi" id="e-setup" type="number" value="${t.setup_fee||200}" min="0" step="0.01"></div>
     </div>
+    <div class="fg" style="margin-bottom:4px">
+      <label style="margin-bottom:8px;display:block">🎯 Selecionar Plano</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <button type="button" id="plan-btn-profissional" class="plan-preset-btn"
+          onclick="applyPlan('profissional')"
+          style="border:2px solid ${(t.plan_type||'profissional')==='profissional'?'var(--rose)':'var(--border)'};background:${(t.plan_type||'profissional')==='profissional'?'rgba(155,77,106,.08)':'transparent'};border-radius:10px;padding:11px 14px;cursor:pointer;text-align:left;transition:all .2s;font-family:inherit">
+          <div class="plan-preset-name" style="font-weight:800;font-size:13px;color:${(t.plan_type||'profissional')==='profissional'?'var(--rose)':'var(--text)'}">Profissional</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Implantação: R$ 247</div>
+          <div style="font-size:11px;color:var(--muted)">Mensalidade: R$ 149/mês</div>
+        </button>
+        <button type="button" id="plan-btn-pro-plus" class="plan-preset-btn"
+          onclick="applyPlan('pro_plus')"
+          style="border:2px solid ${t.plan_type==='pro_plus'?'var(--rose)':'var(--border)'};background:${t.plan_type==='pro_plus'?'rgba(155,77,106,.08)':'transparent'};border-radius:10px;padding:11px 14px;cursor:pointer;text-align:left;transition:all .2s;font-family:inherit">
+          <div class="plan-preset-name" style="font-weight:800;font-size:13px;color:${t.plan_type==='pro_plus'?'var(--rose)':'var(--text)'}">Pro Plus</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Implantação: R$ 287</div>
+          <div style="font-size:11px;color:var(--muted)">Mensalidade: R$ 189/mês</div>
+        </button>
+      </div>
+    </div>
     <div class="fg-row" style="align-items:flex-end">
       <div class="fg">
         <label>Tipo de Plano</label>
@@ -2805,6 +2824,32 @@ async function sendMasterPush() {
     toast('Erro: ' + e.message, 'err');
   } finally {
     btn.textContent = 'Enviar agora 🚀'; btn.disabled = false;
+  }
+}
+
+// ── Planos pré-formatados ──────────────────────────────────────────────────
+const PLANS = {
+  profissional: { setup: 247, monthly: 149, label: 'Profissional' },
+  pro_plus:     { setup: 287, monthly: 189, label: 'Pro Plus'     },
+};
+function applyPlan(type) {
+  const p = PLANS[type]; if (!p) return;
+  const mEl = document.getElementById('e-monthly');
+  const sEl = document.getElementById('e-setup');
+  const tEl = document.getElementById('e-plan-type');
+  if (mEl) mEl.value = p.monthly;
+  if (sEl) sEl.value = p.setup;
+  if (tEl) tEl.value = type;
+  document.querySelectorAll('.plan-preset-btn').forEach(btn => {
+    btn.style.borderColor = 'var(--border)';
+    btn.style.background  = 'transparent';
+    btn.querySelector('.plan-preset-name').style.color = 'var(--text)';
+  });
+  const active = document.getElementById('plan-btn-' + type.replace('_','-'));
+  if (active) {
+    active.style.borderColor = 'var(--rose)';
+    active.style.background  = 'rgba(155,77,106,.08)';
+    active.querySelector('.plan-preset-name').style.color = 'var(--rose)';
   }
 }
 
