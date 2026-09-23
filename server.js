@@ -1123,10 +1123,8 @@ async function initDB() {
     await client.query(`ALTER TABLE cities ADD COLUMN IF NOT EXISTS uf VARCHAR(2)`);
     await client.query(`ALTER TABLE cities ADD COLUMN IF NOT EXISTS neighborhood VARCHAR(100)`);
     // Migração: WebAuthn credentials (login por biometria no PWA)
+    // IMPORTANTE: nunca usar DROP TABLE aqui — apagaria todas as biometrias cadastradas a cada deploy
     try {
-      await client.query(`
-        DROP TABLE IF EXISTS webauthn_credentials
-      `);
       await client.query(`
         CREATE TABLE IF NOT EXISTS webauthn_credentials (
           id            SERIAL PRIMARY KEY,
