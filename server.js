@@ -1355,6 +1355,10 @@ async function initDB() {
         AND body = 'Seu agendamento teve o horário alterado. Verifique os detalhes.'
     `);
 
+    // Migração v2.9.15: tipo de plano e flag de acesso ao chat Bella
+    await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS plan_type VARCHAR(20) NOT NULL DEFAULT 'profissional'`);
+    await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS has_chat BOOLEAN NOT NULL DEFAULT FALSE`);
+
     // Tabela de horários específicos bloqueados (agendamentos manuais / ausências parciais)
     await client.query(`
       CREATE TABLE IF NOT EXISTS blocked_slots (
@@ -5058,6 +5062,7 @@ app.get('/master/api/tenants', requireMaster, async (req, res) => {
       SELECT t.id, t.slug, t.name, t.owner_name, t.owner_email, t.owner_phone,
              t.domain_custom, t.subdomain, t.active, t.plan_expires_at, t.schema_name,
              t.monthly_fee, t.setup_fee, t.created_at, t.exempt, t.trial_ends_at, t.send_cc_master,
+             t.plan_type, t.has_chat,
              tc.primary_color, tc.secondary_color, tc.business_name,
              tc.tagline, tc.whatsapp_number, tc.resend_from_email, tc.admin_user,
              tc.logo_url, tc.prof_photo_url, tc.prof_profession,
@@ -5273,18 +5278,23 @@ app.put('/master/api/tenants/:id', requireMaster, async (req, res) => {
   const { name, owner_name, owner_email, owner_phone, domain_custom, subdomain,
           plan_expires_at, active, business_name, tagline, primary_color,
           secondary_color, logo_url, whatsapp_number, resend_from_email,
-          prof_photo_url, prof_profession, prof_city, prof_bio, prof_specialties } = req.body;
+          prof_photo_url, prof_profession, prof_city, prof_bio, prof_specialties,
+          plan_type, has_chat } = req.body;
   try {
-    const updMFee = req.body.monthly_fee !== undefined ? Number(req.body.monthly_fee) : null;
-    const updSFee = req.body.setup_fee    !== undefined ? Number(req.body.setup_fee)    : null;
+    const updMFee    = req.body.monthly_fee !== undefined ? Number(req.body.monthly_fee) : null;
+    const updSFee    = req.body.setup_fee   !== undefined ? Number(req.body.setup_fee)   : null;
+    const updPlanType = plan_type || 'profissional';
+    const updHasChat  = has_chat === true || has_chat === 'true';
     await pool.query(
       `UPDATE tenants SET name=$1,owner_name=$2,owner_email=$3,owner_phone=$4,
          domain_custom=$5,subdomain=$6,plan_expires_at=$7,active=$8,
          monthly_fee=COALESCE($10,monthly_fee),
-         setup_fee=COALESCE($11,setup_fee)
+         setup_fee=COALESCE($11,setup_fee),
+         plan_type=$12,has_chat=$13
        WHERE id=$9`,
       [name,owner_name,owner_email,owner_phone||null,domain_custom||null,
-       subdomain||null,plan_expires_at||null,active!==false,id,updMFee,updSFee]
+       subdomain||null,plan_expires_at||null,active!==false,id,updMFee,updSFee,
+       updPlanType,updHasChat]
     );
     await pool.query(
       `UPDATE tenant_configs SET business_name=$1,tagline=$2,primary_color=$3,
@@ -5300,6 +5310,19 @@ app.put('/master/api/tenants/:id', requireMaster, async (req, res) => {
     _tenantCache.clear(); // Limpa cache completo — garante que qualquer alias do domínio seja atualizado
     await logAction(id, 'tenant_updated', `Tenant ${id} atualizado`);
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/master/api/tenants/:id/toggle-chat', requireMaster, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tenants SET has_chat = NOT has_chat WHERE id=$1 RETURNING has_chat, slug`,
+      [req.params.id]
+    );
+    _tenantCache.clear();
+    await logAction(req.params.id, rows[0].has_chat ? 'chat_enabled' : 'chat_disabled',
+      `Bella Chat ${rows[0].has_chat ? 'ativado' : 'desativado'} para ${rows[0].slug}`);
+    res.json({ has_chat: rows[0].has_chat });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
