@@ -17,6 +17,7 @@
       --muted: #7a6370;
       --chip-bg: #f3ede8;
       --chip-border: #d4bcc8;
+      --chip-color: #9B4D6A;
       --surface: #fff;
       --shadow: rgba(155,77,106,0.12);
     }
@@ -149,16 +150,24 @@
       border: 1.5px solid var(--chip-border);
       border-radius: 999px;
       font-family: 'Nunito', sans-serif;
-      font-size: 13.5px; font-weight: 600;
-      color: var(--rose);
+      font-size: 13.5px; font-weight: 700;
+      color: var(--chip-color);
       cursor: pointer;
-      transition: background .15s, border-color .15s, transform .1s;
+      transition: background .15s, border-color .15s, transform .1s, opacity .15s;
       white-space: nowrap;
+      letter-spacing: .1px;
     }
-    .chip:hover  { background: #ecdde5; border-color: var(--rose); }
+    .chip:hover  {
+      background: rgba(155,77,106,0.22);
+      border-color: var(--rose);
+      opacity: 1;
+    }
     .chip:active { transform: scale(.96); }
     .chip.primary {
-      background: var(--rose); border-color: var(--rose); color: #fff;
+      background: var(--rose);
+      border-color: var(--rose);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(155,77,106,0.35);
     }
     .chip.primary:hover { background: #883060; }
 
@@ -242,17 +251,25 @@
 
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
-        --cream: #1e1218; --surface: #2c1e26;
-        --chip-bg: #2e1d28; --chip-border: #5a3a4e;
-        --text: #f0dce8; --muted: #a08090;
-        --shadow: rgba(0,0,0,.3);
+        --cream: #1e1218;
+        --surface: #2c1e26;
+        --chip-bg: rgba(155,77,106,0.18);
+        --chip-border: rgba(155,77,106,0.55);
+        --chip-color: #f0c8d8;
+        --text: #f0dce8;
+        --muted: #b090a0;
+        --shadow: rgba(0,0,0,.35);
       }
     }
     :root[data-theme="dark"] {
-      --cream: #1e1218; --surface: #2c1e26;
-      --chip-bg: #2e1d28; --chip-border: #5a3a4e;
-      --text: #f0dce8; --muted: #a08090;
-      --shadow: rgba(0,0,0,.3);
+      --cream: #1e1218;
+      --surface: #2c1e26;
+      --chip-bg: rgba(155,77,106,0.18);
+      --chip-border: rgba(155,77,106,0.55);
+      --chip-color: #f0c8d8;
+      --text: #f0dce8;
+      --muted: #b090a0;
+      --shadow: rgba(0,0,0,.35);
     }
   </style>
 </head>
