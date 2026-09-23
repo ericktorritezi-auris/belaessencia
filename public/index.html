@@ -2954,6 +2954,11 @@ function sendAgendaWA(apptId) {
 function showAdmin(e){e.preventDefault();document.getElementById('booking-app').classList.add('hidden');document.getElementById('admin-app').classList.remove('hidden')}
 function hideAdmin(){document.getElementById('booking-app').classList.remove('hidden');document.getElementById('admin-app').classList.add('hidden')}
 
+function _hideBellaForAdmin() {
+  window._adminLoggedIn = true;
+  const _fab = document.getElementById('bella-fab');
+  if (_fab) _fab.style.display = 'none';
+}
 async function doLogin() {
   const user=document.getElementById('adm-user').value.trim();
   const pass=document.getElementById('adm-pass').value;
@@ -2961,9 +2966,7 @@ async function doLogin() {
     await POST('/api/auth/login',{user,pass});
     document.getElementById('adm-login').classList.add('hidden');
     document.getElementById('adm-dash').classList.remove('hidden');
-    // Bella é só para clientes — oculta o FAB no painel admin
-    const _fab = document.getElementById('bella-fab');
-    if (_fab) _fab.style.display = 'none';
+    _hideBellaForAdmin(); // Bella é só para clientes
     initAdmin();
     loadProfProfile(); // atualiza nome no topbar do admin
     // Inscreve profissional para receber push de novos agendamentos
@@ -2977,6 +2980,7 @@ async function doLogin() {
 }
 async function doLogout() {
   await POST('/api/auth/logout');
+  window._adminLoggedIn = false;
   document.getElementById('adm-dash').classList.add('hidden');
   document.getElementById('adm-login').classList.remove('hidden');
   document.getElementById('adm-pass').value='';
@@ -9155,6 +9159,7 @@ async function doBiometricLogin() {
     await POST('/api/webauthn/auth/finish', authResp);
     document.getElementById('adm-login').classList.add('hidden');
     document.getElementById('adm-dash').classList.remove('hidden');
+    _hideBellaForAdmin(); // Bella é só para clientes
     initAdmin(); loadProfProfile();
     setTimeout(() => subscribePush('admin').catch(()=>{}), 2000);
   } catch(err) {
@@ -9418,6 +9423,7 @@ async function resetBiometric() {
 
   // Aguarda o _tenantConfig estar disponível (carregado por /api/config)
   function tryInit() {
+    if (window._adminLoggedIn) return; // painel admin ativo — Bella não é para admins
     const cfg = window._tenantConfig;
     if (!cfg) { setTimeout(tryInit, 300); return; }
     if (!cfg.has_chat) return; // tenant sem chat — não exibe nada
