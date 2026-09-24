@@ -3994,15 +3994,31 @@ app.get('/api/bella/availability', async (req, res) => {
         );
         rows = r.rows;
       } else {
+        // Lista de preços (sem cityId/categoryId): exibe apenas procedimentos
+        // disponíveis em pelo menos uma cidade ativa — espelhando o fluxo de agendamento.
         const r = await req.db(
-          `SELECT id, name, dur, price,
-                  is_promo, promo_limit, promo_used,
-                  promo_end_date::text AS promo_end_date,
-                  promo_date::text     AS promo_date,
-                  promo_city_ids
-           FROM procedures
-           WHERE active=true
-           ORDER BY is_promo DESC NULLS LAST, sort_order, name LIMIT 30`
+          `SELECT DISTINCT ON (p.id)
+                  p.id, p.name, p.dur, p.price,
+                  p.is_promo, p.promo_limit, p.promo_used,
+                  p.promo_end_date::text AS promo_end_date,
+                  p.promo_date::text     AS promo_date,
+                  p.promo_city_ids,
+                  p.sort_order
+           FROM procedures p
+           WHERE p.active = true
+             AND EXISTS (
+               SELECT 1 FROM cities c
+               WHERE c.is_active = true
+                 AND COALESCE(
+                   (SELECT cp.enabled FROM city_procedures cp
+                    WHERE cp.proc_id = p.id AND cp.city_id = c.id LIMIT 1),
+                   true
+                 ) = true
+                 AND (p.is_promo = FALSE OR p.is_promo IS NULL
+                   OR cardinality(COALESCE(p.promo_city_ids, ARRAY[]::int[])) = 0
+                   OR c.id = ANY(p.promo_city_ids))
+             )
+           ORDER BY p.id, p.is_promo DESC NULLS LAST, p.sort_order, p.name`
         );
         rows = r.rows;
       }
