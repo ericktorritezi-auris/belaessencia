@@ -3940,7 +3940,8 @@ app.get('/api/bella/availability', async (req, res) => {
     if (step === 'services') {
       // Lista procedimentos ativos. Se categoryId informado, filtra por categoria.
       // Se cityId informado, respeita city_procedures.enabled.
-      const { categoryId } = req.query;
+      // Se cityIds informado (lista de preços), filtra pelo conjunto de cidades disponíveis.
+      const { categoryId, cityIds } = req.query;
       let rows;
       if (cityId && categoryId) {
         const r = await req.db(
@@ -3993,32 +3994,59 @@ app.get('/api/bella/availability', async (req, res) => {
           [Number(cityId)]
         );
         rows = r.rows;
+      } else if (cityIds) {
+        // Lista de preços: filtra pelos IDs das cidades que realmente têm disponibilidade
+        // (enviados pelo client após chamar step=cities, que aplica a verificação completa
+        // de datas/slots nos próximos 21 dias — mesma lógica do fluxo de agendamento).
+        const ids = String(cityIds).split(',').map(Number).filter(n => !isNaN(n) && n > 0);
+        if (!ids.length) {
+          rows = [];
+        } else {
+          const r = await req.db(
+            `SELECT id, name, dur, price,
+                    is_promo, promo_limit, promo_used,
+                    promo_end_date, promo_date, promo_city_ids, sort_order
+             FROM (
+               SELECT DISTINCT ON (p.id)
+                      p.id, p.name, p.dur, p.price,
+                      p.is_promo, p.promo_limit, p.promo_used,
+                      p.promo_end_date::text AS promo_end_date,
+                      p.promo_date::text     AS promo_date,
+                      p.promo_city_ids,
+                      p.sort_order
+               FROM procedures p
+               WHERE p.active = true
+                 AND EXISTS (
+                   SELECT 1 FROM cities c
+                   WHERE c.id = ANY($1::int[])
+                     AND COALESCE(
+                       (SELECT cp.enabled FROM city_procedures cp
+                        WHERE cp.proc_id = p.id AND cp.city_id = c.id LIMIT 1),
+                       true
+                     ) = true
+                     AND (p.is_promo = FALSE OR p.is_promo IS NULL
+                       OR cardinality(COALESCE(p.promo_city_ids, ARRAY[]::int[])) = 0
+                       OR c.id = ANY(p.promo_city_ids))
+                 )
+               ORDER BY p.id
+             ) sub
+             ORDER BY is_promo DESC NULLS LAST, sort_order, name`,
+            [ids]
+          );
+          rows = r.rows;
+        }
       } else {
-        // Lista de preços (sem cityId/categoryId): exibe apenas procedimentos
-        // disponíveis em pelo menos uma cidade ativa — espelhando o fluxo de agendamento.
+        // Fallback sem filtro (sem cityId/categoryId/cityIds):
+        // nunca deveria ser chamado pelo showPrices(), mas mantido por segurança.
         const r = await req.db(
-          `SELECT DISTINCT ON (p.id)
-                  p.id, p.name, p.dur, p.price,
-                  p.is_promo, p.promo_limit, p.promo_used,
-                  p.promo_end_date::text AS promo_end_date,
-                  p.promo_date::text     AS promo_date,
-                  p.promo_city_ids,
-                  p.sort_order
-           FROM procedures p
-           WHERE p.active = true
-             AND EXISTS (
-               SELECT 1 FROM cities c
-               WHERE c.is_active = true
-                 AND COALESCE(
-                   (SELECT cp.enabled FROM city_procedures cp
-                    WHERE cp.proc_id = p.id AND cp.city_id = c.id LIMIT 1),
-                   true
-                 ) = true
-                 AND (p.is_promo = FALSE OR p.is_promo IS NULL
-                   OR cardinality(COALESCE(p.promo_city_ids, ARRAY[]::int[])) = 0
-                   OR c.id = ANY(p.promo_city_ids))
-             )
-           ORDER BY p.id, p.is_promo DESC NULLS LAST, p.sort_order, p.name`
+          `SELECT id, name, dur, price,
+                  is_promo, promo_limit, promo_used,
+                  promo_end_date::text AS promo_end_date,
+                  promo_date::text     AS promo_date,
+                  promo_city_ids
+           FROM procedures
+           WHERE active=true
+           ORDER BY is_promo DESC NULLS LAST, sort_order, name LIMIT 30`
         );
         rows = r.rows;
       }

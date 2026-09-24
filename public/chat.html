@@ -644,7 +644,14 @@ async function showPrices() {
   const t = showTyping();
   let svcs = [];
   try {
-    const r = await fetch('/api/bella/availability?step=services');
+    // Busca cidades com disponibilidade real (mesma verificação do fluxo de agendamento).
+    // Só os procedimentos dessas cidades aparecem na lista de preços.
+    const cRes  = await fetch('/api/bella/availability?step=cities');
+    const cities = await cRes.json();
+    const cityParam = Array.isArray(cities) && cities.length > 0
+      ? '&cityIds=' + cities.map(c => c.id).join(',')
+      : '';
+    const r = await fetch('/api/bella/availability?step=services' + cityParam);
     svcs = await r.json();
     t.remove();
   } catch {
