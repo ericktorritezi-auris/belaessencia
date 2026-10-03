@@ -332,6 +332,32 @@
 
     .empty-row td { padding: 36px 14px; text-align: center; color: var(--c-text-muted); }
 
+    /* ── TOGGLE SENSÍVEL ─────────────────────────────
+       Por padrão telefone e valor ficam ocultos.
+       Classe .reveal-sensitive no <body> os exibe.   */
+    .col-phone, .col-value { display: none; }
+    body.reveal-sensitive .col-phone,
+    body.reveal-sensitive .col-value { display: table-cell; }
+    /* Nos cards featured, o meta-item de valor fica oculto */
+    .meta-valor { display: none; }
+    body.reveal-sensitive .meta-valor { display: block; }
+
+    /* Botão olho */
+    .eye-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--c-surface); border: 1px solid var(--c-border);
+      border-radius: 8px; padding: 6px 11px; cursor: pointer;
+      font-family: var(--ff-display); font-size: 9px; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--c-text-label); transition: border-color .15s, color .15s;
+      white-space: nowrap; user-select: none;
+    }
+    .eye-btn:hover { border-color: var(--c-border-hi); color: var(--c-text-sub); }
+    body.reveal-sensitive .eye-btn {
+      border-color: var(--c-accent); color: var(--c-accent);
+    }
+    .eye-icon { font-size: 14px; line-height: 1; }
+
     /* ── ERROR OVERLAY ────────────────────────────── */
     .error-overlay {
       position: fixed; inset: 0; z-index: 100;
@@ -402,6 +428,10 @@
         <option value="realizado">Realizado</option>
       </select>
     </div>
+    <button class="eye-btn" id="eyeBtn" onclick="toggleSensitive()" title="Mostrar/ocultar telefone e valor">
+      <span class="eye-icon" id="eyeIcon">🙈</span>
+      <span id="eyeLabel">Oculto</span>
+    </button>
     <div class="live-pill">
       <div class="live-dot"></div>
       <span>Ao vivo · <span id="countdown">30</span>s</span>
@@ -425,10 +455,10 @@
               <th>Hora</th>
               <th>Período</th>
               <th>Cliente</th>
-              <th>Telefone</th>
+              <th class="col-phone">Telefone</th>
               <th>Procedimento</th>
               <th>Cidade</th>
-              <th style="text-align:right">Valor</th>
+              <th class="col-value" style="text-align:right">Valor</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -614,7 +644,7 @@ function render() {
       <div><div class="meta-key">Horário</div><div class="meta-val">${a.hora}</div></div>
       <div><div class="meta-key">Período</div><div class="meta-val">${a.hora}–${a.fim}</div></div>
       <div><div class="meta-key">Cidade</div><div class="meta-val">${a.cidade||'—'}</div></div>
-      <div><div class="meta-key">Valor</div><div class="meta-val">${fmtMoney(a.valor)}</div></div>
+      <div class="meta-valor"><div class="meta-key">Valor</div><div class="meta-val">${fmtMoney(a.valor)}</div></div>
     </div>`;
   }
 
@@ -654,10 +684,10 @@ function render() {
       <td class="td-hora">${a.hora}</td>
       <td class="td-periodo">${a.hora}–${a.fim}</td>
       <td class="td-name">${a.cliente}</td>
-      <td class="td-phone">${a.telefone||'—'}</td>
+      <td class="col-phone td-phone">${a.telefone||'—'}</td>
       <td>${a.procedimento||'—'}</td>
       <td>${a.cidade||'—'}</td>
-      <td class="td-value">${fmtMoney(a.valor)}</td>
+      <td class="col-value td-value">${fmtMoney(a.valor)}</td>
       <td>${statusBadge(a.displayStatus)}</td>
     </tr>`).join('');
     count.textContent = `${rows.length} procedimento${rows.length!==1?'s':''}`;
@@ -675,6 +705,13 @@ function updateClock() {
     `${pad2(n.getHours())}:${pad2(n.getMinutes())}:${pad2(n.getSeconds())}`;
   document.getElementById('dateLine').textContent =
     `${DAYS_SHORT[n.getDay()]} ${pad2(n.getDate())} ${MONTHS_SH[n.getMonth()]} ${n.getFullYear()}`;
+}
+
+// ── TOGGLE SENSÍVEL ───────────────────────────────────────
+function toggleSensitive() {
+  const visible = document.body.classList.toggle('reveal-sensitive');
+  document.getElementById('eyeIcon').textContent  = visible ? '👁️' : '🙈';
+  document.getElementById('eyeLabel').textContent = visible ? 'Visível' : 'Oculto';
 }
 
 // ── POLLING 30s ───────────────────────────────────────────
