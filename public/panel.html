@@ -327,6 +327,8 @@
     .b-atendendo  { background: rgba(var(--c-accent-rgb),.12); color: var(--c-accent); border: 1px solid rgba(var(--c-accent-rgb),.3); }
     .b-atendendo .badge-dot-sm { animation: pulse-ac 2s infinite; }
     .b-confirmed  { background: rgba(245,158,11,.1);  color: #f59e0b; border: 1px solid rgba(245,158,11,.25); }
+    /* Realizado derivado por horário (passou do fim, ainda confirmed no banco) */
+    .b-realizado-auto { background: rgba(16,185,129,.07); color: #6ee7b7; border: 1px solid rgba(16,185,129,.18); }
 
     .empty-row td { padding: 36px 14px; text-align: center; color: var(--c-text-muted); }
 
@@ -517,10 +519,18 @@ function applyTenant(tenant) {
 }
 
 // ── STATUS BADGE ──────────────────────────────────────────
-function statusBadge(s, isNow) {
-  if (isNow) return `<span class="badge b-atendendo"><span class="badge-dot-sm"></span>Em Atendimento</span>`;
-  if (s === 'realizado') return `<span class="badge b-realizado"><span class="badge-dot-sm"></span>Realizado</span>`;
-  return `<span class="badge b-confirmed"><span class="badge-dot-sm"></span>Confirmado</span>`;
+// displayStatus: 'atendendo' | 'realizado' | 'realizado-auto' | 'confirmed'
+function statusBadge(displayStatus) {
+  const map = {
+    'atendendo':    ['b-atendendo',    'Em Atendimento'],
+    'realizado':    ['b-realizado',    'Realizado'],
+    'realizado-auto':['b-realizado-auto','Realizado'],
+    'confirmed':    ['b-confirmed',    'Confirmado'],
+  };
+  const [cls, label] = map[displayStatus] || map['confirmed'];
+  const anim = displayStatus === 'atendendo'
+    ? ' style="animation:pulse-ac 2s infinite"' : '';
+  return `<span class="badge ${cls}"><span class="badge-dot-sm"${anim}></span>${label}</span>`;
 }
 
 // ── STATE ─────────────────────────────────────────────────
@@ -574,14 +584,22 @@ function render() {
   const selCity   = fCity.value;
   const selStatus = fStatus.value;
 
-  // Annotate isNow
-  const annotated = allAppts.map(a => ({
-    ...a,
-    isNow: a.status === 'confirmed' && a.hora <= now && now < a.fim,
-  }));
+  // Annotate: derivar estado visual por horário
+  const annotated = allAppts.map(a => {
+    const isNow        = a.status === 'confirmed' && a.hora <= now && now < a.fim;
+    const isAutoRealized = a.status === 'confirmed' && a.fim <= now && !isNow;
+    const displayStatus =
+      isNow            ? 'atendendo'     :
+      isAutoRealized   ? 'realizado-auto':
+      a.status === 'realizado' ? 'realizado' :
+                         'confirmed';
+    return { ...a, isNow, isAutoRealized, displayStatus };
+  });
 
+  // "Atendendo Agora": em atendimento neste momento
   const nowApp  = annotated.find(a => a.isNow) || null;
-  const nextApp = annotated.find(a => !a.isNow && a.status === 'confirmed' && a.hora > now) || null;
+  // "Próximo": próximo confirmed com hora futura (não realizados)
+  const nextApp = annotated.find(a => !a.isNow && !a.isAutoRealized && a.status === 'confirmed' && a.hora > now) || null;
 
   const rows = annotated.filter(a =>
     (!selCity   || a.cidade === selCity) &&
@@ -640,7 +658,7 @@ function render() {
       <td>${a.procedimento||'—'}</td>
       <td>${a.cidade||'—'}</td>
       <td class="td-value">${fmtMoney(a.valor)}</td>
-      <td>${statusBadge(a.status,a.isNow)}</td>
+      <td>${statusBadge(a.displayStatus)}</td>
     </tr>`).join('');
     count.textContent = `${rows.length} procedimento${rows.length!==1?'s':''}`;
   }
