@@ -7094,7 +7094,7 @@ app.get('/api/panel/data', async (req, res) => {
       ? date
       : new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
 
-    // 2. Agendamentos do dia (exceto cancelados)
+    // 2. Agendamentos do dia (todos os status — cliente deriva o visual)
     const { rows: appts } = await pool.query(
       `SELECT id,
               to_char(st, 'HH24:MI') AS hora,
@@ -7107,7 +7107,6 @@ app.get('/api/panel/data', async (req, res) => {
               status
        FROM "${schema}".appointments
        WHERE date = $1
-         AND status != 'cancelled'
        ORDER BY st`,
       [targetDate]
     );

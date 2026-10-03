@@ -329,6 +329,8 @@
     .b-confirmed  { background: rgba(245,158,11,.1);  color: #f59e0b; border: 1px solid rgba(245,158,11,.25); }
     /* Realizado derivado por horário (passou do fim, ainda confirmed no banco) */
     .b-realizado-auto { background: rgba(16,185,129,.07); color: #6ee7b7; border: 1px solid rgba(16,185,129,.18); }
+    /* Cancelado */
+    .b-cancelled  { background: rgba(239,68,68,.08);  color: #f87171; border: 1px solid rgba(239,68,68,.22); }
 
     .empty-row td { padding: 36px 14px; text-align: center; color: var(--c-text-muted); }
 
@@ -426,6 +428,7 @@
         <option value="">Todos</option>
         <option value="confirmed">Confirmado</option>
         <option value="realizado">Realizado</option>
+        <option value="cancelled">Cancelado</option>
       </select>
     </div>
     <button class="eye-btn" id="eyeBtn" onclick="toggleSensitive()" title="Mostrar/ocultar telefone e valor">
@@ -549,13 +552,14 @@ function applyTenant(tenant) {
 }
 
 // ── STATUS BADGE ──────────────────────────────────────────
-// displayStatus: 'atendendo' | 'realizado' | 'realizado-auto' | 'confirmed'
+// displayStatus: 'atendendo' | 'realizado' | 'realizado-auto' | 'confirmed' | 'cancelled'
 function statusBadge(displayStatus) {
   const map = {
-    'atendendo':    ['b-atendendo',    'Em Atendimento'],
-    'realizado':    ['b-realizado',    'Realizado'],
+    'atendendo':     ['b-atendendo',     'Em Atendimento'],
+    'realizado':     ['b-realizado',     'Realizado'],
     'realizado-auto':['b-realizado-auto','Realizado'],
-    'confirmed':    ['b-confirmed',    'Confirmado'],
+    'confirmed':     ['b-confirmed',     'Confirmado'],
+    'cancelled':     ['b-cancelled',     'Cancelado'],
   };
   const [cls, label] = map[displayStatus] || map['confirmed'];
   const anim = displayStatus === 'atendendo'
@@ -614,15 +618,24 @@ function render() {
   const selCity   = fCity.value;
   const selStatus = fStatus.value;
 
-  // Annotate: derivar estado visual por horário
+  // Determinar relação da data selecionada com hoje
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  const isToday  = fDate.value === todayStr;
+  const isPast   = fDate.value < todayStr;
+
+  // Annotate: derivar estado visual de forma date-aware
   const annotated = allAppts.map(a => {
-    const isNow        = a.status === 'confirmed' && a.hora <= now && now < a.fim;
-    const isAutoRealized = a.status === 'confirmed' && a.fim <= now && !isNow;
-    const displayStatus =
-      isNow            ? 'atendendo'     :
-      isAutoRealized   ? 'realizado-auto':
-      a.status === 'realizado' ? 'realizado' :
-                         'confirmed';
+    // Cancelados sempre aparecem como cancelados, independente da data
+    if (a.status === 'cancelled') {
+      return { ...a, isNow: false, isAutoRealized: false, displayStatus: 'cancelled' };
+    }
+    // Para confirmed: aplicar lógica de horário apenas no dia de hoje
+    const isNow          = isToday && a.status === 'confirmed' && a.hora <= now && now < a.fim;
+    const isAutoRealized = (isPast || (isToday && a.fim <= now && !isNow)) && a.status === 'confirmed';
+    const displayStatus  =
+      isNow            ? 'atendendo'      :
+      isAutoRealized   ? 'realizado-auto' :
+      a.status === 'realizado' ? 'realizado' : 'confirmed';
     return { ...a, isNow, isAutoRealized, displayStatus };
   });
 
