@@ -1280,6 +1280,41 @@ function copyCname() {
   navigator.clipboard.writeText(text).then(() => toast('✓ CNAME copiado', 'ok'));
 }
 
+// ── Painel TV ─────────────────────────────────────────────────────────────────
+async function generatePanelToken(tenantId) {
+  if (!confirm('Gerar / regenerar link do Painel TV? O link anterior será invalidado.')) return;
+  try {
+    const r = await fetch(`/master/api/tenants/${tenantId}/panel-token`, { method: 'POST' });
+    if (!r.ok) throw new Error((await r.json()).error || r.status);
+    const data = await r.json();
+    toast('✓ Link do Painel TV gerado!', 'ok');
+    await openEditModal(tenantId);           // recarrega o modal com o novo token
+    copyPanelLink(tenantId, data.url);       // já copia para a área de transferência
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function revokePanelToken(tenantId) {
+  if (!confirm('Revogar o link do Painel TV? Quem tiver o link perderá acesso imediatamente.')) return;
+  try {
+    const r = await fetch(`/master/api/tenants/${tenantId}/panel-token`, { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json()).error || r.status);
+    toast('✓ Link revogado', 'ok');
+    await openEditModal(tenantId);
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+function copyPanelLink(tenantId, url) {
+  const text = url || document.getElementById('panel-url-'+tenantId)?.textContent;
+  if (!text) return;
+  navigator.clipboard.writeText(text)
+    .then(() => toast('✓ Link do Painel TV copiado!', 'ok'))
+    .catch(() => {
+      const el = document.getElementById('panel-url-'+tenantId);
+      if (el) { const sel = window.getSelection(); const r = document.createRange(); r.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(r); }
+      toast('Selecione o link manualmente', 'warn');
+    });
+}
+
 function setProvisionStep(step, status) {
   const steps = ['🔄 Criando schema...', '🌱 Inserindo dados iniciais...', '💾 Salvando configurações...', '📧 Enviando e-mail de boas-vindas...'];
   const stepEl = document.getElementById('provision-steps');
@@ -1459,6 +1494,32 @@ async function openEditModal(id) {
       </div>
       <div class="fg"><label>Bio</label><textarea class="fi" id="e-prof-bio" rows="3" style="resize:vertical;font-family:inherit;font-size:13px" placeholder="Texto livre sobre o profissional...">${t.prof_bio||''}</textarea></div>
       <div class="fg"><label>Formações &amp; Especialidades</label><textarea class="fi" id="e-prof-specialties" rows="2" style="resize:vertical;font-family:inherit;font-size:13px" placeholder="Ex: Micropigmentação de Sobrancelhas, Microblading, Design...">${t.prof_specialties||''}</textarea></div>
+    </div>
+
+    <!-- PAINEL TV -->
+    <div style="margin-top:18px;border-top:2px solid var(--border);padding-top:16px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--text-light);margin-bottom:12px">🖥️ Painel TV</div>
+      ${(()=>{
+        const panelDomain = t.domain_custom || (t.subdomain ? t.subdomain+'.belleplanner.com.br' : null);
+        const panelUrl = (panelDomain && t.panel_token) ? 'https://'+panelDomain+'/painel/'+t.panel_token : null;
+        return panelUrl ? `
+          <div style="background:#f0fdf4;border:1.5px solid #10b981;border-radius:8px;padding:12px 14px;margin-bottom:6px">
+            <div style="font-size:10px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">✔ Link ativo</div>
+            <div id="panel-url-${t.id}" style="font-family:monospace;font-size:11px;color:#1f2937;word-break:break-all;margin-bottom:10px">${panelUrl}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" onclick="copyPanelLink(${t.id},'${panelUrl}')" style="padding:6px 12px;background:#10b981;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">📋 Copiar link</button>
+              <button type="button" onclick="generatePanelToken(${t.id})" style="padding:6px 12px;background:var(--rose-light);color:var(--rose);border:1.5px solid var(--rose-mid);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">↺ Regenerar</button>
+              <button type="button" onclick="revokePanelToken(${t.id})" style="padding:6px 12px;background:#fef2f2;color:#ef4444;border:1.5px solid #fecaca;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">✕ Revogar</button>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted)">Gerado em: ${t.panel_token_at ? new Date(t.panel_token_at).toLocaleString('pt-BR') : '—'}</div>
+        ` : `
+          <div style="background:var(--cream);border:1.5px dashed var(--border);border-radius:8px;padding:16px;text-align:center">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Nenhum link gerado para este tenant.</div>
+            <button type="button" onclick="generatePanelToken(${t.id})" style="padding:8px 18px;background:var(--rose);color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖥️ Gerar Link do Painel</button>
+          </div>
+        `;
+      })()}
     </div>
 
     <!-- INTEGRAÇÃO SISTÊMICA -->

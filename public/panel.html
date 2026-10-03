@@ -1,0 +1,697 @@
+<title>Painel de Procedimentos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --c-accent:        #9b4d6a;
+  --c-accent-rgb:    155, 77, 106;
+  --c-glow:          rgba(155,77,106,.18);
+  --c-glow-strong:   rgba(155,77,106,.38);
+  --c-bg:            #07090f;
+  --c-surface:       #0b0f1e;
+  --c-card:          #0e1324;
+  --c-border:        rgba(255,255,255,.07);
+  --c-border-hi:     rgba(255,255,255,.13);
+  --c-text:          #e8edf8;
+  --c-text-sub:      #7b88a0;
+  --c-text-muted:    #3a4560;
+  --c-text-label:    #4d5f7a;
+  --ff-display:      'Orbitron', 'Courier New', monospace;
+  --ff-body:         'Space Grotesk', system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--ff-body);
+  background: var(--c-bg);
+  color: var(--c-text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Grid overlay */
+.grid-bg {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(rgba(var(--c-accent-rgb),.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--c-accent-rgb),.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.glow-top {
+  position: fixed; top: -240px; left: 50%; transform: translateX(-50%);
+  width: 900px; height: 480px; pointer-events: none; z-index: 0;
+  background: radial-gradient(ellipse, var(--c-glow) 0%, transparent 68%);
+}
+
+/* ── PAGE WRAPPER ─────────────────────────────── */
+.page {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; min-height: 100vh;
+  padding-inline: max(20px, 2.5vw);
+}
+
+/* ── HEADER ───────────────────────────────────── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding-block: 18px;
+  border-bottom: 1px solid var(--c-border);
+  flex-wrap: wrap;
+}
+.hd-left  { display: flex; align-items: center; gap: 14px; }
+.hd-center { flex: 1; text-align: center; }
+.hd-right  { text-align: right; flex-shrink: 0; }
+
+.tenant-logo {
+  width: clamp(42px,5vw,60px); height: clamp(42px,5vw,60px);
+  border-radius: 12px;
+  border: 1.5px solid var(--c-border-hi);
+  background: var(--c-card);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--ff-display); font-weight: 700;
+  font-size: clamp(14px,1.6vw,22px);
+  color: var(--c-accent); flex-shrink: 0; overflow: hidden;
+}
+.tenant-logo img { width: 100%; height: 100%; object-fit: contain; }
+
+.tenant-name {
+  font-size: clamp(12px,1vw,14px); color: var(--c-text-sub);
+  font-weight: 500; letter-spacing: .04em;
+}
+
+.panel-title {
+  font-family: var(--ff-display); font-weight: 700;
+  font-size: clamp(13px,1.8vw,24px);
+  letter-spacing: .16em; color: var(--c-text); text-transform: uppercase;
+}
+.panel-date-sub {
+  font-size: clamp(10px,.85vw,12px); color: var(--c-text-label);
+  letter-spacing: .08em; margin-top: 3px;
+}
+
+.clock {
+  font-family: var(--ff-display); font-weight: 700;
+  font-size: clamp(22px,3.5vw,48px);
+  color: var(--c-accent); letter-spacing: .06em;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.date-line {
+  font-size: clamp(10px,.8vw,12px); color: var(--c-text-sub);
+  text-transform: uppercase; letter-spacing: .08em; margin-top: 4px;
+}
+
+/* ── FILTER BAR ───────────────────────────────── */
+.filters {
+  display: flex; align-items: center; gap: 10px;
+  padding-block: 14px;
+  border-bottom: 1px solid var(--c-border);
+  flex-wrap: wrap;
+}
+.filter-pill {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: 8px; padding: 7px 12px;
+}
+.filter-pill label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--c-text-label); font-weight: 700; white-space: nowrap;
+  font-family: var(--ff-display);
+}
+.filter-pill select,
+.filter-pill input[type=date] {
+  background: transparent; border: none; outline: none;
+  color: var(--c-text); font-family: var(--ff-body);
+  font-size: clamp(11px,.95vw,13px); font-weight: 500;
+  cursor: pointer; padding: 0; min-width: 80px;
+}
+.filter-pill select option { background: #141c30; }
+.filter-pill input[type=date]::-webkit-calendar-picker-indicator { filter: invert(.55); cursor: pointer; }
+
+.live-pill {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 8px;
+  font-size: clamp(10px,.85vw,12px); color: var(--c-text-sub);
+  letter-spacing: .04em;
+}
+.live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #10b981; flex-shrink: 0;
+  animation: pulse-green 2s infinite;
+}
+@keyframes pulse-green {
+  0%   { box-shadow: 0 0 0 0 rgba(16,185,129,.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
+  100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+
+/* ── MAIN ─────────────────────────────────────── */
+main { flex: 1; padding-block: 22px; display: flex; flex-direction: column; gap: 28px; }
+
+/* ── FEATURED CARDS ───────────────────────────── */
+.featured {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+@media (max-width: 640px) { .featured { grid-template-columns: 1fr; } }
+
+.card {
+  border-radius: 18px; padding: clamp(18px,2.2vw,32px);
+  display: flex; flex-direction: column; position: relative; overflow: hidden;
+  min-height: clamp(180px,20vw,260px);
+}
+
+.card::after {
+  content: '';
+  position: absolute; top: 0; right: 0;
+  width: 80px; height: 80px;
+  background:
+    linear-gradient(to bottom, var(--card-accent, transparent) 0, var(--card-accent, transparent) 1px, transparent 1px) 0 0 no-repeat,
+    linear-gradient(to right, var(--card-accent, transparent) 0, var(--card-accent, transparent) 1px, transparent 1px) 0 0 no-repeat;
+  background-size: 30px 30px, 30px 30px;
+  opacity: .35;
+}
+
+.card-now {
+  --card-accent: var(--c-accent);
+  background: linear-gradient(135deg, #091428 0%, #0a1830 100%);
+  border: 1.5px solid var(--c-accent);
+  box-shadow: 0 0 50px var(--c-glow), inset 0 1px 0 rgba(var(--c-accent-rgb),.15);
+  animation: glow-breathe 3s ease-in-out infinite;
+}
+@keyframes glow-breathe {
+  0%,100% { box-shadow: 0 0 50px var(--c-glow), inset 0 1px 0 rgba(var(--c-accent-rgb),.15); }
+  50%      { box-shadow: 0 0 80px var(--c-glow-strong), inset 0 1px 0 rgba(var(--c-accent-rgb),.25); }
+}
+
+.card-next {
+  --card-accent: #f59e0b;
+  background: linear-gradient(135deg, #120e04 0%, #19120a 100%);
+  border: 1.5px solid rgba(245,158,11,.5);
+  box-shadow: 0 0 35px rgba(245,158,11,.1);
+}
+
+.card-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--ff-display); font-size: clamp(8px,.75vw,11px);
+  font-weight: 700; letter-spacing: .2em; text-transform: uppercase;
+  padding: 5px 13px; border-radius: 100px; margin-bottom: 18px;
+  width: fit-content;
+}
+.card-now  .card-badge { background: rgba(var(--c-accent-rgb),.12); color: var(--c-accent); border: 1px solid rgba(var(--c-accent-rgb),.28); }
+.card-next .card-badge { background: rgba(245,158,11,.1); color: #f59e0b; border: 1px solid rgba(245,158,11,.28); }
+
+.badge-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0;
+}
+.card-now .badge-dot { animation: pulse-blue 2s infinite; }
+@keyframes pulse-blue {
+  0%   { box-shadow: 0 0 0 0 rgba(var(--c-accent-rgb),.6); }
+  70%  { box-shadow: 0 0 0 7px rgba(var(--c-accent-rgb),0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--c-accent-rgb),0); }
+}
+
+.card-client {
+  font-weight: 700; line-height: 1.1;
+  font-size: clamp(22px,2.8vw,42px);
+  color: var(--c-text); margin-bottom: 6px; text-wrap: balance;
+}
+.card-procedure {
+  font-size: clamp(12px,1.1vw,17px); color: var(--c-text-sub);
+  font-weight: 400; margin-bottom: 20px; text-wrap: balance;
+}
+.card-meta {
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 14px;
+  border-top: 1px solid rgba(255,255,255,.07); padding-top: 18px; margin-top: auto;
+}
+@media (max-width: 480px) { .card-meta { grid-template-columns: repeat(2,1fr); } }
+.meta-key {
+  font-size: clamp(8px,.65vw,9px); text-transform: uppercase; letter-spacing: .12em;
+  color: var(--c-text-label); font-weight: 700; margin-bottom: 4px;
+  font-family: var(--ff-display);
+}
+.meta-val {
+  font-size: clamp(12px,1.1vw,16px); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.card-now  .meta-val { color: var(--c-accent); }
+.card-next .meta-val { color: #f59e0b; }
+
+.card-empty {
+  align-items: center; justify-content: center; text-align: center;
+  background: var(--c-surface) !important;
+  border: 1.5px dashed var(--c-border-hi) !important;
+  box-shadow: none !important; animation: none !important;
+}
+.card-empty .card-badge { margin-bottom: 12px; }
+.card-empty-text { font-size: 13px; color: var(--c-text-muted); margin-top: 8px; }
+
+/* ── SCHEDULE TABLE ───────────────────────────── */
+.section-hd {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+}
+.section-hd-title {
+  font-family: var(--ff-display); font-size: clamp(9px,.8vw,11px);
+  font-weight: 700; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--c-text-sub); white-space: nowrap;
+}
+.section-hd-line { flex: 1; height: 1px; background: var(--c-border); }
+.section-hd-count {
+  font-size: 11px; color: var(--c-text-muted); white-space: nowrap;
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: 100px; padding: 3px 10px; font-variant-numeric: tabular-nums;
+}
+
+.table-wrap {
+  overflow-x: auto; border-radius: 14px;
+  border: 1px solid var(--c-border); background: var(--c-surface);
+}
+
+table { width: 100%; border-collapse: collapse; font-size: clamp(11px,1vw,14px); }
+
+thead tr { border-bottom: 1px solid var(--c-border-hi); }
+th {
+  padding: 11px 16px; text-align: left;
+  font-family: var(--ff-display); font-size: clamp(8px,.7vw,9px);
+  font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--c-text-label); white-space: nowrap;
+}
+td { padding: 12px 16px; white-space: nowrap; }
+
+tbody tr { border-bottom: 1px solid var(--c-border); transition: background .12s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: rgba(255,255,255,.02); }
+tbody tr.row-now { background: rgba(var(--c-accent-rgb),.06); }
+
+.td-hora {
+  font-family: var(--ff-display); font-weight: 600;
+  font-size: clamp(11px,1vw,13px); color: var(--c-accent);
+  font-variant-numeric: tabular-nums;
+}
+.td-periodo { color: var(--c-text-sub); font-variant-numeric: tabular-nums; font-size: .9em; }
+.td-name { font-weight: 600; min-width: 140px; }
+.td-phone { color: var(--c-text-sub); font-variant-numeric: tabular-nums; }
+.td-value { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: clamp(9px,.75vw,10px); font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase;
+  padding: 4px 11px; border-radius: 100px; white-space: nowrap;
+}
+.badge-dot-sm { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+.b-realizado  { background: rgba(16,185,129,.1);  color: #10b981; border: 1px solid rgba(16,185,129,.25); }
+.b-atendendo  { background: rgba(var(--c-accent-rgb),.12); color: var(--c-accent); border: 1px solid rgba(var(--c-accent-rgb),.3); }
+.b-atendendo .badge-dot-sm { animation: pulse-blue 2s infinite; }
+.b-confirmed  { background: rgba(245,158,11,.1);  color: #f59e0b; border: 1px solid rgba(245,158,11,.25); }
+
+.empty-row td { padding: 40px 16px; text-align: center; color: var(--c-text-muted); }
+
+/* ── ERROR OVERLAY ────────────────────────────── */
+.error-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(7,9,15,.92); backdrop-filter: blur(4px);
+}
+.error-box {
+  text-align: center; padding: 40px; max-width: 400px;
+}
+.error-icon { font-size: 48px; margin-bottom: 16px; }
+.error-title { font-family: var(--ff-display); font-size: 18px; font-weight: 700; color: #ef4444; letter-spacing: .1em; margin-bottom: 8px; }
+.error-msg { font-size: 14px; color: var(--c-text-sub); line-height: 1.6; }
+
+/* ── FOOTER ───────────────────────────────────── */
+footer {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  padding-block: 14px;
+  border-top: 1px solid var(--c-border);
+  font-size: 11px;
+}
+.footer-update { color: var(--c-text-muted); font-variant-numeric: tabular-nums; }
+.footer-brand  { color: var(--c-text-muted); letter-spacing: .04em; }
+.footer-brand strong { color: var(--c-text-sub); font-weight: 600; }
+
+/* ── SCROLLBAR ────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--c-border-hi); border-radius: 3px; }
+</style>
+
+<div class="grid-bg" aria-hidden="true"></div>
+<div class="glow-top"  aria-hidden="true"></div>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <header>
+    <div class="hd-left">
+      <div class="tenant-logo" id="tenantLogo">BP</div>
+      <span class="tenant-name" id="tenantName">Belle Planner</span>
+    </div>
+    <div class="hd-center">
+      <div class="panel-title">Painel de Procedimentos</div>
+      <div class="panel-date-sub" id="panelDateSub">—</div>
+    </div>
+    <div class="hd-right">
+      <div class="clock" id="clock">00:00:00</div>
+      <div class="date-line" id="dateLine">—</div>
+    </div>
+  </header>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <div class="filter-pill">
+      <label for="fDate">Data</label>
+      <input type="date" id="fDate">
+    </div>
+    <div class="filter-pill">
+      <label for="fCity">Cidade</label>
+      <select id="fCity"><option value="">Todas</option></select>
+    </div>
+    <div class="filter-pill">
+      <label for="fStatus">Status</label>
+      <select id="fStatus">
+        <option value="">Todos</option>
+        <option value="confirmed">Confirmado</option>
+        <option value="realizado">Realizado</option>
+      </select>
+    </div>
+    <div class="live-pill">
+      <div class="live-dot"></div>
+      <span>Ao vivo · atualiza em <span id="countdown">30</span>s</span>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <main>
+    <div class="featured" id="featured"></div>
+    <div>
+      <div class="section-hd">
+        <span class="section-hd-title">Agenda do Dia</span>
+        <div class="section-hd-line"></div>
+        <span class="section-hd-count" id="rowCount">—</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Período</th>
+              <th>Cliente</th>
+              <th>Telefone</th>
+              <th>Procedimento</th>
+              <th>Cidade</th>
+              <th style="text-align:right">Valor</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer>
+    <span class="footer-update" id="lastUpdate">Carregando...</span>
+    <span class="footer-brand">Powered by <strong>Belle Planner</strong></span>
+  </footer>
+
+</div>
+
+<script>
+// ── TOKEN ─────────────────────────────────────────────────
+const TOKEN = (function() {
+  // /painel/<token>  or  /painel/<token>?...
+  const parts = location.pathname.split('/painel/');
+  return parts.length > 1 ? parts[1].replace(/\/$/, '') : '';
+})();
+
+if (!TOKEN) showError('Link inválido', 'Este link não contém um token de acesso. Solicite um novo link ao administrador.');
+
+// ── HELPERS ───────────────────────────────────────────────
+const pad2 = n => String(n).padStart(2, '0');
+
+const DAYS_LONG  = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+const DAYS_SHORT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+const MONTHS_LONG  = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const MONTHS_SHORT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+function todayISO() {
+  // Use São Paulo timezone consistently
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+}
+
+function nowHHMM() {
+  const d = new Date();
+  return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+function isoToBR(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return `${DAYS_LONG[dt.getDay()]}, ${d} de ${MONTHS_LONG[m-1]} de ${y}`;
+}
+
+function fmtMoney(v) {
+  const n = parseFloat(v) || 0;
+  return 'R$ ' + n.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+const STATUS_LABEL = {
+  confirmed: 'Confirmado',
+  realizado:  'Realizado',
+};
+
+function statusBadge(s, isNow) {
+  if (isNow) return `<span class="badge b-atendendo"><span class="badge-dot-sm"></span>Em Atendimento</span>`;
+  if (s === 'realizado') return `<span class="badge b-realizado"><span class="badge-dot-sm"></span>Realizado</span>`;
+  return `<span class="badge b-confirmed"><span class="badge-dot-sm"></span>Confirmado</span>`;
+}
+
+function hexToRgb(hex) {
+  hex = hex.replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(c => c+c).join('');
+  const n = parseInt(hex, 16);
+  return `${(n>>16)&255}, ${(n>>8)&255}, ${n&255}`;
+}
+
+function showError(title, msg) {
+  const el = document.createElement('div');
+  el.className = 'error-overlay';
+  el.innerHTML = `
+    <div class="error-box">
+      <div class="error-icon">⚠️</div>
+      <div class="error-title">${title}</div>
+      <div class="error-msg">${msg}</div>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+// ── TENANT THEME ──────────────────────────────────────────
+function applyTenant(tenant) {
+  const color   = tenant.color || '#9b4d6a';
+  const colorRgb = hexToRgb(color);
+
+  const R = document.documentElement;
+  R.style.setProperty('--c-accent',       color);
+  R.style.setProperty('--c-accent-rgb',   colorRgb);
+  R.style.setProperty('--c-glow',         `rgba(${colorRgb},.18)`);
+  R.style.setProperty('--c-glow-strong',  `rgba(${colorRgb},.38)`);
+
+  const logoEl = document.getElementById('tenantLogo');
+  if (tenant.logo) {
+    logoEl.innerHTML = `<img src="${tenant.logo}" alt="${tenant.name}">`;
+  } else {
+    const initials = (tenant.name || 'BP').split(' ').filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+    logoEl.textContent = initials;
+    logoEl.style.color = color;
+  }
+  document.getElementById('tenantName').textContent = tenant.name || 'Belle Planner';
+  document.title = `Painel · ${tenant.name || 'Belle Planner'}`;
+}
+
+// ── STATE ─────────────────────────────────────────────────
+let allAppts = [];
+let allCities = [];
+
+// ── FILTERS DOM ───────────────────────────────────────────
+const fDate   = document.getElementById('fDate');
+const fCity   = document.getElementById('fCity');
+const fStatus = document.getElementById('fStatus');
+
+fDate.value = todayISO();
+fDate.addEventListener('change', () => fetchData());
+fCity.addEventListener('change', render);
+fStatus.addEventListener('change', render);
+
+// ── FETCH FROM API ────────────────────────────────────────
+async function fetchData() {
+  try {
+    const url = `/api/panel/data?t=${encodeURIComponent(TOKEN)}&date=${fDate.value}`;
+    const res = await fetch(url);
+    if (res.status === 401) {
+      showError('Acesso negado', 'Token inválido ou expirado. Solicite um novo link ao administrador.');
+      return;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    applyTenant(data.tenant);
+
+    allAppts = data.appointments || [];
+
+    // Rebuild city filter preserving selection
+    const prevCity = fCity.value;
+    allCities = [...new Set(allAppts.map(a => a.cidade).filter(Boolean))].sort();
+    fCity.innerHTML = '<option value="">Todas</option>';
+    allCities.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      if (c === prevCity) o.selected = true;
+      fCity.appendChild(o);
+    });
+
+    render();
+  } catch (err) {
+    console.error('[panel] fetchData error:', err);
+    document.getElementById('lastUpdate').textContent = `Erro ao carregar: ${err.message}`;
+  }
+}
+
+// ── RENDER ────────────────────────────────────────────────
+function render() {
+  const selDate   = fDate.value;
+  const selCity   = fCity.value;
+  const selStatus = fStatus.value;
+  const now       = nowHHMM();
+
+  // Annotate "is attending now"
+  const annotated = allAppts.map(a => ({
+    ...a,
+    isNow: a.status === 'confirmed' && a.hora <= now && now < a.fim,
+  }));
+
+  // Featured: Atendendo Agora
+  const nowApp  = annotated.find(a => a.isNow) || null;
+  // Featured: Próximo — next confirmed after current time
+  const nextApp = annotated.find(a => !a.isNow && a.status === 'confirmed' && a.hora > now) || null;
+
+  // Apply filters for table
+  const rows = annotated.filter(a =>
+    (!selCity   || a.cidade === selCity) &&
+    (!selStatus || a.status === selStatus)
+  );
+
+  // Update subtitle
+  document.getElementById('panelDateSub').textContent = isoToBR(selDate);
+
+  // ── Featured cards ───────────────────────────────────────
+  const feat = document.getElementById('featured');
+
+  function cardMeta(a) {
+    return `
+      <div class="card-meta">
+        <div><div class="meta-key">Horário</div><div class="meta-val">${a.hora}</div></div>
+        <div><div class="meta-key">Período</div><div class="meta-val">${a.hora} – ${a.fim}</div></div>
+        <div><div class="meta-key">Cidade</div><div class="meta-val">${a.cidade || '—'}</div></div>
+        <div><div class="meta-key">Valor</div><div class="meta-val">${fmtMoney(a.valor)}</div></div>
+      </div>`;
+  }
+
+  let featHTML = '';
+
+  if (nowApp) {
+    featHTML += `
+      <div class="card card-now">
+        <div class="card-badge"><span class="badge-dot"></span>Atendendo Agora</div>
+        <div class="card-client">${nowApp.cliente}</div>
+        <div class="card-procedure">${nowApp.procedimento || '—'}</div>
+        ${cardMeta(nowApp)}
+      </div>`;
+  } else {
+    featHTML += `
+      <div class="card card-now card-empty">
+        <div class="card-badge"><span class="badge-dot"></span>Atendendo Agora</div>
+        <div class="card-empty-text">Nenhum atendimento em andamento</div>
+      </div>`;
+  }
+
+  if (nextApp) {
+    featHTML += `
+      <div class="card card-next">
+        <div class="card-badge"><span class="badge-dot"></span>Próximo</div>
+        <div class="card-client">${nextApp.cliente}</div>
+        <div class="card-procedure">${nextApp.procedimento || '—'}</div>
+        ${cardMeta(nextApp)}
+      </div>`;
+  } else {
+    featHTML += `
+      <div class="card card-next card-empty">
+        <div class="card-badge"><span class="badge-dot"></span>Próximo</div>
+        <div class="card-empty-text">Sem próximos agendamentos</div>
+      </div>`;
+  }
+
+  feat.innerHTML = featHTML;
+
+  // ── Table ────────────────────────────────────────────────
+  const tbody = document.getElementById('tbody');
+  const count = document.getElementById('rowCount');
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Nenhum procedimento encontrado para os filtros selecionados</td></tr>`;
+    count.textContent = '0 procedimentos';
+  } else {
+    tbody.innerHTML = rows.map(a => `
+      <tr${a.isNow ? ' class="row-now"' : ''}>
+        <td class="td-hora">${a.hora}</td>
+        <td class="td-periodo">${a.hora} – ${a.fim}</td>
+        <td class="td-name">${a.cliente}</td>
+        <td class="td-phone">${a.telefone || '—'}</td>
+        <td>${a.procedimento || '—'}</td>
+        <td>${a.cidade || '—'}</td>
+        <td class="td-value">${fmtMoney(a.valor)}</td>
+        <td>${statusBadge(a.status, a.isNow)}</td>
+      </tr>`).join('');
+    count.textContent = `${rows.length} procedimento${rows.length !== 1 ? 's' : ''}`;
+  }
+
+  // Footer
+  const n = new Date();
+  document.getElementById('lastUpdate').textContent =
+    `Última atualização: ${pad2(n.getHours())}:${pad2(n.getMinutes())}:${pad2(n.getSeconds())}`;
+}
+
+// ── CLOCK ─────────────────────────────────────────────────
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    `${pad2(n.getHours())}:${pad2(n.getMinutes())}:${pad2(n.getSeconds())}`;
+  document.getElementById('dateLine').textContent =
+    `${DAYS_SHORT[n.getDay()]} ${pad2(n.getDate())} ${MONTHS_SHORT[n.getMonth()]} ${n.getFullYear()}`;
+}
+
+// ── AUTO-REFRESH (30 s polling) ───────────────────────────
+let countdown = 30;
+setInterval(() => {
+  countdown--;
+  document.getElementById('countdown').textContent = countdown;
+  if (countdown <= 0) {
+    countdown = 30;
+    fetchData();
+  }
+}, 1000);
+
+// ── INIT ──────────────────────────────────────────────────
+if (TOKEN) {
+  updateClock();
+  fetchData();
+  setInterval(updateClock, 1000);
+}
+</script>
