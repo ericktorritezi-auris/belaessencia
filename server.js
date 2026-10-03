@@ -1373,6 +1373,8 @@ async function initDB() {
     // Migração v2.9.15: tipo de plano e flag de acesso ao chat Bella
     await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS plan_type VARCHAR(20) NOT NULL DEFAULT 'profissional'`);
     await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS has_chat BOOLEAN NOT NULL DEFAULT FALSE`);
+    await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS panel_token VARCHAR(64) UNIQUE`);
+    await client.query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS panel_token_at TIMESTAMPTZ`);
 
     // Migração v2.9.16: tabelas Bella Chat em todos os schemas de tenant existentes
     {
@@ -5597,7 +5599,7 @@ app.get('/master/api/tenants', requireMaster, async (req, res) => {
       SELECT t.id, t.slug, t.name, t.owner_name, t.owner_email, t.owner_phone,
              t.domain_custom, t.subdomain, t.active, t.plan_expires_at, t.schema_name,
              t.monthly_fee, t.setup_fee, t.created_at, t.exempt, t.trial_ends_at, t.send_cc_master,
-             t.plan_type, t.has_chat,
+             t.plan_type, t.has_chat, t.panel_token, t.panel_token_at,
              tc.primary_color, tc.secondary_color, tc.business_name,
              tc.tagline, tc.whatsapp_number, tc.resend_from_email, tc.admin_user,
              tc.logo_url, tc.prof_photo_url, tc.prof_profession,
@@ -7058,6 +7060,105 @@ app.get('/master', (req, res) => {
 });
 app.get('/master/', (req, res) => {
   res.sendFile(require('path').join(__dirname, 'public', 'master.html'));
+});
+
+// ── Painel TV: serve a página ─────────────────────────────────────────────────
+app.get('/painel/:token', (req, res) => {
+  res.sendFile(require('path').join(__dirname, 'public', 'panel.html'));
+});
+
+// ── Painel TV: dados (config + agenda do dia) ─────────────────────────────────
+// Público — autenticado apenas pelo panel_token no path param
+app.get('/api/panel/data', async (req, res) => {
+  const { t: token, date } = req.query;
+  if (!token) return res.status(401).json({ error: 'Token ausente' });
+
+  try {
+    // 1. Resolve tenant pelo token
+    const { rows } = await pool.query(
+      `SELECT t.id, t.schema_name, t.subdomain, t.domain_custom,
+              tc.business_name, tc.primary_color, tc.logo_url
+       FROM tenants t
+       LEFT JOIN tenant_configs tc ON tc.tenant_id = t.id
+       WHERE t.panel_token = $1 AND t.active = TRUE
+       LIMIT 1`,
+      [token]
+    );
+    if (!rows[0]) return res.status(401).json({ error: 'Token inválido ou tenant inativo' });
+
+    const tenant = rows[0];
+    const schema = tenant.schema_name;
+
+    // Data alvo: parâmetro ou hoje em BRT
+    const targetDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? date
+      : new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+
+    // 2. Agendamentos do dia (exceto cancelados)
+    const { rows: appts } = await pool.query(
+      `SELECT id,
+              to_char(st, 'HH24:MI') AS hora,
+              to_char(et, 'HH24:MI') AS fim,
+              name       AS cliente,
+              phone      AS telefone,
+              proc_name  AS procedimento,
+              city_name  AS cidade,
+              COALESCE(price, 0)::numeric AS valor,
+              status
+       FROM "${schema}".appointments
+       WHERE date = $1
+         AND status != 'cancelled'
+       ORDER BY st`,
+      [targetDate]
+    );
+
+    res.json({
+      tenant: {
+        name:  tenant.business_name || 'Belle Planner',
+        color: tenant.primary_color || '#9b4d6a',
+        logo:  tenant.logo_url      || null,
+      },
+      date:         targetDate,
+      appointments: appts,
+    });
+  } catch (err) {
+    console.error('[panel/data]', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ── Painel TV: gerar / regenerar token (master only) ─────────────────────────
+app.post('/master/api/tenants/:id/panel-token', requireMaster, async (req, res) => {
+  try {
+    const token = require('crypto').randomUUID();
+    const { rows } = await pool.query(
+      `UPDATE tenants
+         SET panel_token = $1, panel_token_at = NOW()
+       WHERE id = $2
+       RETURNING id, panel_token, panel_token_at, subdomain, domain_custom`,
+      [token, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tenant não encontrado' });
+
+    const t = rows[0];
+    const domain = t.domain_custom || `${t.subdomain}.belleplanner.com.br`;
+    res.json({
+      token: t.panel_token,
+      url:   `https://${domain}/painel/${t.panel_token}`,
+      generated_at: t.panel_token_at,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Painel TV: revogar token (master only) ────────────────────────────────────
+app.delete('/master/api/tenants/:id/panel-token', requireMaster, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE tenants SET panel_token = NULL, panel_token_at = NULL WHERE id = $1`,
+      [req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Health Check ─────────────────────────────────────────────────────────────
