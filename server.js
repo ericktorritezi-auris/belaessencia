@@ -1362,7 +1362,8 @@ async function initDB() {
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS city_ids_promo INTEGER[] NOT NULL DEFAULT '{}'`);
 
     // Migração v2.9.17: promoção por valor fixo por produto
-    await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS type VARCHAR(10) NOT NULL DEFAULT 'percent'`);
+    await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'percent'`);
+    await client.query(`ALTER TABLE promotions ALTER COLUMN type TYPE VARCHAR(20)`);
     await client.query(`ALTER TABLE promotions ALTER COLUMN discount DROP NOT NULL`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS promotion_items (
