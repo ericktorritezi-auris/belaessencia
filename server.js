@@ -4907,10 +4907,13 @@ app.get('/api/promotions/active', async (req, res) => {
     query += ` ORDER BY created_at DESC LIMIT 1`;
     const { rows } = await req.db(query, params);
     const promo = rows[0] || null;
-    // Para promoção de valor fixo, retorna os itens com preço promocional por produto
+    // Para promoção de valor fixo, retorna os itens com nome e preço original do procedimento
     if (promo && promo.type === 'fixed_price') {
       const { rows: items } = await req.db(
-        `SELECT proc_id, promo_price FROM promotion_items WHERE promotion_id = $1`,
+        `SELECT pi.proc_id, pi.promo_price, p.name AS proc_name, p.price AS original_price
+         FROM promotion_items pi
+         LEFT JOIN procedures p ON p.id = pi.proc_id
+         WHERE pi.promotion_id = $1`,
         [promo.id]
       );
       promo.items = items;
