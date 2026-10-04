@@ -622,6 +622,49 @@ async function startWithConfirmation() {
 async function startMainFlow() {
   const first = visitorName.split(' ')[0];
   await bellaDelay(`${first}, é um prazer te atender! 🌸 Em que posso te ajudar hoje?`, 700);
+
+  // — Gatilho de promoção ativa: sempre que entrar no fluxo principal ——
+  try {
+    const promoRes = await fetch('/api/promotions/active');
+    const promo = promoRes.ok ? await promoRes.json() : null;
+    if (promo && promo.id) {
+      const promoName = promo.name || 'Promoção Especial';
+      let promoHtml = '';
+      if (promo.type === 'fixed_price' && promo.items?.length) {
+        const lines = promo.items.map(item => {
+          if (!item.proc_name) return null;
+          const orig = item.original_price
+            ? `<span style="text-decoration:line-through;opacity:.65">R$ ${Number(item.original_price).toFixed(2).replace('.',',')}</span>`
+            : '';
+          const novo = `<strong style="color:#fff">R$ ${Number(item.promo_price).toFixed(2).replace('.',',')}</strong>`;
+          return `<div style="margin:4px 0">• <strong>${item.proc_name}</strong>: ${orig} ➜ ${novo}</div>`;
+        }).filter(Boolean).join('');
+        if (lines) {
+          promoHtml =
+            `<div style="background:linear-gradient(135deg,#c2185b,#e91e8c,#ad1457);` +
+            `color:#fff;border-radius:12px;padding:14px 16px;margin-top:4px;` +
+            `box-shadow:0 3px 14px rgba(194,24,91,.35);font-size:.95em;line-height:1.5">` +
+            `<div style="font-size:1.5em;margin-bottom:6px">🌸</div>` +
+            `<div style="font-weight:700;margin-bottom:8px">Promoção especial: ${promoName}</div>` +
+            lines +
+            `<div style="margin-top:8px;font-size:.85em;opacity:.9">✨ Aproveite, é por tempo limitado!</div>` +
+            `</div>`;
+        }
+      } else if (promo.discount) {
+        promoHtml =
+          `<div style="background:linear-gradient(135deg,#6a1b9a,#9c27b0);` +
+          `color:#fff;border-radius:12px;padding:14px 16px;margin-top:4px;` +
+          `box-shadow:0 3px 14px rgba(106,27,154,.35);font-size:.95em">` +
+          `<div style="font-size:1.5em;margin-bottom:6px">🎉</div>` +
+          `<div style="font-weight:700">${promo.discount}% de desconto — ${promoName}</div>` +
+          `<div style="font-size:.85em;margin-top:6px;opacity:.9">✨ Aproveite, é por tempo limitado!</div>` +
+          `</div>`;
+      }
+      if (promoHtml) await bellaDelay(promoHtml, 500);
+    }
+  } catch {}
+  // ———————————————————————————————————————————————————————————————————
+
   setDefaultChips();
   setInputEnabled(true);
   $input.placeholder = 'Digite sua mensagem...';
