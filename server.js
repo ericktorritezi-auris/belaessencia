@@ -7922,7 +7922,29 @@ async function bellaRespond({ message, history, name, tenant, procedures, active
       // Trata como pergunta normal (cai no resto do bellaRespond)
       // Não retorna aqui — deixa o fluxo continuar para capturar intenção
     } else {
-      return `Que prazer, *${firstWord}*! 🌸\n\nComo posso te ajudar hoje? Você pode me perguntar sobre:\n• 📅 Agendamento\n• 🌿 Serviços disponíveis\n• 💫 Preços e valores\n• 📍 Localização`;
+      // Bloco de promoção ativa — anunciado logo após receber o nome
+      let promoAnnounce = '';
+      if (activePromo) {
+        const promoName = activePromo.name || 'Promoção Especial';
+        if (activePromo.type === 'fixed_price' && activePromo.items?.length) {
+          const promoLines = activePromo.items
+            .map(item => {
+              const proc = procedures.find(p => Number(p.id) === Number(item.proc_id));
+              if (!proc) return null;
+              const orig = proc.price ? `~R$ ${Number(proc.price).toFixed(2).replace('.', ',')}~` : '';
+              const novo = `*R$ ${Number(item.promo_price).toFixed(2).replace('.', ',')}*`;
+              return `• *${proc.name}*: ${orig} ➜ ${novo}`;
+            })
+            .filter(Boolean)
+            .join('\n');
+          if (promoLines) {
+            promoAnnounce = `\n\n🌸 *Você sabia?* Temos a promoção *${promoName}* com preços especiais!\n\n${promoLines}\n\n_Aproveite, é por tempo limitado!_ ✨`;
+          }
+        } else if (activePromo.discount) {
+          promoAnnounce = `\n\n🎉 *Você sabia?* Estamos com *${activePromo.discount}% de desconto* na promoção *${promoName}*! Confira os serviços com desconto na nossa agenda! ✨`;
+        }
+      }
+      return `Que prazer, *${firstWord}*! 🌸${promoAnnounce}\n\nComo posso te ajudar hoje? Você pode me perguntar sobre:\n• 📅 Agendamento\n• 🌿 Serviços disponíveis\n• 💫 Preços e valores\n• 📍 Localização`;
     }
   }
 
