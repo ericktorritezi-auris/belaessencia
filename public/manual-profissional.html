@@ -485,7 +485,7 @@
 
           <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--rose);margin:14px 0 8px">📣 Marketing</p>
           <div class="feat-list">
-            <div class="feat-item"><span>🏷</span><p><strong>Promoções</strong> — Crie descontos por procedimento e cidade</p></div>
+            <div class="feat-item"><span>🏷</span><p><strong>Promoções</strong> — Desconto percentual ou valor fixo por produto, por período e cidade</p></div>
             <div class="feat-item"><span>🎉</span><p><strong>Datas Comemorativas</strong> — Configure popups especiais para datas festivas</p></div>
             <div class="feat-item"><span>🔔</span><p><strong>Web Push</strong> — Envie notificações para todas as clientes cadastradas</p></div>
             <div class="feat-item"><span>📑</span><p><strong>Gestão do Contrato</strong> — Visualize e gerencie o contrato de uso da plataforma</p></div>
@@ -1537,17 +1537,39 @@
           <div class="section-title">Criando promoções</div>
         </div>
         <div class="section-body">
-          <p>Crie promoções com desconto percentual, válidas por período, para procedimentos e cidades específicas.</p>
+          <p>O sistema oferece dois tipos de promoção: <strong>Desconto Percentual</strong> (reduz o preço de todos os serviços selecionados em X%) e <strong>Valor Fixo por Produto</strong> (você define o preço exato de cada serviço na promoção). Ambos os tipos respeitam cidade e período de validade.</p>
+
+          <div class="sub">
+            <h4>🏷 Tipo 1 — Desconto Percentual</h4>
+            <p>Aplica um percentual de desconto sobre o preço de tabela dos procedimentos selecionados.</p>
+          </div>
           <div class="steps">
-            <div class="step"><div class="step-num">1</div><div class="step-content"><h4>Nome da promoção</h4><p>Ex: "Semana do Cliente" ou "Promoção Maio".</p></div></div>
-            <div class="step"><div class="step-num">2</div><div class="step-content"><h4>Período de validade</h4><p>Data de início e data de fim. A promoção é ativada e desativada automaticamente.</p></div></div>
-            <div class="step"><div class="step-num">3</div><div class="step-content"><h4>Desconto (%)</h4><p>Percentual de desconto sobre o valor do procedimento.</p></div></div>
-            <div class="step"><div class="step-num">4</div><div class="step-content"><h4>Procedimentos participantes</h4><p>Todos os procedimentos ou selecione apenas os que terão desconto.</p></div></div>
-            <div class="step"><div class="step-num">5</div><div class="step-content"><h4>Cidades participantes</h4><p>Todas as cidades ou selecione apenas as que terão a promoção.</p></div></div>
+            <div class="step"><div class="step-num">1</div><div class="step-content"><h4>Nome</h4><p>Ex: "Semana do Cliente" ou "Promoção Maio".</p></div></div>
+            <div class="step"><div class="step-num">2</div><div class="step-content"><h4>Período</h4><p>Data de início e data de fim. A promoção ativa e desativa automaticamente.</p></div></div>
+            <div class="step"><div class="step-num">3</div><div class="step-content"><h4>Tipo → Desconto percentual</h4><p>Selecione "% Desconto percentual" no campo Tipo.</p></div></div>
+            <div class="step"><div class="step-num">4</div><div class="step-content"><h4>Desconto (%)</h4><p>Percentual a ser aplicado, de 1% a 100%.</p></div></div>
+            <div class="step"><div class="step-num">5</div><div class="step-content"><h4>Procedimentos e cidades</h4><p>Escolha quais procedimentos e cidades participam.</p></div></div>
+          </div>
+
+          <div class="sub" style="margin-top:20px">
+            <h4>🌸 Tipo 2 — Valor Fixo por Produto</h4>
+            <p>Você define o <strong>preço exato</strong> de cada produto na promoção. Ideal para campanhas como "Outubro Rosa" onde cada serviço tem seu próprio preço especial.</p>
+          </div>
+          <div class="steps">
+            <div class="step"><div class="step-num">1</div><div class="step-content"><h4>Nome</h4><p>Ex: "Outubro Rosa — Preços Especiais".</p></div></div>
+            <div class="step"><div class="step-num">2</div><div class="step-content"><h4>Período</h4><p>Data de início e data de fim.</p></div></div>
+            <div class="step"><div class="step-num">3</div><div class="step-content"><h4>Tipo → Valor fixo por produto</h4><p>Selecione "🏷 Valor fixo por produto" para que a tabela de produtos apareça.</p></div></div>
+            <div class="step"><div class="step-num">4</div><div class="step-content"><h4>Tabela de preços</h4><p>Informe o preço promocional de cada produto. Deixe em branco os que <strong>não</strong> participam — eles continuam com o preço normal.</p></div></div>
+            <div class="step"><div class="step-num">5</div><div class="step-content"><h4>Cidade participante</h4><p>Escolha para qual cidade a promoção se aplica.</p></div></div>
+          </div>
+
+          <div class="tip">
+            <span>🌸</span>
+            <p><strong>O que o cliente vê:</strong> Um banner de destaque aparece na agenda com o nome da promoção. Em cada produto participante, o preço original aparece <s>riscado</s> e o preço promocional em destaque. Na Bella (chat), ela responde sobre preços já informando os valores promocionais automaticamente.</p>
           </div>
           <div class="tip">
             <span>💡</span>
-            <p>A promoção ativa é exibida automaticamente para o cliente na etapa de seleção do procedimento. O desconto é aplicado no valor exibido, sem nenhuma ação adicional.</p>
+            <p>Pode haver apenas <strong>uma promoção ativa</strong> por vez. Para trocar de promoção, desative a atual antes de criar uma nova.</p>
           </div>
         </div>
       </section>

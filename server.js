@@ -1361,6 +1361,19 @@ async function initDB() {
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS apply_to_all_cities BOOLEAN NOT NULL DEFAULT TRUE`);
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS city_ids_promo INTEGER[] NOT NULL DEFAULT '{}'`);
 
+    // Migração v2.9.17: promoção por valor fixo por produto
+    await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS type VARCHAR(10) NOT NULL DEFAULT 'percent'`);
+    await client.query(`ALTER TABLE promotions ALTER COLUMN discount DROP NOT NULL`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS promotion_items (
+        id             SERIAL        PRIMARY KEY,
+        promotion_id   INTEGER       NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,
+        proc_id        INTEGER       NOT NULL,
+        promo_price    NUMERIC(8,2)  NOT NULL CHECK (promo_price >= 0),
+        UNIQUE(promotion_id, proc_id)
+      )
+    `);
+
     // Migração: atualiza texto do template "Agendamento alterado" no banco
     await client.query(`
       UPDATE push_templates
@@ -4892,7 +4905,16 @@ app.get('/api/promotions/active', async (req, res) => {
     }
     query += ` ORDER BY created_at DESC LIMIT 1`;
     const { rows } = await req.db(query, params);
-    res.json(rows[0] || null);
+    const promo = rows[0] || null;
+    // Para promoção de valor fixo, retorna os itens com preço promocional por produto
+    if (promo && promo.type === 'fixed_price') {
+      const { rows: items } = await req.db(
+        `SELECT proc_id, promo_price FROM promotion_items WHERE promotion_id = $1`,
+        [promo.id]
+      );
+      promo.items = items;
+    }
+    res.json(promo);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -4902,25 +4924,44 @@ app.get('/api/promotions', requireAdmin, async (req, res) => {
     const { rows } = await req.db(
       'SELECT * FROM promotions ORDER BY start_date DESC'
     );
+    // Enriquecer com items para promoções de valor fixo
+    for (const p of rows) {
+      if (p.type === 'fixed_price') {
+        const { rows: items } = await req.db(
+          `SELECT proc_id, promo_price FROM promotion_items WHERE promotion_id = $1`,
+          [p.id]
+        );
+        p.items = items;
+      }
+    }
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Admin: criar promoção
 app.post('/api/promotions', requireAdmin, async (req, res) => {
-  const { name, start_date, end_date, discount, apply_to_all, proc_ids } = req.body;
-  if (!name || !start_date || !end_date || !discount) {
+  const { name, start_date, end_date, discount, apply_to_all, proc_ids, type = 'percent', items = [] } = req.body;
+  if (!name || !start_date || !end_date) {
     return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+  }
+  if (type === 'percent' && !discount) {
+    return res.status(400).json({ error: 'Informe o percentual de desconto' });
+  }
+  if (type === 'fixed_price' && (!items || items.length === 0)) {
+    return res.status(400).json({ error: 'Informe o valor promocional de ao menos um produto' });
   }
   if (start_date > end_date) {
     return res.status(400).json({ error: 'Data de início deve ser antes do fim' });
   }
-  if (Number(discount) <= 0 || Number(discount) > 100) {
+  if (type === 'percent' && (Number(discount) <= 0 || Number(discount) > 100)) {
     return res.status(400).json({ error: 'Desconto deve ser entre 1% e 100%' });
   }
-  const allProcs = apply_to_all !== false;
-  const ids = allProcs ? [] : (Array.isArray(proc_ids) ? proc_ids.map(Number) : []);
-  if (!allProcs && ids.length === 0) {
+  // Para fixed_price: proc_ids é derivado dos items; para percent: usa seleção normal
+  const allProcs = type === 'fixed_price' ? false : (apply_to_all !== false);
+  const ids = type === 'fixed_price'
+    ? items.map(i => Number(i.proc_id))
+    : (allProcs ? [] : (Array.isArray(proc_ids) ? proc_ids.map(Number) : []));
+  if (type === 'percent' && !allProcs && ids.length === 0) {
     return res.status(400).json({ error: 'Selecione ao menos um procedimento' });
   }
   const allCities = req.body.apply_to_all_cities !== false;
@@ -4929,12 +4970,25 @@ app.post('/api/promotions', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Selecione ao menos uma cidade' });
   }
   try {
+    const discountVal = type === 'percent' ? Number(discount) : null;
     const { rows } = await req.db(
-      `INSERT INTO promotions (name, start_date, end_date, discount, apply_to_all, proc_ids, apply_to_all_cities, city_ids_promo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [name, start_date, end_date, Number(discount), allProcs, ids, allCities, cityIds]
+      `INSERT INTO promotions (name, start_date, end_date, discount, apply_to_all, proc_ids, apply_to_all_cities, city_ids_promo, type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [name, start_date, end_date, discountVal, allProcs, ids, allCities, cityIds, type]
     );
-    res.status(201).json(rows[0]);
+    const promo = rows[0];
+    // Se for valor fixo, inserir os itens na tabela promotion_items
+    if (type === 'fixed_price' && items.length > 0) {
+      for (const item of items) {
+        await req.db(
+          `INSERT INTO promotion_items (promotion_id, proc_id, promo_price)
+           VALUES ($1, $2, $3) ON CONFLICT (promotion_id, proc_id) DO UPDATE SET promo_price = $3`,
+          [promo.id, Number(item.proc_id), Number(item.promo_price)]
+        );
+      }
+      promo.items = items;
+    }
+    res.status(201).json(promo);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -7843,7 +7897,7 @@ app.post('/api/push/subscribe/admin', requireAdmin, async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // Gera resposta da Bella com base na mensagem do visitante (flow scriptado)
-async function bellaRespond({ message, history, name, tenant, procedures }) {
+async function bellaRespond({ message, history, name, tenant, procedures, activePromo = null }) {
   const raw = message.toLowerCase();
   const msg = raw.normalize('NFD').replace(/[̀-ͯ]/g, '');
   const bizName  = tenant?.business_name || 'nosso espaço';
@@ -7893,11 +7947,62 @@ async function bellaRespond({ message, history, name, tenant, procedures }) {
     return `${greeting}Aqui estão alguns dos nossos serviços: 🌸\n\n${list}${extra}\n\nQuer saber mais sobre algum ou prefere já agendar?`;
   }
 
+  // — Promoção / desconto / oferta
+  if (/promoc|promocao|promoção|desconto|oferta|especial|outubro rosa|campanha/.test(msg)) {
+    if (activePromo) {
+      const promoName = activePromo.name || 'Promoção Especial';
+      if (activePromo.type === 'fixed_price' && activePromo.items?.length) {
+        // Monta lista com preços riscados
+        const promoItems = activePromo.items
+          .map(item => {
+            const proc = procedures.find(p => p.id === item.proc_id || Number(p.id) === Number(item.proc_id));
+            if (!proc) return null;
+            const orig = proc.price ? `~R$ ${Number(proc.price).toFixed(2).replace('.', ',')}~` : '';
+            const novo = `R$ ${Number(item.promo_price).toFixed(2).replace('.', ',')}`;
+            return `• *${proc.name}*: ${orig} ➜ *${novo}*`;
+          })
+          .filter(Boolean)
+          .slice(0, 5)
+          .join('\n');
+        if (promoItems) {
+          return `${greeting}Temos uma promoção incrível! 🌸✨\n\n*${promoName}*\n\n${promoItems}\n\nAproveite, faz parte da promoção *${promoName}*! 💫\n\nQuer agendar? É só me dizer!`;
+        }
+      } else if (activePromo.discount) {
+        return `${greeting}Sim! Estamos com *${activePromo.discount}% de desconto* na promoção *${promoName}*! 🎉\n\nAproveite e agende agora:\n\n👉 [Ver promoção](/)`;
+      }
+    }
+    return `${greeting}Fique de olho na nossa agenda para promoções e novidades! 🌸\n\n👉 [Ver agenda](/)`;
+  }
+
   // — Preço / valor
   if (/preco|precos|valor|quanto|custa|custo|investimento|pagar|tabela/.test(msg)) {
     const withPrice = procedures.filter(p => p.price).slice(0, 5);
     if (!withPrice.length) {
       return `${greeting}Para conferir os valores dos atendimentos, acesse nossa agenda onde tudo está listado com preços atualizados! 💫\n\n👉 [Ver preços](/)`;
+    }
+    // Se há promoção de valor fixo, mostra preços com destaque
+    if (activePromo?.type === 'fixed_price' && activePromo.items?.length) {
+      const promoName = activePromo.name || 'Promoção Especial';
+      const list = withPrice.map(p => {
+        const promoItem = activePromo.items.find(i => Number(i.proc_id) === Number(p.id));
+        if (promoItem) {
+          const orig = `~R$ ${Number(p.price).toFixed(2).replace('.', ',')}~`;
+          const novo = `*R$ ${Number(promoItem.promo_price).toFixed(2).replace('.', ',')}*`;
+          return `• *${p.name}*: ${orig} ➜ ${novo} 🌸`;
+        }
+        return `• *${p.name}*: R$ ${Number(p.price).toFixed(2).replace('.', ',')}`;
+      }).join('\n');
+      return `${greeting}Valores dos nossos serviços: 💫\n\n${list}\n\n🌸 Aproveite os preços especiais da promoção *${promoName}*!\n\nPara agendar, é só me dizer qual serviço deseja! 🗓️`;
+    }
+    // Promoção percentual
+    if (activePromo?.discount) {
+      const promoName = activePromo.name || 'Promoção Especial';
+      const list = withPrice.map(p => {
+        const orig = `~R$ ${Number(p.price).toFixed(2).replace('.', ',')}~`;
+        const novo = `*R$ ${(Number(p.price) * (1 - activePromo.discount / 100)).toFixed(2).replace('.', ',')}*`;
+        return `• *${p.name}*: ${orig} ➜ ${novo}`;
+      }).join('\n');
+      return `${greeting}Valores com *${activePromo.discount}% de desconto* (${promoName}): 🎉\n\n${list}\n\nPara agendar, é só me dizer qual serviço deseja! 🗓️`;
     }
     const list = withPrice.map(p => `• *${p.name}*: R$ ${Number(p.price).toFixed(2).replace('.',',')}`).join('\n');
     return `${greeting}Valores dos nossos serviços: 💫\n\n${list}\n\nPara agendar, é só me dizer qual serviço deseja! 🗓️`;
@@ -8029,9 +8134,28 @@ app.post('/api/chat/message', async (req, res) => {
     let procedures = [];
     try {
       const pr = await req.db(
-        `SELECT name, description, price FROM procedures WHERE active=true ORDER BY sort_order, name LIMIT 30`
+        `SELECT id, name, description, price FROM procedures WHERE active=true ORDER BY sort_order, name LIMIT 30`
       );
       procedures = pr.rows;
+    } catch {}
+    // Promoção ativa (para Bella informar preços promocionais)
+    let activePromo = null;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const promoRes = await req.db(
+        `SELECT * FROM promotions WHERE start_date <= $1 AND end_date >= $1 ORDER BY id DESC LIMIT 1`,
+        [today]
+      );
+      if (promoRes.rows.length) {
+        activePromo = promoRes.rows[0];
+        if (activePromo.type === 'fixed_price') {
+          const itemsRes = await req.db(
+            `SELECT proc_id, promo_price FROM promotion_items WHERE promotion_id = $1`,
+            [activePromo.id]
+          );
+          activePromo.items = itemsRes.rows;
+        }
+      }
     } catch {}
     // Detecta nome enviado nesta mensagem (se ainda não temos)
     let resolvedName = currentName;
@@ -8043,6 +8167,7 @@ app.post('/api/chat/message', async (req, res) => {
       name:       resolvedName,
       tenant:     req.tenant,
       procedures,
+      activePromo,
     });
     // Salva resposta da Bella (exceto marcadores internos)
     const nameGreet = resolvedName ? `${resolvedName.split(' ')[0]}, ` : '';
