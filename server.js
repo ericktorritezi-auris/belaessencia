@@ -8609,7 +8609,7 @@ app.get('/api/public/mapa/:key', async (req, res) => {
       );
       // Procedimentos disponíveis (para o formulário de adição)
       const { rows: procs } = await client.query(
-        `SELECT id, name, duration_min FROM procedures WHERE active=TRUE ORDER BY name`
+        `SELECT id, name, dur FROM procedures WHERE active=TRUE ORDER BY name`
       );
       res.json({
         panel,

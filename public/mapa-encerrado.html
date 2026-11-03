@@ -164,7 +164,7 @@ function renderStatic(pg, cfg, data) {
   // Card de informações do painel (se disponível)
   let panelCard = '';
   if (panel) {
-    const d = new Date(panel.exec_date + 'T12:00:00').toLocaleDateString('pt-BR');
+    const d = new Date((panel.exec_date||'').slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR');
     panelCard = `
       <div class="card" style="width:100%">
         <div class="card-head">Informações do Atendimento</div>
