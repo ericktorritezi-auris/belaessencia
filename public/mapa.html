@@ -20,36 +20,21 @@
   --r-sm:8px;--r-md:14px;--r-lg:22px;--r-xl:40px;
   --tr:all .28s cubic-bezier(.4,0,.2,1)
 }
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --cream:#1A1214;--white:#231820;--dark:#FAF7F2;--text:#EDD8E4;--text-light:#A87090;
-  --border:#3D2B35;--border-light:#2E1F28;--rose-light:#2A1520;
-  --success-bg:#0E2A1A;--warn-bg:#2A1A08;--error-bg:#2A0E0E;
-}}
-:root[data-theme="dark"]{
-  --cream:#1A1214;--white:#231820;--dark:#FAF7F2;--text:#EDD8E4;--text-light:#A87090;
-  --border:#3D2B35;--border-light:#2E1F28;--rose-light:#2A1520;
-  --success-bg:#0E2A1A;--warn-bg:#2A1A08;--error-bg:#2A0E0E;
-}
+/* sem dark mode — página pública sempre usa fundo claro com cores do tenant */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{min-height:100%;font-family:'Nunito',sans-serif;background:var(--cream);color:var(--text);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
 body{padding:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 
 /* ── welcome bar ─────────────────────────────────────────────── */
 .welcome-bar{
-  background:linear-gradient(135deg,var(--gold-light),#EDE4CE);
-  border-bottom:1px solid rgba(196,153,74,.2);
+  background:#FFF8EE;
+  border-bottom:1px solid rgba(196,153,74,.25);
   padding:11px 16px;display:flex;align-items:center;gap:10px
 }
-.welcome-avatar{
-  width:36px;height:36px;border-radius:50%;flex-shrink:0;
-  background:linear-gradient(135deg,var(--rose-light),var(--border));
-  display:flex;align-items:center;justify-content:center;
-  font-size:17px;border:2px solid rgba(155,77,106,.2)
-}
 .welcome-text{flex:1;min-width:0}
-.welcome-hi{font-size:13px;font-weight:700;color:var(--dark);line-height:1.2}
+.welcome-hi{font-size:13px;font-weight:700;color:#1A1214;line-height:1.2}
 .welcome-hi span{color:var(--rose)}
-.welcome-hint{font-size:11px;color:var(--text-light);margin-top:1px;line-height:1.4}
+.welcome-hint{font-size:11px;color:#8A6B76;margin-top:1px;line-height:1.4}
 .btn-help{
   width:32px;height:32px;border-radius:50%;flex-shrink:0;
   background:#fff;border:1.5px solid var(--gold);color:var(--gold-deep);
@@ -97,18 +82,16 @@ body{padding:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-
 /* ── header ──────────────────────────────────────────────────── */
 .header{
   position:sticky;top:0;z-index:100;
-  background:linear-gradient(135deg,var(--rose),var(--rose-deep));
+  background:var(--rose);
   padding:14px 16px 12px;box-shadow:0 2px 12px rgba(0,0,0,.15)
 }
 .header-inner{display:flex;align-items:center;gap:12px}
-.logo-circle{
-  width:44px;height:44px;border-radius:50%;flex-shrink:0;
-  border:2.5px solid rgba(255,255,255,.4);
-  background:rgba(255,255,255,.15);
-  display:flex;align-items:center;justify-content:center;overflow:hidden
+.logo-wrap{
+  height:40px;max-width:120px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center
 }
-.logo-circle img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-.logo-circle .logo-fallback{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#fff}
+.logo-wrap img{height:40px;max-width:120px;width:auto;object-fit:contain;display:block}
+.logo-wrap .logo-fallback{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#fff}
 .header-info{flex:1;min-width:0}
 .header-brand{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:600;color:#fff;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .header-sub{font-size:11px;color:rgba(255,255,255,.7);font-weight:500;margin-top:1px}
@@ -255,7 +238,6 @@ body{padding:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-
 
 <!-- ── WELCOME BAR ────────────────────────────────────────────── -->
 <div class="welcome-bar" id="welcomeBar">
-  <div class="welcome-avatar" id="welcomeAvatar">👩</div>
   <div class="welcome-text">
     <div class="welcome-hi" id="welcomeHi">Carregando…</div>
     <div class="welcome-hint" id="welcomeHint">Favor cadastrar os agendamentos do dia abaixo.</div>
@@ -310,7 +292,7 @@ body{padding:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-
 <!-- ── HEADER ─────────────────────────────────────────────────── -->
 <div class="header">
   <div class="header-inner">
-    <div class="logo-circle" id="logoCircle">
+    <div class="logo-wrap" id="logoWrap">
       <span class="logo-fallback" id="logoFallback">🌸</span>
     </div>
     <div class="header-info">
@@ -420,10 +402,10 @@ function applyBranding(tenant) {
   if (!tenant) return;
   const name = tenant.business_name || 'Belle Planner';
   document.getElementById('tName').textContent = name;
-  // Logo
-  const circle = document.getElementById('logoCircle');
+  // Logo — mostra inteira, sem círculo
+  const wrap = document.getElementById('logoWrap');
   if (tenant.logo_url) {
-    circle.innerHTML = `<img src="${tenant.logo_url}" alt="${esc(name)}" onerror="this.parentElement.innerHTML='<span class=logo-fallback>${esc(name[0]||'B')}</span>'">`;
+    wrap.innerHTML = `<img src="${tenant.logo_url}" alt="${esc(name)}" onerror="this.parentElement.innerHTML='<span class=logo-fallback>${esc(name[0]||'B')}</span>'">`;
   } else {
     document.getElementById('logoFallback').textContent = name[0] || 'B';
   }
