@@ -8326,6 +8326,436 @@ app.get('*', (req, res, next) => {
   next();
 });
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MAPA DE ATENDIMENTO (AGENDA EXTERNA) — v3.0.0
+// Rotas admin (requireAdmin) e públicas (/m/:key)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Helper: gera chave de acesso única de 7 caracteres
+function generateAccessKey() {
+  return Math.random().toString(36).slice(2, 9).toUpperCase();
+}
+
+// Guard: tenant precisa ter has_mapa=true
+function requireMapa(req, res, next) {
+  if (!req.tenant || !req.tenant.has_mapa) {
+    return res.status(403).json({ error: 'Funcionalidade não disponível no seu plano' });
+  }
+  next();
+}
+
+// ── Admin: listar painéis ──────────────────────────────────────────────────
+app.get('/api/route-panels', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const { rows } = await req.db(
+      `SELECT rp.*, COUNT(ri.id)::int AS item_count,
+              COALESCE(SUM(ri.price),0) AS total_value
+       FROM route_panels rp
+       LEFT JOIN route_panel_items ri ON ri.panel_id = rp.id
+       GROUP BY rp.id
+       ORDER BY rp.exec_date DESC, rp.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: criar painel ───────────────────────────────────────────────────
+app.post('/api/route-panels', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const { city_id, city_name, exec_date, aux_name, aux_phone, commission_pct } = req.body;
+    if (!city_name || !exec_date || !aux_name || !aux_phone) {
+      return res.status(400).json({ error: 'Campos obrigatórios: city_name, exec_date, aux_name, aux_phone' });
+    }
+    // Gera chave única (tenta até 5 vezes para evitar colisão)
+    let access_key, attempt = 0;
+    while (attempt < 5) {
+      access_key = generateAccessKey();
+      const { rows: ck } = await req.db(`SELECT id FROM route_panels WHERE access_key=$1`, [access_key]);
+      if (ck.length === 0) break;
+      attempt++;
+    }
+    const { rows } = await req.db(
+      `INSERT INTO route_panels (access_key, city_id, city_name, exec_date, aux_name, aux_phone, commission_pct, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'filling')
+       RETURNING *`,
+      [access_key, city_id||null, city_name, exec_date, aux_name, aux_phone, commission_pct||30]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: buscar painel com itens ────────────────────────────────────────
+app.get('/api/route-panels/:id', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const { rows: panels } = await req.db(
+      `SELECT rp.*, COUNT(ri.id)::int AS item_count, COALESCE(SUM(ri.price),0) AS total_value
+       FROM route_panels rp
+       LEFT JOIN route_panel_items ri ON ri.panel_id = rp.id
+       WHERE rp.id=$1 GROUP BY rp.id`,
+      [req.params.id]
+    );
+    if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
+    const { rows: items } = await req.db(
+      `SELECT * FROM route_panel_items WHERE panel_id=$1 ORDER BY st, id`,
+      [req.params.id]
+    );
+    res.json({ ...panels[0], items });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: editar metadados do painel ─────────────────────────────────────
+app.put('/api/route-panels/:id', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const { city_id, city_name, exec_date, aux_name, aux_phone, commission_pct } = req.body;
+    const { rows } = await req.db(
+      `UPDATE route_panels SET
+         city_id=$1, city_name=$2, exec_date=$3,
+         aux_name=$4, aux_phone=$5, commission_pct=$6,
+         updated_at=NOW()
+       WHERE id=$7 AND status NOT IN ('approved','expired')
+       RETURNING *`,
+      [city_id||null, city_name, exec_date, aux_name, aux_phone, commission_pct||30, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Painel não encontrado ou já encerrado' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: excluir painel ─────────────────────────────────────────────────
+app.delete('/api/route-panels/:id', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    await req.db(
+      `DELETE FROM route_panels WHERE id=$1`,
+      [req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: adicionar item ao painel ──────────────────────────────────────
+app.post('/api/route-panels/:id/items', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const { client_name, client_phone, proc_id, proc_name, st, et, price } = req.body;
+    if (!client_name || !proc_name || !st || !et) {
+      return res.status(400).json({ error: 'Campos obrigatórios: client_name, proc_name, st, et' });
+    }
+    const { rows } = await req.db(
+      `INSERT INTO route_panel_items (panel_id, client_name, client_phone, proc_id, proc_name, st, et, price)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [req.params.id, client_name, client_phone||'', proc_id||null, proc_name, st, et, price||null]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: editar item ────────────────────────────────────────────────────
+app.put('/api/route-panels/:id/items/:itemId', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const { client_name, client_phone, proc_id, proc_name, st, et, price } = req.body;
+    const { rows } = await req.db(
+      `UPDATE route_panel_items SET
+         client_name=$1, client_phone=$2, proc_id=$3, proc_name=$4, st=$5, et=$6, price=$7
+       WHERE id=$8 AND panel_id=$9 RETURNING *`,
+      [client_name, client_phone||'', proc_id||null, proc_name, st, et, price||null,
+       req.params.itemId, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Item não encontrado' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: remover item ───────────────────────────────────────────────────
+app.delete('/api/route-panels/:id/items/:itemId', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    await req.db(
+      `DELETE FROM route_panel_items WHERE id=$1 AND panel_id=$2`,
+      [req.params.itemId, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: aprovar painel → cria agendamentos táticos + despesa comissão ──
+app.post('/api/route-panels/:id/approve', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const result = await tenantTransaction(req, async (client) => {
+      const schema = req.schemaName || 'public';
+
+      // Busca painel
+      const { rows: panels } = await client.query(
+        `SELECT * FROM "${schema}".route_panels WHERE id=$1`, [req.params.id]
+      );
+      if (!panels.length) throw new Error('Painel não encontrado');
+      const panel = panels[0];
+      if (panel.status === 'approved') throw new Error('Painel já aprovado');
+      if (panel.status === 'expired')  throw new Error('Painel expirado — não pode ser aprovado');
+
+      // Busca itens
+      const { rows: items } = await client.query(
+        `SELECT * FROM "${schema}".route_panel_items WHERE panel_id=$1 ORDER BY st`, [panel.id]
+      );
+      if (!items.length) throw new Error('Painel sem itens — adicione atendimentos antes de aprovar');
+
+      // Cria agendamentos táticos para cada item
+      for (const item of items) {
+        const apptId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        await client.query(
+          `INSERT INTO "${schema}".appointments
+             (id, city_id, city_name, proc_id, proc_name, date, st, et,
+              name, phone, price, pt, status, privacy_consent)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'fixed','confirmed',TRUE)`,
+          [apptId, panel.city_id, panel.city_name, item.proc_id, item.proc_name,
+           panel.exec_date, item.st, item.et, item.client_name, item.client_phone||'',
+           item.price||null]
+        );
+      }
+
+      // Calcula comissão e cria despesa em contas a pagar
+      const totalValue = items.reduce((s, i) => s + (parseFloat(i.price) || 0), 0);
+      const commPct    = parseFloat(panel.commission_pct) || 0;
+      const commValue  = totalValue * commPct / 100;
+      if (commValue > 0) {
+        await client.query(
+          `INSERT INTO "${schema}".expenses (category, description, amount, expense_date)
+           VALUES ('comissao',$1,$2,$3)`,
+          [
+            `Comissão ${panel.aux_name} — ${panel.city_name} ${new Date(panel.exec_date).toLocaleDateString('pt-BR')} (${commPct}%)`,
+            commValue,
+            panel.exec_date
+          ]
+        );
+      }
+
+      // Marca painel como aprovado
+      const { rows: updated } = await client.query(
+        `UPDATE "${schema}".route_panels
+         SET status='approved', approved_at=NOW(), updated_at=NOW()
+         WHERE id=$1 RETURNING *`,
+        [panel.id]
+      );
+      return { panel: updated[0], items_count: items.length, commission: commValue };
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: devolver para revisão ──────────────────────────────────────────
+app.post('/api/route-panels/:id/devolver', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const { obs } = req.body;
+    const { rows } = await req.db(
+      `UPDATE route_panels SET status='revision', obs_devolucao=$1, updated_at=NOW()
+       WHERE id=$2 AND status='pending' RETURNING *`,
+      [obs||null, req.params.id]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Painel não está aguardando aprovação' });
+    res.json({ ok: true, panel: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin: link WhatsApp para compartilhar painel ─────────────────────────
+app.get('/api/route-panels/:id/whatsapp-link', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const { rows } = await req.db(
+      `SELECT access_key, aux_phone, aux_name, city_name, exec_date FROM route_panels WHERE id=$1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Painel não encontrado' });
+    const p = rows[0];
+    const dateStr = new Date(p.exec_date).toLocaleDateString('pt-BR');
+    const panelUrl = `${req.protocol}://${req.get('host')}/m/${p.access_key}`;
+    const msg = encodeURIComponent(
+      `Olá ${p.aux_name}! 🌸\nSegue o link do Mapa de Atendimento de ${p.city_name} (${dateStr}):\n${panelUrl}\nPreencha os dados dos atendimentos e envie para aprovação. Obrigada! 💜`
+    );
+    const phone = String(p.aux_phone).replace(/\D/g, '');
+    res.json({ url: `https://wa.me/${phone}?text=${msg}`, panel_url: panelUrl });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ROTAS PÚBLICAS DO MAPA DE ATENDIMENTO (sem autenticação — acesso por :key)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Serve a página HTML pública do mapa (auxiliar preenche)
+app.get('/m/:key', async (req, res) => {
+  if (!req.tenant) return res.status(404).send('Tenant não encontrado');
+  res.sendFile('mapa.html', { root: path.join(__dirname, 'public') });
+});
+
+// Dados do painel público — consultado pelo mapa.html
+app.get('/api/public/mapa/:key', async (req, res) => {
+  try {
+    if (!req.tenant) return res.status(404).json({ error: 'Tenant não encontrado' });
+    const schema = req.schemaName;
+    const client = await pool.connect();
+    try {
+      await client.query(`SET search_path TO "${schema}", public`);
+      const { rows: panels } = await client.query(
+        `SELECT * FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
+      );
+      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
+      const panel = panels[0];
+      // Qualquer status diferente de filling/revision ainda serve a página,
+      // mas os itens ficarão em modo somente leitura
+      const { rows: items } = await client.query(
+        `SELECT * FROM route_panel_items WHERE panel_id=$1 ORDER BY st, id`, [panel.id]
+      );
+      // Dados do tenant para branding
+      const { rows: cfg } = await client.query(
+        `SELECT tc.business_name, tc.primary_color, tc.secondary_color, tc.logo_url, tc.whatsapp_number
+         FROM tenants t JOIN tenant_configs tc ON tc.tenant_id=t.id
+         WHERE t.schema_name=$1 LIMIT 1`, [schema]
+      );
+      // Procedimentos disponíveis (para o formulário de adição)
+      const { rows: procs } = await client.query(
+        `SELECT id, name, duration_min FROM procedures WHERE active=TRUE ORDER BY name`
+      );
+      res.json({
+        panel,
+        items,
+        tenant: cfg[0] || {},
+        procedures: procs,
+      });
+    } finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Adicionar item (auxiliar) — apenas se filling ou revision
+app.post('/api/public/mapa/:key/items', async (req, res) => {
+  try {
+    if (!req.tenant) return res.status(403).json({ error: 'Não autorizado' });
+    const schema = req.schemaName;
+    const client = await pool.connect();
+    try {
+      await client.query(`SET search_path TO "${schema}", public`);
+      const { rows: panels } = await client.query(
+        `SELECT id, status FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
+      );
+      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
+      if (!['filling','revision'].includes(panels[0].status))
+        return res.status(400).json({ error: 'Este painel não aceita mais edições' });
+      const { client_name, client_phone, proc_id, proc_name, st, et, price } = req.body;
+      if (!client_name || !proc_name || !st || !et)
+        return res.status(400).json({ error: 'Campos obrigatórios: client_name, proc_name, st, et' });
+      const { rows } = await client.query(
+        `INSERT INTO route_panel_items (panel_id, client_name, client_phone, proc_id, proc_name, st, et, price)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [panels[0].id, client_name, client_phone||'', proc_id||null, proc_name, st, et, price||null]
+      );
+      // Atualiza updated_at do painel
+      await client.query(`UPDATE route_panels SET updated_at=NOW() WHERE id=$1`, [panels[0].id]);
+      res.json(rows[0]);
+    } finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Editar item (auxiliar)
+app.put('/api/public/mapa/:key/items/:itemId', async (req, res) => {
+  try {
+    if (!req.tenant) return res.status(403).json({ error: 'Não autorizado' });
+    const schema = req.schemaName;
+    const client = await pool.connect();
+    try {
+      await client.query(`SET search_path TO "${schema}", public`);
+      const { rows: panels } = await client.query(
+        `SELECT id, status FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
+      );
+      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
+      if (!['filling','revision'].includes(panels[0].status))
+        return res.status(400).json({ error: 'Este painel não aceita mais edições' });
+      const { client_name, client_phone, proc_id, proc_name, st, et, price } = req.body;
+      const { rows } = await client.query(
+        `UPDATE route_panel_items SET
+           client_name=$1, client_phone=$2, proc_id=$3, proc_name=$4, st=$5, et=$6, price=$7
+         WHERE id=$8 AND panel_id=$9 RETURNING *`,
+        [client_name, client_phone||'', proc_id||null, proc_name, st, et, price||null,
+         req.params.itemId, panels[0].id]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Item não encontrado' });
+      await client.query(`UPDATE route_panels SET updated_at=NOW() WHERE id=$1`, [panels[0].id]);
+      res.json(rows[0]);
+    } finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Remover item (auxiliar)
+app.delete('/api/public/mapa/:key/items/:itemId', async (req, res) => {
+  try {
+    if (!req.tenant) return res.status(403).json({ error: 'Não autorizado' });
+    const schema = req.schemaName;
+    const client = await pool.connect();
+    try {
+      await client.query(`SET search_path TO "${schema}", public`);
+      const { rows: panels } = await client.query(
+        `SELECT id, status FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
+      );
+      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
+      if (!['filling','revision'].includes(panels[0].status))
+        return res.status(400).json({ error: 'Este painel não aceita mais edições' });
+      await client.query(
+        `DELETE FROM route_panel_items WHERE id=$1 AND panel_id=$2`,
+        [req.params.itemId, panels[0].id]
+      );
+      await client.query(`UPDATE route_panels SET updated_at=NOW() WHERE id=$1`, [panels[0].id]);
+      res.json({ ok: true });
+    } finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Enviar para aprovação (auxiliar muda filling/revision → pending)
+app.post('/api/public/mapa/:key/submit', async (req, res) => {
+  try {
+    if (!req.tenant) return res.status(403).json({ error: 'Não autorizado' });
+    const schema = req.schemaName;
+    const client = await pool.connect();
+    try {
+      await client.query(`SET search_path TO "${schema}", public`);
+      const { rows: panels } = await client.query(
+        `SELECT id, status FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
+      );
+      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
+      if (!['filling','revision'].includes(panels[0].status))
+        return res.status(400).json({ error: 'Painel já enviado ou encerrado' });
+      // Verifica se tem pelo menos 1 item
+      const { rows: cnt } = await client.query(
+        `SELECT COUNT(*) AS c FROM route_panel_items WHERE panel_id=$1`, [panels[0].id]
+      );
+      if (parseInt(cnt[0].c) === 0)
+        return res.status(400).json({ error: 'Adicione ao menos um atendimento antes de enviar' });
+      await client.query(
+        `UPDATE route_panels SET status='pending', obs_devolucao=NULL, updated_at=NOW() WHERE id=$1`,
+        [panels[0].id]
+      );
+      res.json({ ok: true });
+    } finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Cron: expirar painéis cuja exec_date já passou sem aprovação ──────────
+cron.schedule('0 3 * * *', async () => {
+  // Roda às 03:00 UTC (00h Brasília)
+  try {
+    const { rows: tenants } = await pool.query(
+      `SELECT schema_name FROM tenants WHERE schema_name IS NOT NULL AND active=TRUE AND has_mapa=TRUE`
+    );
+    for (const { schema_name: sn } of tenants) {
+      try {
+        const result = await pool.query(
+          `UPDATE "${sn}".route_panels
+           SET status='expired', updated_at=NOW()
+           WHERE status IN ('filling','pending','revision')
+             AND exec_date < CURRENT_DATE
+           RETURNING id`
+        );
+        if (result.rows.length > 0) {
+          console.log(`[Cron Mapa] ${sn}: ${result.rows.length} painel(is) expirado(s)`);
+        }
+      } catch (e) { console.warn(`[Cron Mapa] Erro em ${sn}:`, e.message); }
+    }
+  } catch (e) { console.error('[Cron Mapa] Erro geral:', e.message); }
+}, { timezone: 'UTC' });
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -8842,435 +9272,6 @@ cron.schedule('30 9 * * *', async () => {
       } catch (e) { console.error('[Cron] Erro no envio para ' + snap.tenant_name + ':', e.message); }
     }
   } catch (e) { console.error('[Cron] Erro geral 06h30:', e.message); }
-}, { timezone: 'UTC' });
-
-// ══════════════════════════════════════════════════════════════════════════════
-// MAPA DE ATENDIMENTO (AGENDA EXTERNA) — v3.0.0
-// Rotas admin (requireAdmin) e públicas (/m/:key)
-// ══════════════════════════════════════════════════════════════════════════════
-
-// Helper: gera chave de acesso única de 7 caracteres
-function generateAccessKey() {
-  return Math.random().toString(36).slice(2, 9).toUpperCase();
-}
-
-// Guard: tenant precisa ter has_mapa=true
-function requireMapa(req, res, next) {
-  if (!req.tenant || !req.tenant.has_mapa) {
-    return res.status(403).json({ error: 'Funcionalidade não disponível no seu plano' });
-  }
-  next();
-}
-
-// ── Admin: listar painéis ──────────────────────────────────────────────────
-app.get('/api/route-panels', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    const { rows } = await req.db(
-      `SELECT rp.*, COUNT(ri.id)::int AS item_count,
-              COALESCE(SUM(ri.price),0) AS total_value
-       FROM route_panels rp
-       LEFT JOIN route_panel_items ri ON ri.panel_id = rp.id
-       GROUP BY rp.id
-       ORDER BY rp.exec_date DESC, rp.created_at DESC`
-    );
-    res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: criar painel ───────────────────────────────────────────────────
-app.post('/api/route-panels', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    const { city_id, city_name, exec_date, aux_name, aux_phone, commission_pct } = req.body;
-    if (!city_name || !exec_date || !aux_name || !aux_phone) {
-      return res.status(400).json({ error: 'Campos obrigatórios: city_name, exec_date, aux_name, aux_phone' });
-    }
-    // Gera chave única (tenta até 5 vezes para evitar colisão)
-    let access_key, attempt = 0;
-    while (attempt < 5) {
-      access_key = generateAccessKey();
-      const { rows: ck } = await req.db(`SELECT id FROM route_panels WHERE access_key=$1`, [access_key]);
-      if (ck.length === 0) break;
-      attempt++;
-    }
-    const { rows } = await req.db(
-      `INSERT INTO route_panels (access_key, city_id, city_name, exec_date, aux_name, aux_phone, commission_pct, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'filling')
-       RETURNING *`,
-      [access_key, city_id||null, city_name, exec_date, aux_name, aux_phone, commission_pct||30]
-    );
-    res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: buscar painel com itens ────────────────────────────────────────
-app.get('/api/route-panels/:id', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    const { rows: panels } = await req.db(
-      `SELECT rp.*, COUNT(ri.id)::int AS item_count, COALESCE(SUM(ri.price),0) AS total_value
-       FROM route_panels rp
-       LEFT JOIN route_panel_items ri ON ri.panel_id = rp.id
-       WHERE rp.id=$1 GROUP BY rp.id`,
-      [req.params.id]
-    );
-    if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
-    const { rows: items } = await req.db(
-      `SELECT * FROM route_panel_items WHERE panel_id=$1 ORDER BY st, id`,
-      [req.params.id]
-    );
-    res.json({ ...panels[0], items });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: editar metadados do painel ─────────────────────────────────────
-app.put('/api/route-panels/:id', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    const { city_id, city_name, exec_date, aux_name, aux_phone, commission_pct } = req.body;
-    const { rows } = await req.db(
-      `UPDATE route_panels SET
-         city_id=$1, city_name=$2, exec_date=$3,
-         aux_name=$4, aux_phone=$5, commission_pct=$6,
-         updated_at=NOW()
-       WHERE id=$7 AND status NOT IN ('approved','expired')
-       RETURNING *`,
-      [city_id||null, city_name, exec_date, aux_name, aux_phone, commission_pct||30, req.params.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Painel não encontrado ou já encerrado' });
-    res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: excluir painel ─────────────────────────────────────────────────
-app.delete('/api/route-panels/:id', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    await req.db(
-      `DELETE FROM route_panels WHERE id=$1`,
-      [req.params.id]
-    );
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: adicionar item ao painel ──────────────────────────────────────
-app.post('/api/route-panels/:id/items', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    const { client_name, client_phone, proc_id, proc_name, st, et, price } = req.body;
-    if (!client_name || !proc_name || !st || !et) {
-      return res.status(400).json({ error: 'Campos obrigatórios: client_name, proc_name, st, et' });
-    }
-    const { rows } = await req.db(
-      `INSERT INTO route_panel_items (panel_id, client_name, client_phone, proc_id, proc_name, st, et, price)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [req.params.id, client_name, client_phone||'', proc_id||null, proc_name, st, et, price||null]
-    );
-    res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: editar item ────────────────────────────────────────────────────
-app.put('/api/route-panels/:id/items/:itemId', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    const { client_name, client_phone, proc_id, proc_name, st, et, price } = req.body;
-    const { rows } = await req.db(
-      `UPDATE route_panel_items SET
-         client_name=$1, client_phone=$2, proc_id=$3, proc_name=$4, st=$5, et=$6, price=$7
-       WHERE id=$8 AND panel_id=$9 RETURNING *`,
-      [client_name, client_phone||'', proc_id||null, proc_name, st, et, price||null,
-       req.params.itemId, req.params.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Item não encontrado' });
-    res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: remover item ───────────────────────────────────────────────────
-app.delete('/api/route-panels/:id/items/:itemId', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    await req.db(
-      `DELETE FROM route_panel_items WHERE id=$1 AND panel_id=$2`,
-      [req.params.itemId, req.params.id]
-    );
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: aprovar painel → cria agendamentos táticos + despesa comissão ──
-app.post('/api/route-panels/:id/approve', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    const result = await tenantTransaction(req, async (client) => {
-      const schema = req.schemaName || 'public';
-
-      // Busca painel
-      const { rows: panels } = await client.query(
-        `SELECT * FROM "${schema}".route_panels WHERE id=$1`, [req.params.id]
-      );
-      if (!panels.length) throw new Error('Painel não encontrado');
-      const panel = panels[0];
-      if (panel.status === 'approved') throw new Error('Painel já aprovado');
-      if (panel.status === 'expired')  throw new Error('Painel expirado — não pode ser aprovado');
-
-      // Busca itens
-      const { rows: items } = await client.query(
-        `SELECT * FROM "${schema}".route_panel_items WHERE panel_id=$1 ORDER BY st`, [panel.id]
-      );
-      if (!items.length) throw new Error('Painel sem itens — adicione atendimentos antes de aprovar');
-
-      // Cria agendamentos táticos para cada item
-      for (const item of items) {
-        const apptId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-        await client.query(
-          `INSERT INTO "${schema}".appointments
-             (id, city_id, city_name, proc_id, proc_name, date, st, et,
-              name, phone, price, pt, status, privacy_consent)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'fixed','confirmed',TRUE)`,
-          [apptId, panel.city_id, panel.city_name, item.proc_id, item.proc_name,
-           panel.exec_date, item.st, item.et, item.client_name, item.client_phone||'',
-           item.price||null]
-        );
-      }
-
-      // Calcula comissão e cria despesa em contas a pagar
-      const totalValue = items.reduce((s, i) => s + (parseFloat(i.price) || 0), 0);
-      const commPct    = parseFloat(panel.commission_pct) || 0;
-      const commValue  = totalValue * commPct / 100;
-      if (commValue > 0) {
-        await client.query(
-          `INSERT INTO "${schema}".expenses (category, description, amount, expense_date)
-           VALUES ('comissao',$1,$2,$3)`,
-          [
-            `Comissão ${panel.aux_name} — ${panel.city_name} ${new Date(panel.exec_date).toLocaleDateString('pt-BR')} (${commPct}%)`,
-            commValue,
-            panel.exec_date
-          ]
-        );
-      }
-
-      // Marca painel como aprovado
-      const { rows: updated } = await client.query(
-        `UPDATE "${schema}".route_panels
-         SET status='approved', approved_at=NOW(), updated_at=NOW()
-         WHERE id=$1 RETURNING *`,
-        [panel.id]
-      );
-      return { panel: updated[0], items_count: items.length, commission: commValue };
-    });
-    res.json({ ok: true, ...result });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: devolver para revisão ──────────────────────────────────────────
-app.post('/api/route-panels/:id/devolver', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    const { obs } = req.body;
-    const { rows } = await req.db(
-      `UPDATE route_panels SET status='revision', obs_devolucao=$1, updated_at=NOW()
-       WHERE id=$2 AND status='pending' RETURNING *`,
-      [obs||null, req.params.id]
-    );
-    if (!rows.length) return res.status(400).json({ error: 'Painel não está aguardando aprovação' });
-    res.json({ ok: true, panel: rows[0] });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Admin: link WhatsApp para compartilhar painel ─────────────────────────
-app.get('/api/route-panels/:id/whatsapp-link', requireAdmin, requireMapa, async (req, res) => {
-  try {
-    const { rows } = await req.db(
-      `SELECT access_key, aux_phone, aux_name, city_name, exec_date FROM route_panels WHERE id=$1`,
-      [req.params.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Painel não encontrado' });
-    const p = rows[0];
-    const dateStr = new Date(p.exec_date).toLocaleDateString('pt-BR');
-    const panelUrl = `${req.protocol}://${req.get('host')}/m/${p.access_key}`;
-    const msg = encodeURIComponent(
-      `Olá ${p.aux_name}! 🌸\nSegue o link do Mapa de Atendimento de ${p.city_name} (${dateStr}):\n${panelUrl}\nPreencha os dados dos atendimentos e envie para aprovação. Obrigada! 💜`
-    );
-    const phone = String(p.aux_phone).replace(/\D/g, '');
-    res.json({ url: `https://wa.me/${phone}?text=${msg}`, panel_url: panelUrl });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ROTAS PÚBLICAS DO MAPA DE ATENDIMENTO (sem autenticação — acesso por :key)
-// ══════════════════════════════════════════════════════════════════════════════
-
-// Serve a página HTML pública do mapa (auxiliar preenche)
-app.get('/m/:key', async (req, res) => {
-  if (!req.tenant) return res.status(404).send('Tenant não encontrado');
-  res.sendFile('mapa.html', { root: path.join(__dirname, 'public') });
-});
-
-// Dados do painel público — consultado pelo mapa.html
-app.get('/api/public/mapa/:key', async (req, res) => {
-  try {
-    if (!req.tenant) return res.status(404).json({ error: 'Tenant não encontrado' });
-    const schema = req.schemaName;
-    const client = await pool.connect();
-    try {
-      await client.query(`SET search_path TO "${schema}", public`);
-      const { rows: panels } = await client.query(
-        `SELECT * FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
-      );
-      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
-      const panel = panels[0];
-      // Qualquer status diferente de filling/revision ainda serve a página,
-      // mas os itens ficarão em modo somente leitura
-      const { rows: items } = await client.query(
-        `SELECT * FROM route_panel_items WHERE panel_id=$1 ORDER BY st, id`, [panel.id]
-      );
-      // Dados do tenant para branding
-      const { rows: cfg } = await client.query(
-        `SELECT tc.business_name, tc.primary_color, tc.secondary_color, tc.logo_url, tc.whatsapp_number
-         FROM tenants t JOIN tenant_configs tc ON tc.tenant_id=t.id
-         WHERE t.schema_name=$1 LIMIT 1`, [schema]
-      );
-      // Procedimentos disponíveis (para o formulário de adição)
-      const { rows: procs } = await client.query(
-        `SELECT id, name, duration_min FROM procedures WHERE active=TRUE ORDER BY name`
-      );
-      res.json({
-        panel,
-        items,
-        tenant: cfg[0] || {},
-        procedures: procs,
-      });
-    } finally { client.release(); }
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// Adicionar item (auxiliar) — apenas se filling ou revision
-app.post('/api/public/mapa/:key/items', async (req, res) => {
-  try {
-    if (!req.tenant) return res.status(403).json({ error: 'Não autorizado' });
-    const schema = req.schemaName;
-    const client = await pool.connect();
-    try {
-      await client.query(`SET search_path TO "${schema}", public`);
-      const { rows: panels } = await client.query(
-        `SELECT id, status FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
-      );
-      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
-      if (!['filling','revision'].includes(panels[0].status))
-        return res.status(400).json({ error: 'Este painel não aceita mais edições' });
-      const { client_name, client_phone, proc_id, proc_name, st, et, price } = req.body;
-      if (!client_name || !proc_name || !st || !et)
-        return res.status(400).json({ error: 'Campos obrigatórios: client_name, proc_name, st, et' });
-      const { rows } = await client.query(
-        `INSERT INTO route_panel_items (panel_id, client_name, client_phone, proc_id, proc_name, st, et, price)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-        [panels[0].id, client_name, client_phone||'', proc_id||null, proc_name, st, et, price||null]
-      );
-      // Atualiza updated_at do painel
-      await client.query(`UPDATE route_panels SET updated_at=NOW() WHERE id=$1`, [panels[0].id]);
-      res.json(rows[0]);
-    } finally { client.release(); }
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// Editar item (auxiliar)
-app.put('/api/public/mapa/:key/items/:itemId', async (req, res) => {
-  try {
-    if (!req.tenant) return res.status(403).json({ error: 'Não autorizado' });
-    const schema = req.schemaName;
-    const client = await pool.connect();
-    try {
-      await client.query(`SET search_path TO "${schema}", public`);
-      const { rows: panels } = await client.query(
-        `SELECT id, status FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
-      );
-      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
-      if (!['filling','revision'].includes(panels[0].status))
-        return res.status(400).json({ error: 'Este painel não aceita mais edições' });
-      const { client_name, client_phone, proc_id, proc_name, st, et, price } = req.body;
-      const { rows } = await client.query(
-        `UPDATE route_panel_items SET
-           client_name=$1, client_phone=$2, proc_id=$3, proc_name=$4, st=$5, et=$6, price=$7
-         WHERE id=$8 AND panel_id=$9 RETURNING *`,
-        [client_name, client_phone||'', proc_id||null, proc_name, st, et, price||null,
-         req.params.itemId, panels[0].id]
-      );
-      if (!rows.length) return res.status(404).json({ error: 'Item não encontrado' });
-      await client.query(`UPDATE route_panels SET updated_at=NOW() WHERE id=$1`, [panels[0].id]);
-      res.json(rows[0]);
-    } finally { client.release(); }
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// Remover item (auxiliar)
-app.delete('/api/public/mapa/:key/items/:itemId', async (req, res) => {
-  try {
-    if (!req.tenant) return res.status(403).json({ error: 'Não autorizado' });
-    const schema = req.schemaName;
-    const client = await pool.connect();
-    try {
-      await client.query(`SET search_path TO "${schema}", public`);
-      const { rows: panels } = await client.query(
-        `SELECT id, status FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
-      );
-      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
-      if (!['filling','revision'].includes(panels[0].status))
-        return res.status(400).json({ error: 'Este painel não aceita mais edições' });
-      await client.query(
-        `DELETE FROM route_panel_items WHERE id=$1 AND panel_id=$2`,
-        [req.params.itemId, panels[0].id]
-      );
-      await client.query(`UPDATE route_panels SET updated_at=NOW() WHERE id=$1`, [panels[0].id]);
-      res.json({ ok: true });
-    } finally { client.release(); }
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// Enviar para aprovação (auxiliar muda filling/revision → pending)
-app.post('/api/public/mapa/:key/submit', async (req, res) => {
-  try {
-    if (!req.tenant) return res.status(403).json({ error: 'Não autorizado' });
-    const schema = req.schemaName;
-    const client = await pool.connect();
-    try {
-      await client.query(`SET search_path TO "${schema}", public`);
-      const { rows: panels } = await client.query(
-        `SELECT id, status FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
-      );
-      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
-      if (!['filling','revision'].includes(panels[0].status))
-        return res.status(400).json({ error: 'Painel já enviado ou encerrado' });
-      // Verifica se tem pelo menos 1 item
-      const { rows: cnt } = await client.query(
-        `SELECT COUNT(*) AS c FROM route_panel_items WHERE panel_id=$1`, [panels[0].id]
-      );
-      if (parseInt(cnt[0].c) === 0)
-        return res.status(400).json({ error: 'Adicione ao menos um atendimento antes de enviar' });
-      await client.query(
-        `UPDATE route_panels SET status='pending', obs_devolucao=NULL, updated_at=NOW() WHERE id=$1`,
-        [panels[0].id]
-      );
-      res.json({ ok: true });
-    } finally { client.release(); }
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ── Cron: expirar painéis cuja exec_date já passou sem aprovação ──────────
-cron.schedule('0 3 * * *', async () => {
-  // Roda às 03:00 UTC (00h Brasília)
-  try {
-    const { rows: tenants } = await pool.query(
-      `SELECT schema_name FROM tenants WHERE schema_name IS NOT NULL AND active=TRUE AND has_mapa=TRUE`
-    );
-    for (const { schema_name: sn } of tenants) {
-      try {
-        const result = await pool.query(
-          `UPDATE "${sn}".route_panels
-           SET status='expired', updated_at=NOW()
-           WHERE status IN ('filling','pending','revision')
-             AND exec_date < CURRENT_DATE
-           RETURNING id`
-        );
-        if (result.rows.length > 0) {
-          console.log(`[Cron Mapa] ${sn}: ${result.rows.length} painel(is) expirado(s)`);
-        }
-      } catch (e) { console.warn(`[Cron Mapa] Erro em ${sn}:`, e.message); }
-    }
-  } catch (e) { console.error('[Cron Mapa] Erro geral:', e.message); }
 }, { timezone: 'UTC' });
 
 async function start() {
