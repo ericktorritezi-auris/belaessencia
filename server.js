@@ -5728,7 +5728,7 @@ app.get('/master/api/tenants', requireMaster, async (req, res) => {
       SELECT t.id, t.slug, t.name, t.owner_name, t.owner_email, t.owner_phone,
              t.domain_custom, t.subdomain, t.active, t.plan_expires_at, t.schema_name,
              t.monthly_fee, t.setup_fee, t.created_at, t.exempt, t.trial_ends_at, t.send_cc_master,
-             t.plan_type, t.has_chat, t.panel_token, t.panel_token_at,
+             t.plan_type, t.has_chat, t.has_mapa, t.panel_token, t.panel_token_at,
              tc.primary_color, tc.secondary_color, tc.business_name,
              tc.tagline, tc.whatsapp_number, tc.resend_from_email, tc.admin_user,
              tc.logo_url, tc.prof_photo_url, tc.prof_profession,
