@@ -2100,7 +2100,11 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
               <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto">
                 <div style="font-size:16px;font-weight:800;margin-bottom:16px">Novo Mapa de Atendimento</div>
                 <div style="display:grid;gap:12px">
-                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Cidade <input id="mc-city" class="fi" placeholder="Ex: Curitiba · PR" style="margin-top:4px"></label>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Cidade
+                    <select id="mc-city" class="fi" style="margin-top:4px">
+                      <option value="">Carregando cidades…</option>
+                    </select>
+                  </label>
                   <label style="font-size:12px;font-weight:700;color:var(--text-light)">Data de execução <input type="date" id="mc-date" class="fi" style="margin-top:4px"></label>
                   <label style="font-size:12px;font-weight:700;color:var(--text-light)">Nome da auxiliar <input id="mc-aux-name" class="fi" placeholder="Nome completo" style="margin-top:4px"></label>
                   <label style="font-size:12px;font-weight:700;color:var(--text-light)">WhatsApp da auxiliar <input id="mc-aux-phone" class="fi" placeholder="Ex: 41999999999" style="margin-top:4px"></label>
@@ -9848,12 +9852,33 @@ function mapaRenderList() {
 }
 
 // ── Criar novo painel ──────────────────────────────────────────────────────
-function mapaOpenCreate() {
-  document.getElementById('mc-city').value    = '';
+async function mapaOpenCreate() {
   document.getElementById('mc-date').value    = '';
   document.getElementById('mc-aux-name').value  = '';
   document.getElementById('mc-aux-phone').value = '';
   document.getElementById('mc-comm').value    = '30';
+
+  // Carrega cidades cadastradas pelo tenant
+  const sel = document.getElementById('mc-city');
+  sel.innerHTML = '<option value="">Carregando…</option>';
+  try {
+    const r = await fetch('/api/cities');
+    if (r.ok) {
+      const cities = await r.json();
+      if (cities.length === 0) {
+        sel.innerHTML = '<option value="">Nenhuma cidade cadastrada</option>';
+      } else {
+        sel.innerHTML = '<option value="">Selecione a cidade…</option>' +
+          cities.map(c => {
+            const label = c.name + (c.uf ? ' · ' + c.uf : '');
+            return `<option value="${c.id}" data-name="${label.replace(/"/g,'&quot;')}">${label}</option>`;
+          }).join('');
+      }
+    }
+  } catch(e) {
+    sel.innerHTML = '<option value="">Erro ao carregar cidades</option>';
+  }
+
   document.getElementById('mapa-create-modal').classList.remove('hidden');
   document.getElementById('mapa-create-modal').style.display = 'flex';
 }
@@ -9862,8 +9887,12 @@ function mapaCloseCreate() {
   document.getElementById('mapa-create-modal').classList.add('hidden');
 }
 async function mapaSaveCreate() {
+  const sel     = document.getElementById('mc-city');
+  const cityId  = sel.value;
+  const cityName = sel.selectedOptions[0]?.dataset?.name || '';
   const body = {
-    city_name:      document.getElementById('mc-city').value.trim(),
+    city_id:        cityId   ? parseInt(cityId) : null,
+    city_name:      cityName,
     exec_date:      document.getElementById('mc-date').value,
     aux_name:       document.getElementById('mc-aux-name').value.trim(),
     aux_phone:      document.getElementById('mc-aux-phone').value.trim(),
