@@ -900,7 +900,7 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
         </div>
         <div style="margin-top:2px" id="sb-agenda-externa" style="display:none">
           <div class="nav-sec-ttl">Agenda Externa</div>
-          <div class="nav-item" id="nav-mapa" onclick="showSec('mapa');initMapa()"><span class="nav-icon">🗺️</span> Mapa de Atendimento</div>
+          <div class="nav-item" id="nav-mapa" onclick="showSec('mapa')"><span class="nav-icon">🗺️</span> Mapa de Atendimento</div>
         </div>
         <div style="margin-top:2px">
           <div class="nav-sec-ttl">Configurações</div>
@@ -3188,9 +3188,10 @@ const SEC_TITLES={
   agenda:'Agenda',manual:'Agenda Manual',retro:'Agenda Retroativa','tatica':'Agenda Tática',blocked:'Bloquear Datas','avail':'Disponibilidade',released:'Liberar Datas',nps:'NPS — Satisfação',
   revenue:'Receita',cockpit:'Cockpit Financeiro',receivables:'Contas a Receber',expenses:'Contas a Pagar','summary-fin':'Resumo Financeiro',promos:'Promoções',commem:'Datas Comemorativas',webpush:'Web Push',
   cities:'Cidades',schedules:'Configuração de Horários',report:'Agendamentos',historico:'Histórico de Atividades',lembretes:'Lembretes',
-  procs:'Procedimentos','cert-config':'Certificados',profile:'Perfil & Senha',lgpd:'Log LGPD',backup:'Backup'
+  procs:'Procedimentos','cert-config':'Certificados',profile:'Perfil & Senha',lgpd:'Log LGPD',backup:'Backup',
+  mapa:'Mapa de Atendimento'
 };
-const ALL_SECS = ['agenda','manual','retro','tatica','blocked','released','avail','report','historico','lembretes','nps','revenue','cockpit','receivables','expenses','summary-fin','promos','commem','webpush','cities','schedules','procs','cert-config','profile','lgpd','backup'];
+const ALL_SECS = ['agenda','manual','retro','tatica','blocked','released','avail','report','historico','lembretes','nps','revenue','cockpit','receivables','expenses','summary-fin','promos','commem','webpush','cities','schedules','procs','cert-config','profile','lgpd','backup','mapa'];
 
 function showSec(name){
   if (name === 'profile') renderBiometricProfileCard();
@@ -3210,6 +3211,7 @@ function showSec(name){
   if(name==='expenses')     initExpenses();
   if(name==='summary-fin')  initSummaryFin();
   if(name==='lgpd') initLgpd();
+  if(name==='mapa') initMapa();
   if(name==='released'){renderReleased();renderReleasedSlots();renderReleaseCityCheckboxes()}
   if(name==='nps') renderNPSDashboard();
   if(name==='blocked'){renderBlocked();renderBlockedSlots();renderBlockCityCheckboxes()}
