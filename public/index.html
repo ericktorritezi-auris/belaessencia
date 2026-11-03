@@ -2220,10 +2220,14 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
               <div style="display:grid;gap:11px">
                 <label style="font-size:12px;font-weight:700;color:var(--text-light)">Nome do cliente <input id="mi-name" class="fi" placeholder="Nome completo" style="margin-top:4px"></label>
                 <label style="font-size:12px;font-weight:700;color:var(--text-light)">WhatsApp do cliente <input id="mi-phone" class="fi" placeholder="Ex: 41999999999" style="margin-top:4px"></label>
-                <label style="font-size:12px;font-weight:700;color:var(--text-light)">Procedimento <input id="mi-proc" class="fi" placeholder="Ex: Design de Sobrancelha" style="margin-top:4px"></label>
+                <label style="font-size:12px;font-weight:700;color:var(--text-light)">Procedimento
+                  <select id="mi-proc" class="fi" onchange="mapaItemProcChange()" style="margin-top:4px">
+                    <option value="">— Selecione —</option>
+                  </select>
+                </label>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Início <input type="time" id="mi-st" class="fi" style="margin-top:4px"></label>
-                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Fim <input type="time" id="mi-et" class="fi" style="margin-top:4px"></label>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Início <input type="time" id="mi-st" class="fi" oninput="mapaItemCalcEnd()" style="margin-top:4px"></label>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Fim <input type="time" id="mi-et" class="fi" readonly style="margin-top:4px;background:var(--cream);cursor:default"></label>
                 </div>
                 <label style="font-size:12px;font-weight:700;color:var(--text-light)">Valor (R$) <input type="number" id="mi-price" class="fi" placeholder="0,00" min="0" step="0.01" style="margin-top:4px"></label>
               </div>
@@ -9881,6 +9885,7 @@ let _mapaPanel      = null;   // painel em detalhe/aprovação
 let _mapaEditItem   = null;   // item sendo editado (null = novo)
 let _mapaLinkKey    = null;   // access_key do painel recém-criado
 let _mapaReviewMode = false;  // tenant revisando itens antes de enviar para validação
+let _mapaProcs      = [];     // procedimentos do tenant para o modal de item
 
 const MAPA_STATUS_LABEL = {
   filling:    '✏️ Preenchendo',
@@ -9918,7 +9923,44 @@ function _mapaSheetClose(sheetId, overlayId) {
 // ── Inicialização ─────────────────────────────────────────────────────────
 async function initMapa() {
   document.getElementById('adm-ttl').textContent = 'Mapa de Atendimento';
+  // Carrega procedimentos para o modal de item
+  try {
+    const r = await fetch('/api/procedures');
+    if (r.ok) {
+      _mapaProcs = await r.json();
+      const sel = document.getElementById('mi-proc');
+      if (sel) {
+        sel.innerHTML = '<option value="">— Selecione —</option>' +
+          _mapaProcs.map(p => `<option value="${p.id}" data-dur="${p.dur||0}" data-price="${p.price||0}" data-name="${(p.name||'').replace(/"/g,'&quot;')}">${p.name}</option>`).join('');
+      }
+    }
+  } catch(e) { /* silencioso */ }
   await mapaLoadList();
+}
+
+// Auto-fill fim e preço ao trocar procedimento
+function mapaItemProcChange() {
+  const sel = document.getElementById('mi-proc');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  const dur   = parseInt(opt.dataset.dur) || 0;
+  const price = parseFloat(opt.dataset.price) || 0;
+  if (price) document.getElementById('mi-price').value = price.toFixed(2);
+  mapaItemCalcEnd();
+}
+
+// Recalcula horário de fim baseado em início + duração do procedimento selecionado
+function mapaItemCalcEnd() {
+  const sel   = document.getElementById('mi-proc');
+  const opt   = sel ? sel.options[sel.selectedIndex] : null;
+  const dur   = opt ? (parseInt(opt.dataset.dur) || 0) : 0;
+  const stVal = document.getElementById('mi-st').value;
+  if (!stVal || !dur) return;
+  const [h, m] = stVal.split(':').map(Number);
+  const endMin = h * 60 + m + dur;
+  const eh = String(Math.floor(endMin / 60) % 24).padStart(2,'0');
+  const em = String(endMin % 60).padStart(2,'0');
+  document.getElementById('mi-et').value = `${eh}:${em}`;
 }
 
 async function mapaLoadList() {
@@ -10333,7 +10375,12 @@ async function mapaConfirmDevolver() {
 function mapaOpenAddItem() {
   _mapaEditItem = null;
   document.getElementById('mapa-item-modal-ttl').textContent = 'Novo Atendimento';
-  ['mi-name','mi-phone','mi-proc','mi-st','mi-et','mi-price'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('mi-name').value  = '';
+  document.getElementById('mi-phone').value = '';
+  document.getElementById('mi-proc').value  = '';
+  document.getElementById('mi-st').value    = '';
+  document.getElementById('mi-et').value    = '';
+  document.getElementById('mi-price').value = '';
   const el = document.getElementById('mapa-item-modal');
   el.classList.remove('hidden'); el.style.display = 'flex';
 }
@@ -10344,7 +10391,11 @@ function mapaOpenEditItem(itemId) {
   document.getElementById('mapa-item-modal-ttl').textContent = 'Editar Atendimento';
   document.getElementById('mi-name').value  = it.client_name;
   document.getElementById('mi-phone').value = it.client_phone || '';
-  document.getElementById('mi-proc').value  = it.proc_name;
+  // Seleciona procedimento pelo nome no select
+  const sel = document.getElementById('mi-proc');
+  const opts = Array.from(sel.options);
+  const match = opts.find(o => o.dataset.name === it.proc_name || o.text === it.proc_name);
+  sel.value = match ? match.value : '';
   document.getElementById('mi-st').value    = it.st ? it.st.slice(0,5) : '';
   document.getElementById('mi-et').value    = it.et ? it.et.slice(0,5) : '';
   document.getElementById('mi-price').value = it.price || '';
@@ -10357,10 +10408,12 @@ function mapaCloseItemModal() {
   _mapaEditItem = null;
 }
 async function mapaSaveItem() {
+  const sel = document.getElementById('mi-proc');
+  const procName = sel.options[sel.selectedIndex]?.dataset?.name || sel.options[sel.selectedIndex]?.text || '';
   const body = {
     client_name:  document.getElementById('mi-name').value.trim(),
     client_phone: document.getElementById('mi-phone').value.trim(),
-    proc_name:    document.getElementById('mi-proc').value.trim(),
+    proc_name:    procName.trim(),
     st:           document.getElementById('mi-st').value,
     et:           document.getElementById('mi-et').value,
     price:        document.getElementById('mi-price').value || null,
