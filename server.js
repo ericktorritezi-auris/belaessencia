@@ -2036,16 +2036,15 @@ app.post('/api/webauthn/register/start', requireAdmin, async (req, res) => {
     const { rpID, rpName } = getRpConfig(req);
     const userHandle = req.schemaName || 'default';
 
-    // Credenciais existentes para evitar duplicatas
-    const existing = await req.db('SELECT credential_id FROM webauthn_credentials WHERE user_handle=$1', [userHandle]);
-
     const options = await generateRegistrationOptions({
       rpName,
       rpID,
       userName: userHandle,
       userDisplayName: 'Administrador',
       attestationType: 'none',
-      excludeCredentials: existing.rows.map(r => ({ id: r.credential_id })),
+      // excludeCredentials removido: causava InvalidStateError no iOS (iCloud Keychain)
+      // quando o usuário tentava re-cadastrar após perder a autenticação.
+      // O ON CONFLICT DO UPDATE no INSERT já trata credenciais duplicadas.
       authenticatorSelection: {
         authenticatorAttachment: 'platform',
         residentKey: 'required',
