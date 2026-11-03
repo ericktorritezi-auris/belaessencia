@@ -10441,9 +10441,18 @@ async function mapaSaveItem() {
     const method = _mapaEditItem ? 'PUT' : 'POST';
     const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
     if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
+    const savedItem = await r.json();
+    // Atualiza _mapaPanel.items localmente (sem segundo fetch) → atualização instantânea
+    if (!_mapaPanel.items) _mapaPanel.items = [];
+    if (_mapaEditItem) {
+      const idx = _mapaPanel.items.findIndex(i => i.id === _mapaEditItem.id);
+      if (idx >= 0) _mapaPanel.items[idx] = savedItem; else _mapaPanel.items.push(savedItem);
+    } else {
+      _mapaPanel.items.push(savedItem);
+    }
     mapaCloseItemModal();
+    mapaRenderItems();
     toast(_mapaEditItem ? 'Atendimento atualizado!' : 'Atendimento adicionado!', 'ok');
-    await mapaRefreshItems();
   } catch(e) { toast(e.message, 'error'); }
 }
 async function mapaDeleteItem(itemId) {
@@ -10451,8 +10460,10 @@ async function mapaDeleteItem(itemId) {
   try {
     const r = await fetch('/api/route-panels/' + _mapaPanel.id + '/items/' + itemId, { method:'DELETE' });
     if (!r.ok) throw new Error('Erro ao remover');
+    // Remove localmente sem segundo fetch → atualização instantânea
+    if (_mapaPanel.items) _mapaPanel.items = _mapaPanel.items.filter(i => i.id !== itemId);
+    mapaRenderItems();
     toast('Atendimento removido.', 'ok');
-    await mapaRefreshItems();
   } catch(e) { toast(e.message, 'error'); }
 }
 </script>
