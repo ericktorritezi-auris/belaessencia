@@ -10253,7 +10253,7 @@ function mapaRenderItems() {
   `<div style="background:var(--cream);border-radius:10px;padding:10px 14px;margin-top:10px;display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-end">
     <span style="font-size:12.5px;font-weight:700;color:var(--text-light)">Total: <span style="color:var(--dark)">R$ ${totalVal.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></span>
     <span style="font-size:12.5px;font-weight:700;color:var(--text-light)">Comissão (${p.commission_pct}%): <span style="color:#c47a30">R$ ${commVal.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></span>
-    <span style="font-size:12.5px;font-weight:700;color:var(--text-light)">Repasse: <span style="color:var(--success,#16a34a)">R$ ${(totalVal-commVal).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></span>
+    <span style="font-size:12.5px;font-weight:700;color:var(--text-light)">Valor do dia: <span style="color:var(--success,#16a34a)">R$ ${(totalVal-commVal).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></span>
   </div>`;
 }
 
@@ -10313,6 +10313,22 @@ async function mapaApprove() {
     toast('Mapa aprovado! Agendamentos criados com sucesso.', 'ok');
     await mapaOpenDetail(_mapaPanel.id);
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Refresh leve: re-busca dados e atualiza só a lista de itens ──────────
+async function mapaRefreshItems() {
+  try {
+    const r = await fetch('/api/route-panels/' + _mapaPanel.id);
+    if (!r.ok) return;
+    _mapaPanel = await r.json();
+    mapaRenderItems();
+    // Atualiza também o contador de atendimentos nos metadados
+    const metaEl = document.getElementById('mapa-detail-meta');
+    if (metaEl) {
+      const countCell = metaEl.querySelector('[data-field="atend"]');
+      if (countCell) countCell.textContent = (_mapaPanel.items||[]).length;
+    }
+  } catch(e) { /* silencioso */ }
 }
 
 // ── Excluir painel ────────────────────────────────────────────────────────
@@ -10427,7 +10443,7 @@ async function mapaSaveItem() {
     if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
     mapaCloseItemModal();
     toast(_mapaEditItem ? 'Atendimento atualizado!' : 'Atendimento adicionado!', 'ok');
-    await mapaOpenDetail(_mapaPanel.id);
+    await mapaRefreshItems();
   } catch(e) { toast(e.message, 'error'); }
 }
 async function mapaDeleteItem(itemId) {
@@ -10436,7 +10452,7 @@ async function mapaDeleteItem(itemId) {
     const r = await fetch('/api/route-panels/' + _mapaPanel.id + '/items/' + itemId, { method:'DELETE' });
     if (!r.ok) throw new Error('Erro ao remover');
     toast('Atendimento removido.', 'ok');
-    await mapaOpenDetail(_mapaPanel.id);
+    await mapaRefreshItems();
   } catch(e) { toast(e.message, 'error'); }
 }
 </script>
