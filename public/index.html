@@ -2086,6 +2086,7 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
                       <button id="btn-mapa-approve" onclick="mapaApprove()" style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">✅ Aprovar</button>
                       <button id="btn-mapa-send-val" onclick="mapaSendValidation()" style="display:none;background:linear-gradient(135deg,#2d7d52,#1e5c3c);color:#fff;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">📤 Enviar para Validação</button>
                       <button id="btn-mapa-cancel-review" onclick="mapaCancelReview()" style="display:none;background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#b00">✕ Cancelar</button>
+                      <button id="btn-mapa-agenda" onclick="mapaEnviarAgenda()" style="display:none;background:linear-gradient(135deg,#25d366,#1aaa4f);color:#fff;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">💬 Enviar Agenda</button>
                     </div>
                   </div>
                   <div id="mapa-detail-meta" style="padding:10px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px"></div>
@@ -10194,6 +10195,7 @@ function mapaRenderDetail() {
   document.getElementById('btn-mapa-revisar').style.display      = (isPending && !inReview) ? '' : 'none';
   document.getElementById('btn-mapa-edit').style.display         = (isActive && !isDone && !inReview) ? '' : 'none';
   document.getElementById('btn-mapa-delete').style.display       = (isDone && !inReview) ? '' : 'none';
+  document.getElementById('btn-mapa-agenda').style.display       = (p.status === 'approved' && !inReview) ? '' : 'none';
   // Modo revisão
   document.getElementById('btn-mapa-send-val').style.display     = inReview ? '' : 'none';
   document.getElementById('btn-mapa-cancel-review').style.display= inReview ? '' : 'none';
@@ -10313,6 +10315,47 @@ async function mapaApprove() {
     toast('Mapa aprovado! Agendamentos criados com sucesso.', 'ok');
     await mapaOpenDetail(_mapaPanel.id);
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Enviar agenda aprovada para o auxiliar via WhatsApp ───────────────────
+function mapaEnviarAgenda() {
+  const p = _mapaPanel;
+  if (!p || p.status !== 'approved') return;
+  const items = p.items || [];
+  const rawDate = (p.exec_date || '').slice(0,10);
+  const d = rawDate ? new Date(rawDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  const totalVal = items.reduce((s,i) => s + (parseFloat(i.price)||0), 0);
+  const commPct  = parseFloat(p.commission_pct) || 0;
+  const commVal  = totalVal * commPct / 100;
+  const valorDia = totalVal - commVal;
+  const fmtR = n => 'R$ ' + Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2});
+
+  let msg = `🗓️ *Agenda Confirmada — ${p.city_name||''}*\n`;
+  msg += `📅 ${d}\n\n`;
+
+  if (items.length) {
+    items.forEach((it, idx) => {
+      msg += `*${idx+1}. ${it.client_name}*\n`;
+      msg += `   ${it.proc_name} · ${it.st.slice(0,5)}–${it.et.slice(0,5)}`;
+      if (it.price) msg += ` · ${fmtR(it.price)}`;
+      if (it.client_phone) msg += `\n   📱 ${it.client_phone}`;
+      msg += '\n\n';
+    });
+  } else {
+    msg += '_Nenhum atendimento registrado._\n\n';
+  }
+
+  if (totalVal > 0) {
+    msg += `💰 Total: ${fmtR(totalVal)}\n`;
+    msg += `💼 Comissão (${commPct}%): ${fmtR(commVal)}\n`;
+    msg += `✅ Valor do dia: ${fmtR(valorDia)}\n\n`;
+  }
+
+  const url = location.origin + '/mapa-encerrado?s=approved&k=' + (p.access_key||'');
+  msg += `🔗 Detalhes: ${url}`;
+
+  const phone = (p.aux_phone||'').replace(/\D/g,'');
+  window.open('https://wa.me/' + (phone ? '55'+phone : '') + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
 // ── Refresh leve: re-busca dados e atualiza só a lista de itens ──────────
