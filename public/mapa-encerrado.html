@@ -17,14 +17,7 @@
   --sh-md:0 4px 20px rgba(155,77,106,.12);
   --r-sm:8px;--r-md:14px;--r-lg:20px;--r-xl:40px;
 }
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --cream:#1A1214;--white:#231820;--dark:#FAF7F2;--text:#EDD8E4;--text-light:#A87090;
-  --border:#3D2B35;--border-light:#2E1F28;--rose-light:#2A1520;--success-bg:#0E2A1A;
-}}
-:root[data-theme="dark"]{
-  --cream:#1A1214;--white:#231820;--dark:#FAF7F2;--text:#EDD8E4;--text-light:#A87090;
-  --border:#3D2B35;--border-light:#2E1F28;--rose-light:#2A1520;--success-bg:#0E2A1A;
-}
+/* sem dark mode — página pública sempre usa fundo claro com cores do tenant */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{min-height:100%;font-family:'Nunito',sans-serif;background:var(--cream);color:var(--text);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
 body{padding:0 16px;padding-top:calc(env(safe-area-inset-top,0px) + 16px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 24px)}
@@ -202,7 +195,7 @@ function renderStatic(pg, cfg, data) {
         <div class="fin-section" style="border-top:1px solid var(--border-light);padding-top:10px;margin-top:4px">
           <div class="fin-row"><span>Total</span><span>R$ ${fmt(total)}</span></div>
           <div class="fin-row"><span>Comissão (${commPct}%)</span><span>R$ ${fmt(comm)}</span></div>
-          <div class="fin-row"><span>Seu repasse</span><span style="color:var(--success)">R$ ${fmt(repasse)}</span></div>
+          <div class="fin-row"><span>Valor do dia</span><span style="color:var(--success)">R$ ${fmt(repasse)}</span></div>
         </div>` : ''}
       </div>`;
   }

@@ -2080,6 +2080,7 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
                     <div class="tbl-ttl">Informações</div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                       <button id="btn-mapa-edit" onclick="mapaOpenEdit()" style="background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">✏️ Editar</button>
+                      <button id="btn-mapa-delete" onclick="mapaDeletePanel(_mapaPanel?.id)" style="display:none;background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#b00">🗑 Excluir</button>
                       <button id="btn-mapa-devolver" onclick="mapaDevolver()" style="display:none;background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">↩️ Devolver</button>
                       <button id="btn-mapa-revisar" onclick="mapaStartReview()" style="display:none;background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#7c3aed">🔍 Revisar</button>
                       <button id="btn-mapa-approve" onclick="mapaApprove()" style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">✅ Aprovar</button>
@@ -9981,7 +9982,10 @@ function mapaRenderList() {
           🔗 ${location.origin}/m/${p.access_key||'…'}
         </div>
         <button onclick="mapaCopyLinkCard('${p.access_key||''}')" style="background:var(--cream);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;color:var(--text);white-space:nowrap" title="Copiar link">📋</button>
-        <button onclick="mapaOpenDetail(${p.id});mapaOpenEdit()" style="background:var(--cream);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;color:var(--text);white-space:nowrap" title="Editar">✏️</button>
+        ${['approved','expired'].includes(p.status)
+          ? `<button onclick="mapaDeletePanel(${p.id})" style="background:var(--cream);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;color:#b00;white-space:nowrap" title="Excluir">🗑</button>`
+          : `<button onclick="mapaOpenDetail(${p.id});mapaOpenEdit()" style="background:var(--cream);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;color:var(--text);white-space:nowrap" title="Editar">✏️</button>`
+        }
       </div>
     </div>`;
   }).join('');
@@ -10140,11 +10144,14 @@ function mapaRenderDetail() {
   const isActive       = !['approved','expired'].includes(p.status);
   const inReview       = _mapaReviewMode && isPending;
 
+  const isDone = ['approved','expired'].includes(p.status);
+
   // Modo normal
   document.getElementById('btn-mapa-approve').style.display      = (isPending && !inReview) ? '' : 'none';
   document.getElementById('btn-mapa-devolver').style.display     = (isPending && !inReview) ? '' : 'none';
   document.getElementById('btn-mapa-revisar').style.display      = (isPending && !inReview) ? '' : 'none';
-  document.getElementById('btn-mapa-edit').style.display         = (isActive && !inReview) ? '' : 'none';
+  document.getElementById('btn-mapa-edit').style.display         = (isActive && !isDone && !inReview) ? '' : 'none';
+  document.getElementById('btn-mapa-delete').style.display       = (isDone && !inReview) ? '' : 'none';
   // Modo revisão
   document.getElementById('btn-mapa-send-val').style.display     = inReview ? '' : 'none';
   document.getElementById('btn-mapa-cancel-review').style.display= inReview ? '' : 'none';
@@ -10263,6 +10270,18 @@ async function mapaApprove() {
     if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
     toast('Mapa aprovado! Agendamentos criados com sucesso.', 'ok');
     await mapaOpenDetail(_mapaPanel.id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Excluir painel ────────────────────────────────────────────────────────
+async function mapaDeletePanel(id) {
+  if (!id) return;
+  if (!confirm('Excluir este mapa permanentemente? Esta ação não pode ser desfeita.')) return;
+  try {
+    const r = await fetch('/api/route-panels/' + id, { method:'DELETE' });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro ao excluir'); }
+    toast('Mapa excluído.', 'ok');
+    mapaBack();
   } catch(e) { toast(e.message, 'error'); }
 }
 
