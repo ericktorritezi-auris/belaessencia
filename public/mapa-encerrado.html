@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Painel Encerrado</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#FAF7F2;--white:#FFFFFF;
+  --rose:#9B4D6A;--rose-deep:#7A3554;--rose-light:#F5E8EE;--rose-mid:#C98CA8;
+  --gold:#C4994A;--gold-light:#F5EDD8;
+  --dark:#1A1214;--text:#3D2B35;--text-light:#8A6B76;
+  --border:#E8D5DE;--border-light:#F0E2E8;
+  --success:#2D7D52;--success-bg:#E8F5EE;
+  --sh-sm:0 2px 8px rgba(155,77,106,.08);
+  --sh-md:0 4px 20px rgba(155,77,106,.12);
+  --r-sm:8px;--r-md:14px;--r-lg:20px;--r-xl:40px;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --cream:#1A1214;--white:#231820;--dark:#FAF7F2;--text:#EDD8E4;--text-light:#A87090;
+  --border:#3D2B35;--border-light:#2E1F28;--rose-light:#2A1520;--success-bg:#0E2A1A;
+}}
+:root[data-theme="dark"]{
+  --cream:#1A1214;--white:#231820;--dark:#FAF7F2;--text:#EDD8E4;--text-light:#A87090;
+  --border:#3D2B35;--border-light:#2E1F28;--rose-light:#2A1520;--success-bg:#0E2A1A;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%;font-family:'Nunito',sans-serif;background:var(--cream);color:var(--text);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body{padding:0 16px;padding-top:calc(env(safe-area-inset-top,0px) + 16px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 24px)}
+
+.page{max-width:420px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:20px;min-height:80vh;justify-content:center;text-align:center;padding:24px 0}
+
+/* ── ícone grande ─── */
+.big-icon{
+  width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:4px;
+}
+.big-icon.approved{background:var(--success-bg);box-shadow:0 0 0 8px rgba(45,125,82,.08)}
+.big-icon.expired{background:var(--rose-light);box-shadow:0 0 0 8px rgba(155,77,106,.06)}
+.big-icon.not_found{background:var(--gold-light);box-shadow:0 0 0 8px rgba(196,153,74,.08)}
+
+/* ── textos ─── */
+.title{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;color:var(--dark);line-height:1.25;margin-top:4px}
+.subtitle{font-size:14px;color:var(--text-light);max-width:300px;line-height:1.6}
+
+/* ── card de detalhes ─── */
+.card{background:var(--white);border:1px solid var(--border-light);border-radius:var(--r-lg);box-shadow:var(--sh-sm);width:100%;text-align:left;overflow:hidden}
+.card-head{padding:11px 16px;border-bottom:1px solid var(--border-light);font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;color:var(--dark)}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 16px}
+.meta-cell{background:var(--cream);border-radius:var(--r-sm);padding:8px 10px}
+.meta-lbl{font-size:9.5px;font-weight:800;color:var(--text-light);text-transform:uppercase;letter-spacing:.06em}
+.meta-val{font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;color:var(--dark);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── lista de itens aprovados ─── */
+.items-list{padding:0 16px}
+.item{padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;align-items:flex-start;gap:10px}
+.item:last-child{border-bottom:none}
+.item-num{width:22px;height:22px;border-radius:50%;background:var(--rose-light);color:var(--rose);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.item-info{flex:1;min-width:0}
+.item-name{font-weight:700;font-size:13px;color:var(--dark)}
+.item-sub{font-size:11px;color:var(--text-light);margin-top:1px}
+
+/* ── resumo financeiro ─── */
+.fin-section{padding:0 16px 12px}
+.fin-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-light);font-size:12.5px}
+.fin-row:last-child{border:none;font-weight:800;font-size:13.5px;padding-top:8px}
+
+/* ── badge de status ─── */
+.status-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:800;letter-spacing:.02em}
+.badge-approved{background:var(--success-bg);color:var(--success);border:1px solid rgba(45,125,82,.2)}
+.badge-expired{background:var(--rose-light);color:var(--rose);border:1px solid var(--border)}
+.badge-not_found{background:var(--gold-light);color:var(--gold);border:1px solid rgba(196,153,74,.3)}
+
+/* ── separador ─── */
+.divider{width:40px;height:3px;border-radius:99px;background:linear-gradient(90deg,var(--rose),var(--rose-mid));opacity:.5}
+
+/* ── footer ─── */
+.footer{font-size:11px;color:var(--text-light);line-height:1.7}
+.footer span{font-family:'Cormorant Garamond',serif;font-size:13px;color:var(--rose-mid);font-weight:600}
+
+/* ── skeleton de carregamento ─── */
+.sk{background:linear-gradient(90deg,var(--border-light) 25%,var(--cream) 50%,var(--border-light) 75%);background-size:200% 100%;animation:sk 1.4s ease infinite;border-radius:6px;height:14px}
+@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<div class="page" id="page">
+  <!-- preenchido por JS -->
+  <div class="big-icon"><div class="sk" style="width:48px;height:48px;border-radius:50%"></div></div>
+  <div style="width:160px;height:22px;border-radius:6px" class="sk"></div>
+  <div style="width:240px;height:14px;border-radius:6px" class="sk"></div>
+</div>
+
+<script>
+// Lê parâmetros da URL: ?s=approved&k=KEY ou ?s=expired&k=KEY ou ?s=not_found
+const params  = new URLSearchParams(location.search);
+const STATE   = params.get('s') || 'expired';   // approved | expired | not_found
+const KEY     = (params.get('k') || '').toUpperCase();
+
+const STATES = {
+  approved: {
+    icon: '✅',
+    iconClass: 'approved',
+    badge: '<span class="status-badge badge-approved">✅ Aprovado</span>',
+    title: 'Mapa Aprovado!',
+    subtitle: 'Este mapa de atendimento foi aprovado e os agendamentos foram confirmados.',
+  },
+  expired: {
+    icon: '⏰',
+    iconClass: 'expired',
+    badge: '<span class="status-badge badge-expired">⏰ Expirado</span>',
+    title: 'Link Expirado',
+    subtitle: 'A data de atendimento deste painel já passou. Este link não está mais disponível para edição.',
+  },
+  not_found: {
+    icon: '🔎',
+    iconClass: 'not_found',
+    badge: '<span class="status-badge badge-not_found">Não encontrado</span>',
+    title: 'Link não encontrado',
+    subtitle: 'O link que você acessou não existe ou foi removido. Verifique com o profissional responsável.',
+  },
+};
+
+const cfg = STATES[STATE] || STATES.not_found;
+
+async function load() {
+  const pg = document.getElementById('page');
+
+  // Para not_found, não há dados para buscar
+  if (STATE === 'not_found' || !KEY) {
+    renderStatic(pg, cfg, null);
+    return;
+  }
+
+  // Tenta buscar dados do painel para exibir detalhes
+  try {
+    const r = await fetch('/api/public/mapa/' + KEY);
+    if (r.ok) {
+      const data = await r.json();
+      renderStatic(pg, cfg, data);
+    } else {
+      renderStatic(pg, cfg, null);
+    }
+  } catch {
+    renderStatic(pg, cfg, null);
+  }
+}
+
+function fmt(n) { return Number(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderStatic(pg, cfg, data) {
+  const panel = data?.panel;
+  const items = data?.items || [];
+  const tenant = data?.tenant;
+
+  // Branding dinâmico
+  let tenantName = 'Belle Planner';
+  if (tenant?.business_name) tenantName = tenant.business_name;
+  if (tenant?.primary_color) {
+    document.documentElement.style.setProperty('--rose', tenant.primary_color);
+  }
+
+  // Card de informações do painel (se disponível)
+  let panelCard = '';
+  if (panel) {
+    const d = new Date(panel.exec_date + 'T12:00:00').toLocaleDateString('pt-BR');
+    panelCard = `
+      <div class="card" style="width:100%">
+        <div class="card-head">Informações do Atendimento</div>
+        <div class="meta-grid">
+          <div class="meta-cell"><div class="meta-lbl">Cidade</div><div class="meta-val">${esc(panel.city_name)}</div></div>
+          <div class="meta-cell"><div class="meta-lbl">Data</div><div class="meta-val">${d}</div></div>
+          <div class="meta-cell"><div class="meta-lbl">Auxiliar</div><div class="meta-val">${esc(panel.aux_name)}</div></div>
+          <div class="meta-cell"><div class="meta-lbl">Atendimentos</div><div class="meta-val" style="color:var(--rose)">${items.length}</div></div>
+        </div>
+      </div>`;
+  }
+
+  // Lista de itens (somente no estado approved)
+  let itemsCard = '';
+  if (STATE === 'approved' && items.length > 0) {
+    const total   = items.reduce((s,i) => s + (parseFloat(i.price)||0), 0);
+    const commPct = parseFloat(panel?.commission_pct||0);
+    const comm    = total * commPct / 100;
+    const repasse = total - comm;
+
+    itemsCard = `
+      <div class="card" style="width:100%">
+        <div class="card-head">Atendimentos confirmados</div>
+        <div class="items-list">
+          ${items.map((it,idx)=>`
+            <div class="item">
+              <div class="item-num">${idx+1}</div>
+              <div class="item-info">
+                <div class="item-name">${esc(it.client_name)}</div>
+                <div class="item-sub">${esc(it.proc_name)} · ${it.st.slice(0,5)}–${it.et.slice(0,5)}${it.price ? ' · R$ '+fmt(it.price) : ''}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+        ${total > 0 ? `
+        <div class="fin-section" style="border-top:1px solid var(--border-light);padding-top:10px;margin-top:4px">
+          <div class="fin-row"><span>Total</span><span>R$ ${fmt(total)}</span></div>
+          <div class="fin-row"><span>Comissão (${commPct}%)</span><span>R$ ${fmt(comm)}</span></div>
+          <div class="fin-row"><span>Seu repasse</span><span style="color:var(--success)">R$ ${fmt(repasse)}</span></div>
+        </div>` : ''}
+      </div>`;
+  }
+
+  pg.innerHTML = `
+    <div class="big-icon ${cfg.iconClass}">${cfg.icon}</div>
+    ${cfg.badge}
+    <div>
+      <div class="title">${cfg.title}</div>
+    </div>
+    <div class="divider"></div>
+    <p class="subtitle">${cfg.subtitle}</p>
+    ${panelCard}
+    ${itemsCard}
+    <div class="footer">
+      Gerenciado por <span>${esc(tenantName)}</span><br>
+      Agenda Externa · Mapa de Atendimento
+    </div>
+  `;
+}
+
+load();
+</script>
+</body>
+</html>

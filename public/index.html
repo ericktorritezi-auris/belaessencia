@@ -898,6 +898,10 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
           <div class="nav-item" id="nav-webpush" onclick="showSec('webpush')"><span class="nav-icon">🔔</span> Web Push</div>
           <div class="nav-item" id="nav-meucontrato" onclick="openMeuContrato()"><span class="nav-icon">📑</span> Gestão do Contrato</div>
         </div>
+        <div style="margin-top:2px" id="sb-agenda-externa" style="display:none">
+          <div class="nav-sec-ttl">Agenda Externa</div>
+          <div class="nav-item" id="nav-mapa" onclick="showSec('mapa');initMapa()"><span class="nav-icon">🗺️</span> Mapa de Atendimento</div>
+        </div>
         <div style="margin-top:2px">
           <div class="nav-sec-ttl">Configurações</div>
           <div class="nav-item" id="nav-cities" onclick="showSec('cities')"><span class="nav-icon">📍</span> Cidades</div>
@@ -2047,6 +2051,102 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
             </div>
           </div>
 
+          <!-- ── MAPA DE ATENDIMENTO ──────────────────────────────── -->
+          <div id="sec-mapa" class="hidden">
+            <!-- Lista de painéis -->
+            <div id="mapa-list-view">
+              <div class="tbl-wrap" style="margin-bottom:16px">
+                <div class="tbl-head">
+                  <div class="tbl-ttl">🗺️ Mapa de Atendimento</div>
+                  <button class="btn btn-primary" onclick="mapaOpenCreate()" style="width:auto;padding:8px 18px;font-size:13px">+ Novo Mapa</button>
+                </div>
+                <div id="mapa-list-body" style="padding:0 16px 16px"></div>
+              </div>
+            </div>
+            <!-- Detalhe / aprovação de um painel -->
+            <div id="mapa-detail-view" class="hidden">
+              <div style="padding:4px 0 12px">
+                <button onclick="mapaBack()" style="background:none;border:none;color:var(--rose);font-size:13px;font-weight:700;cursor:pointer;padding:0;display:flex;align-items:center;gap:6px">← Voltar à lista</button>
+              </div>
+              <div class="tbl-wrap" style="margin-bottom:12px">
+                <div class="tbl-head">
+                  <div class="tbl-ttl" id="mapa-detail-ttl">Painel</div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button id="btn-mapa-wa"    class="btn" onclick="mapaWhatsApp()" style="width:auto;padding:7px 14px;font-size:12px;background:var(--cream);color:var(--text)">📲 Compartilhar</button>
+                    <button id="btn-mapa-devolver" class="btn" onclick="mapaDevolver()" style="width:auto;padding:7px 14px;font-size:12px;display:none">↩️ Devolver</button>
+                    <button id="btn-mapa-approve" class="btn btn-primary" onclick="mapaApprove()" style="width:auto;padding:7px 14px;font-size:12px;display:none">✅ Aprovar</button>
+                  </div>
+                </div>
+                <div id="mapa-detail-meta" style="padding:12px 16px 4px;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px"></div>
+                <div id="mapa-detail-obs" style="padding:0 16px 12px;display:none">
+                  <div style="background:var(--warn-bg,#FEF0E0);border:1px solid #f0c080;border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--text)">
+                    <strong style="display:block;margin-bottom:4px;color:#c47a30">↩️ Observação da devolução:</strong>
+                    <span id="mapa-obs-text"></span>
+                  </div>
+                </div>
+                <div id="mapa-status-badge" style="padding:0 16px 12px"></div>
+              </div>
+              <!-- Itens do painel -->
+              <div class="tbl-wrap" style="margin-bottom:12px">
+                <div class="tbl-head">
+                  <div class="tbl-ttl">Atendimentos</div>
+                  <button id="btn-mapa-add-item" class="btn btn-primary" onclick="mapaOpenAddItem()" style="width:auto;padding:7px 14px;font-size:12px;display:none">+ Adicionar</button>
+                </div>
+                <div id="mapa-items-body" style="padding:0 16px 16px"></div>
+              </div>
+            </div>
+            <!-- Modal: criar painel -->
+            <div id="mapa-create-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px">
+              <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto">
+                <div style="font-size:16px;font-weight:800;margin-bottom:16px">Novo Mapa de Atendimento</div>
+                <div style="display:grid;gap:12px">
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Cidade <input id="mc-city" class="fi" placeholder="Ex: Curitiba · PR" style="margin-top:4px"></label>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Data de execução <input type="date" id="mc-date" class="fi" style="margin-top:4px"></label>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Nome da auxiliar <input id="mc-aux-name" class="fi" placeholder="Nome completo" style="margin-top:4px"></label>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">WhatsApp da auxiliar <input id="mc-aux-phone" class="fi" placeholder="Ex: 41999999999" style="margin-top:4px"></label>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Comissão (%) <input type="number" id="mc-comm" class="fi" value="30" min="0" max="100" style="margin-top:4px"></label>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:20px">
+                  <button class="btn" onclick="mapaCloseCreate()" style="flex:1;background:var(--cream)">Cancelar</button>
+                  <button class="btn btn-primary" onclick="mapaSaveCreate()" style="flex:1">Criar Mapa</button>
+                </div>
+              </div>
+            </div>
+            <!-- Modal: devolver -->
+            <div id="mapa-devolver-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px">
+              <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:420px">
+                <div style="font-size:15px;font-weight:800;margin-bottom:12px">↩️ Devolver para revisão</div>
+                <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">Informe o motivo da devolução para a auxiliar corrigir:</p>
+                <textarea id="mapa-obs-input" class="fi" rows="4" placeholder="Ex: O horário do atendimento 2 está conflitante. Por favor corrija." style="resize:vertical;min-height:80px;width:100%"></textarea>
+                <div style="display:flex;gap:10px;margin-top:16px">
+                  <button class="btn" onclick="mapaCloseDevolverModal()" style="flex:1;background:var(--cream)">Cancelar</button>
+                  <button class="btn btn-primary" onclick="mapaConfirmDevolver()" style="flex:1;background:var(--warn,#c47a30)">Devolver</button>
+                </div>
+              </div>
+            </div>
+            <!-- Modal: adicionar/editar item -->
+            <div id="mapa-item-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px">
+              <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto">
+                <div style="font-size:15px;font-weight:800;margin-bottom:14px" id="mapa-item-modal-ttl">Atendimento</div>
+                <div style="display:grid;gap:11px">
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Nome do cliente <input id="mi-name" class="fi" placeholder="Nome completo" style="margin-top:4px"></label>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">WhatsApp do cliente <input id="mi-phone" class="fi" placeholder="Ex: 41999999999" style="margin-top:4px"></label>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Procedimento <input id="mi-proc" class="fi" placeholder="Ex: Design de Sobrancelha" style="margin-top:4px"></label>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <label style="font-size:12px;font-weight:700;color:var(--text-light)">Início <input type="time" id="mi-st" class="fi" style="margin-top:4px"></label>
+                    <label style="font-size:12px;font-weight:700;color:var(--text-light)">Fim <input type="time" id="mi-et" class="fi" style="margin-top:4px"></label>
+                  </div>
+                  <label style="font-size:12px;font-weight:700;color:var(--text-light)">Valor (R$) <input type="number" id="mi-price" class="fi" placeholder="0,00" min="0" step="0.01" style="margin-top:4px"></label>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:18px">
+                  <button class="btn" onclick="mapaCloseItemModal()" style="flex:1;background:var(--cream)">Cancelar</button>
+                  <button class="btn btn-primary" onclick="mapaSaveItem()" style="flex:1" id="btn-save-item">Salvar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- ── FIM MAPA DE ATENDIMENTO ──────────────────────────── -->
+
         </div>
         <div class="app-footer" id="footer-admin"></div>
       </main>
@@ -3032,6 +3132,12 @@ async function doLogin() {
     _hideBellaForAdmin(); // Bella é só para clientes
     initAdmin();
     loadProfProfile(); // atualiza nome no topbar do admin
+    // Mostra menu "Agenda Externa" se tenant tem has_mapa
+    (function applyMapaMenu() {
+      const cfg = window._tenantConfig;
+      const el  = document.getElementById('sb-agenda-externa');
+      if (el && cfg && cfg.has_mapa) el.style.display = '';
+    })();
     // Inscreve profissional para receber push de novos agendamentos
     setTimeout(() => subscribePush('admin').catch(()=>{}), 2000);
     checkBiometricBannerAfterLogin();
@@ -3051,6 +3157,9 @@ async function doLogout() {
   const _fab = document.getElementById('bella-fab');
   const _cfg = window._tenantConfig;
   if (_fab && _cfg && _cfg.has_chat) _fab.style.display = 'flex';
+  // Oculta menu Agenda Externa ao fazer logout
+  const _mapaMenu = document.getElementById('sb-agenda-externa');
+  if (_mapaMenu) _mapaMenu.style.display = 'none';
   checkBiometricAvailability();
 }
 function toggleSB(){document.getElementById('adm-sb').classList.toggle('open')}
@@ -9642,6 +9751,338 @@ document.addEventListener('click', function(e) {
   const fab = document.getElementById('bella-fab');
   if (!fab.contains(e.target)) closeBellaModal();
 });
+</script>
+
+<!-- ══ MAPA DE ATENDIMENTO — JavaScript ══════════════════════════════════ -->
+<script>
+// Ativa menu "Agenda Externa" quando has_mapa=true
+(function applyMapaVisibility() {
+  function check() {
+    const cfg = window._tenantConfig;
+    if (!cfg) return;
+    const el = document.getElementById('sb-agenda-externa');
+    if (el && cfg.has_mapa) el.style.display = '';
+  }
+  // Tenta imediatamente e também depois que _tenantConfig for setado
+  check();
+  const orig = Object.getOwnPropertyDescriptor(window, '_tenantConfig');
+  if (!orig) {
+    Object.defineProperty(window, '_tenantConfigMapa', { set: check });
+    // Fallback: poll 200 ms até encontrar
+    const t = setInterval(() => {
+      if (window._tenantConfig) { check(); clearInterval(t); }
+    }, 200);
+  }
+  // Garante que o check rode após o fetch de /api/config (linha ~604)
+  const origFetch = window.fetch;
+  window.fetch = function(...args) {
+    return origFetch.apply(this, args).then(r => {
+      if (typeof args[0] === 'string' && args[0].includes('/api/config')) {
+        setTimeout(check, 100);
+      }
+      return r;
+    });
+  };
+})();
+
+// ── Estado do módulo ───────────────────────────────────────────────────────
+let _mapaPanels   = [];
+let _mapaPanel    = null;  // painel em detalhe
+let _mapaEditItem = null;  // item sendo editado (null = novo)
+
+// ── Inicialização da lista ─────────────────────────────────────────────────
+async function initMapa() {
+  document.getElementById('adm-ttl').textContent = 'Mapa de Atendimento';
+  await mapaLoadList();
+}
+
+async function mapaLoadList() {
+  const body = document.getElementById('mapa-list-body');
+  body.innerHTML = '<p style="padding:20px;color:var(--text-light);font-size:13px">Carregando...</p>';
+  try {
+    const r = await fetch('/api/route-panels');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _mapaPanels = await r.json();
+    mapaRenderList();
+  } catch(e) {
+    body.innerHTML = `<p style="padding:20px;color:#b00;font-size:13px">Erro ao carregar: ${e.message}</p>`;
+  }
+}
+
+const MAPA_STATUS_LABEL = {
+  filling:  '✏️ Preenchendo',
+  pending:  '⏳ Aguardando aprovação',
+  revision: '↩️ Em revisão',
+  approved: '✅ Aprovado',
+  expired:  '⏰ Expirado',
+};
+const MAPA_STATUS_COLOR = {
+  filling:  '#6b7280',
+  pending:  '#c47a30',
+  revision: '#7c3aed',
+  approved: '#16a34a',
+  expired:  '#9ca3af',
+};
+
+function mapaRenderList() {
+  const body = document.getElementById('mapa-list-body');
+  if (!_mapaPanels.length) {
+    body.innerHTML = '<p style="padding:20px;color:var(--text-light);font-size:13px;text-align:center">Nenhum mapa criado ainda.<br>Clique em "+ Novo Mapa" para começar.</p>';
+    return;
+  }
+  body.innerHTML = _mapaPanels.map(p => {
+    const d = new Date(p.exec_date + 'T12:00:00').toLocaleDateString('pt-BR');
+    const color = MAPA_STATUS_COLOR[p.status] || '#6b7280';
+    const label = MAPA_STATUS_LABEL[p.status] || p.status;
+    return `<div onclick="mapaOpenDetail(${p.id})"
+      style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border-light);cursor:pointer;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13.5px;color:var(--dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.city_name}</div>
+        <div style="font-size:12px;color:var(--text-light);margin-top:2px">${d} · ${p.aux_name} · ${p.item_count||0} atend. · R$ ${Number(p.total_value||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;color:${color};white-space:nowrap;background:${color}18;padding:3px 9px;border-radius:99px">${label}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Criar novo painel ──────────────────────────────────────────────────────
+function mapaOpenCreate() {
+  document.getElementById('mc-city').value    = '';
+  document.getElementById('mc-date').value    = '';
+  document.getElementById('mc-aux-name').value  = '';
+  document.getElementById('mc-aux-phone').value = '';
+  document.getElementById('mc-comm').value    = '30';
+  document.getElementById('mapa-create-modal').classList.remove('hidden');
+  document.getElementById('mapa-create-modal').style.display = 'flex';
+}
+function mapaCloseCreate() {
+  document.getElementById('mapa-create-modal').style.display = 'none';
+  document.getElementById('mapa-create-modal').classList.add('hidden');
+}
+async function mapaSaveCreate() {
+  const body = {
+    city_name:      document.getElementById('mc-city').value.trim(),
+    exec_date:      document.getElementById('mc-date').value,
+    aux_name:       document.getElementById('mc-aux-name').value.trim(),
+    aux_phone:      document.getElementById('mc-aux-phone').value.trim(),
+    commission_pct: document.getElementById('mc-comm').value,
+  };
+  if (!body.city_name || !body.exec_date || !body.aux_name || !body.aux_phone) {
+    return toast('Preencha todos os campos obrigatórios', 'error');
+  }
+  try {
+    const r = await fetch('/api/route-panels', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
+    mapaCloseCreate();
+    toast('Mapa criado com sucesso!', 'ok');
+    await mapaLoadList();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Detalhe do painel ──────────────────────────────────────────────────────
+async function mapaOpenDetail(id) {
+  document.getElementById('mapa-list-view').classList.add('hidden');
+  document.getElementById('mapa-detail-view').classList.remove('hidden');
+  const metaEl = document.getElementById('mapa-detail-meta');
+  metaEl.innerHTML = '<p style="font-size:12px;color:var(--text-light)">Carregando...</p>';
+  try {
+    const r = await fetch('/api/route-panels/' + id);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _mapaPanel = await r.json();
+    mapaRenderDetail();
+  } catch(e) {
+    metaEl.innerHTML = `<p style="color:#b00;font-size:12px">Erro: ${e.message}</p>`;
+  }
+}
+
+function mapaBack() {
+  _mapaPanel = null;
+  document.getElementById('mapa-detail-view').classList.add('hidden');
+  document.getElementById('mapa-list-view').classList.remove('hidden');
+  mapaLoadList();
+}
+
+function mapaRenderDetail() {
+  const p = _mapaPanel;
+  const d = new Date(p.exec_date + 'T12:00:00').toLocaleDateString('pt-BR');
+  document.getElementById('mapa-detail-ttl').textContent = `${p.city_name} · ${d}`;
+
+  // Metadados
+  const meta = document.getElementById('mapa-detail-meta');
+  const fields = [
+    ['Cidade', p.city_name],
+    ['Data', d],
+    ['Auxiliar', p.aux_name],
+    ['WhatsApp', p.aux_phone],
+    ['Comissão', p.commission_pct + '%'],
+  ];
+  meta.innerHTML = fields.map(([l,v]) =>
+    `<div style="background:var(--cream);border-radius:8px;padding:8px 10px">
+      <div style="font-size:9.5px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.06em">${l}</div>
+      <div style="font-size:13px;font-weight:600;color:var(--dark);margin-top:2px">${v||'—'}</div>
+    </div>`
+  ).join('');
+
+  // Badge de status
+  const color = MAPA_STATUS_COLOR[p.status] || '#6b7280';
+  const label = MAPA_STATUS_LABEL[p.status] || p.status;
+  document.getElementById('mapa-status-badge').innerHTML =
+    `<span style="font-size:12px;font-weight:700;color:${color};background:${color}18;padding:4px 12px;border-radius:99px">${label}</span>`;
+
+  // Observação de devolução
+  const obsWrap = document.getElementById('mapa-detail-obs');
+  if (p.status === 'revision' && p.obs_devolucao) {
+    document.getElementById('mapa-obs-text').textContent = p.obs_devolucao;
+    obsWrap.style.display = '';
+  } else {
+    obsWrap.style.display = 'none';
+  }
+
+  // Botões condicionais
+  document.getElementById('btn-mapa-approve').style.display  = p.status === 'pending' ? '' : 'none';
+  document.getElementById('btn-mapa-devolver').style.display = p.status === 'pending' ? '' : 'none';
+  const canEdit = ['filling','revision'].includes(p.status);
+  document.getElementById('btn-mapa-add-item').style.display = canEdit ? '' : 'none';
+
+  // Itens
+  mapaRenderItems();
+}
+
+function mapaRenderItems() {
+  const p = _mapaPanel;
+  const body = document.getElementById('mapa-items-body');
+  if (!p.items || !p.items.length) {
+    body.innerHTML = '<p style="padding:12px 0;font-size:13px;color:var(--text-light);text-align:center">Nenhum atendimento adicionado.</p>';
+    return;
+  }
+  const canEdit = ['filling','revision'].includes(p.status);
+  const totalVal = p.items.reduce((s,i) => s + (parseFloat(i.price)||0), 0);
+  const commVal  = totalVal * (parseFloat(p.commission_pct)||0) / 100;
+  body.innerHTML = p.items.map((it, idx) => {
+    const price = it.price ? 'R$ ' + Number(it.price).toLocaleString('pt-BR',{minimumFractionDigits:2}) : '—';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-light);gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px;color:var(--dark)">${idx+1}. ${it.client_name}</div>
+        <div style="font-size:11.5px;color:var(--text-light);margin-top:2px">${it.proc_name} · ${it.st.slice(0,5)}–${it.et.slice(0,5)} · ${price}</div>
+      </div>
+      ${canEdit ? `<div style="display:flex;gap:6px">
+        <button onclick="mapaOpenEditItem(${it.id})" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:var(--text)">✏️</button>
+        <button onclick="mapaDeleteItem(${it.id})" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:#b00">🗑</button>
+      </div>` : ''}
+    </div>`;
+  }).join('') +
+  `<div style="display:flex;justify-content:flex-end;gap:20px;padding:10px 0;font-size:12.5px;font-weight:700;color:var(--text-light)">
+    <span>Total: <span style="color:var(--dark)">R$ ${totalVal.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></span>
+    <span>Comissão (${p.commission_pct}%): <span style="color:var(--rose)">R$ ${commVal.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></span>
+  </div>`;
+}
+
+// ── Compartilhar via WhatsApp ──────────────────────────────────────────────
+async function mapaWhatsApp() {
+  try {
+    const r = await fetch('/api/route-panels/' + _mapaPanel.id + '/whatsapp-link');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    window.open(data.url, '_blank');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Aprovar painel ────────────────────────────────────────────────────────
+async function mapaApprove() {
+  if (!confirm('Confirma a aprovação do mapa? Os agendamentos serão criados e a comissão lançada em Contas a Pagar.')) return;
+  try {
+    const r = await fetch('/api/route-panels/' + _mapaPanel.id + '/approve', { method:'POST' });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
+    toast('Mapa aprovado! Agendamentos criados com sucesso.', 'ok');
+    await mapaOpenDetail(_mapaPanel.id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Devolver para revisão ─────────────────────────────────────────────────
+function mapaDevolver() {
+  document.getElementById('mapa-obs-input').value = '';
+  document.getElementById('mapa-devolver-modal').style.display = 'flex';
+  document.getElementById('mapa-devolver-modal').classList.remove('hidden');
+}
+function mapaCloseDevolverModal() {
+  document.getElementById('mapa-devolver-modal').style.display = 'none';
+  document.getElementById('mapa-devolver-modal').classList.add('hidden');
+}
+async function mapaConfirmDevolver() {
+  const obs = document.getElementById('mapa-obs-input').value.trim();
+  try {
+    const r = await fetch('/api/route-panels/' + _mapaPanel.id + '/devolver', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ obs })
+    });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
+    mapaCloseDevolverModal();
+    toast('Painel devolvido para revisão.', 'ok');
+    await mapaOpenDetail(_mapaPanel.id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Adicionar / editar item ───────────────────────────────────────────────
+function mapaOpenAddItem() {
+  _mapaEditItem = null;
+  document.getElementById('mapa-item-modal-ttl').textContent = 'Novo Atendimento';
+  document.getElementById('mi-name').value  = '';
+  document.getElementById('mi-phone').value = '';
+  document.getElementById('mi-proc').value  = '';
+  document.getElementById('mi-st').value    = '';
+  document.getElementById('mi-et').value    = '';
+  document.getElementById('mi-price').value = '';
+  document.getElementById('mapa-item-modal').style.display = 'flex';
+  document.getElementById('mapa-item-modal').classList.remove('hidden');
+}
+function mapaOpenEditItem(itemId) {
+  const it = _mapaPanel.items.find(i => i.id === itemId);
+  if (!it) return;
+  _mapaEditItem = it;
+  document.getElementById('mapa-item-modal-ttl').textContent = 'Editar Atendimento';
+  document.getElementById('mi-name').value  = it.client_name;
+  document.getElementById('mi-phone').value = it.client_phone || '';
+  document.getElementById('mi-proc').value  = it.proc_name;
+  document.getElementById('mi-st').value    = it.st ? it.st.slice(0,5) : '';
+  document.getElementById('mi-et').value    = it.et ? it.et.slice(0,5) : '';
+  document.getElementById('mi-price').value = it.price || '';
+  document.getElementById('mapa-item-modal').style.display = 'flex';
+  document.getElementById('mapa-item-modal').classList.remove('hidden');
+}
+function mapaCloseItemModal() {
+  document.getElementById('mapa-item-modal').style.display = 'none';
+  document.getElementById('mapa-item-modal').classList.add('hidden');
+  _mapaEditItem = null;
+}
+async function mapaSaveItem() {
+  const body = {
+    client_name:  document.getElementById('mi-name').value.trim(),
+    client_phone: document.getElementById('mi-phone').value.trim(),
+    proc_name:    document.getElementById('mi-proc').value.trim(),
+    st:           document.getElementById('mi-st').value,
+    et:           document.getElementById('mi-et').value,
+    price:        document.getElementById('mi-price').value || null,
+  };
+  if (!body.client_name || !body.proc_name || !body.st || !body.et)
+    return toast('Preencha nome, procedimento, início e fim', 'error');
+  try {
+    const url    = '/api/route-panels/' + _mapaPanel.id + '/items' + (_mapaEditItem ? '/' + _mapaEditItem.id : '');
+    const method = _mapaEditItem ? 'PUT' : 'POST';
+    const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
+    mapaCloseItemModal();
+    toast(_mapaEditItem ? 'Atendimento atualizado!' : 'Atendimento adicionado!', 'ok');
+    await mapaOpenDetail(_mapaPanel.id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+async function mapaDeleteItem(itemId) {
+  if (!confirm('Remover este atendimento?')) return;
+  try {
+    const r = await fetch('/api/route-panels/' + _mapaPanel.id + '/items/' + itemId, { method:'DELETE' });
+    if (!r.ok) throw new Error('Erro ao remover');
+    toast('Atendimento removido.', 'ok');
+    await mapaOpenDetail(_mapaPanel.id);
+  } catch(e) { toast(e.message, 'error'); }
+}
 </script>
 
 </body>

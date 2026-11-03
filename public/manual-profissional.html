@@ -387,6 +387,7 @@
     <a href="#push" class="toc-link">🔔 Push</a>
     <a href="#nps" class="toc-link">⭐ NPS</a>
     <a href="#perfil" class="toc-link">👤 Perfil</a>
+    <a href="#mapa-atendimento" class="toc-link">🗺️ Agenda Externa</a>
   </nav>
 
   <!-- LAYOUT PRINCIPAL -->
@@ -431,6 +432,9 @@
       <a href="#perfil">👤 Perfil e senha</a>
       <a href="#email">📧 E-mail diário</a>
       <a href="#backup">💾 Backup</a>
+      <div class="sidebar-sep"></div>
+      <div class="sidebar-title">Agenda Externa</div>
+      <a href="#mapa-atendimento">🗺️ Mapa de Atendimento</a>
     </aside>
 
     <!-- CONTEÚDO -->
@@ -1789,6 +1793,54 @@
           </div>
         </div>
       </section>
+
+      <!-- ════ AGENDA EXTERNA — MAPA DE ATENDIMENTO ════ -->
+      <section class="section" id="mapa-atendimento">
+        <div class="section-header">
+          <div class="section-icon">🗺️</div>
+          <div class="section-title">Mapa de Atendimento <span style="font-size:11px;font-weight:700;color:#7c3aed;background:#ede9fe;padding:2px 8px;border-radius:99px;vertical-align:middle;margin-left:8px">Pro Plus</span></div>
+        </div>
+        <div class="section-body">
+          <p>O <strong>Mapa de Atendimento</strong> permite que você envie um link de preenchimento para uma auxiliar antes de uma viagem ou atendimento itinerante. A auxiliar preenche os atendimentos, você revisa, devolve para correção se necessário e, ao aprovar, os agendamentos são criados automaticamente no sistema e a comissão é lançada em <em>Contas a Pagar</em>.</p>
+          <div class="tip"><span>⭐</span><p>Disponível apenas para clientes do plano <strong>Pro Plus</strong>. Ative no painel master.</p></div>
+
+          <h3 id="mapa-criar">Criar um novo mapa</h3>
+          <p>Acesse o menu <strong>Agenda Externa → Mapa de Atendimento</strong> e clique em <strong>+ Novo Mapa</strong>. Preencha:</p>
+          <ul>
+            <li><strong>Cidade</strong> — local do atendimento (ex: Curitiba · PR)</li>
+            <li><strong>Data de execução</strong> — dia em que os atendimentos acontecerão</li>
+            <li><strong>Nome e WhatsApp da auxiliar</strong> — quem vai preencher os atendimentos</li>
+            <li><strong>Comissão (%)</strong> — percentual sobre o total de atendimentos (padrão 30%)</li>
+          </ul>
+          <p>Após criar, o painel aparece com status <strong>✏️ Preenchendo</strong>.</p>
+
+          <h3 id="mapa-auxiliar">O que a auxiliar faz</h3>
+          <p>Use o botão <strong>📲 Compartilhar</strong> na tela de detalhe do painel para enviar o link por WhatsApp diretamente para a auxiliar. Ela vai acessar a página, adicionar cada atendimento (nome do cliente, procedimento, horário, valor) e, ao terminar, clicar em <strong>Enviar para aprovação</strong>. O status muda para <strong>⏳ Aguardando aprovação</strong>.</p>
+
+          <h3 id="mapa-revisar">Revisar os atendimentos</h3>
+          <p>Abra o painel na lista e confira cada atendimento. Você pode editar ou remover itens diretamente pelo painel admin, mesmo quando o mapa já foi enviado pela auxiliar.</p>
+
+          <h3 id="mapa-devolver">Devolver para revisão</h3>
+          <p>Se encontrar algo errado, clique em <strong>↩️ Devolver</strong> e escreva uma observação explicando o que precisa ser corrigido. O status muda para <strong>↩️ Em revisão</strong> e a auxiliar poderá editar novamente.</p>
+
+          <h3 id="mapa-aprovar">Aprovar e confirmar agendamentos</h3>
+          <p>Quando estiver tudo certo, clique em <strong>✅ Aprovar</strong>. O sistema automaticamente:</p>
+          <ol>
+            <li>Cria cada atendimento como <strong>Agendamento Tático confirmado</strong> na agenda da cidade e data informadas.</li>
+            <li>Lança uma entrada em <strong>Contas a Pagar</strong> com a comissão calculada sobre o total dos atendimentos.</li>
+          </ol>
+          <p>O painel passa para status <strong>✅ Aprovado</strong> e o link da auxiliar exibe a mensagem de encerramento.</p>
+
+          <h3 id="mapa-expiracao">Expiração automática</h3>
+          <p>Se a data de execução passar sem que o mapa tenha sido aprovado, o sistema expira o painel automaticamente na madrugada. O link da auxiliar exibirá a mensagem <strong>⏰ Painel Expirado</strong>.</p>
+
+          <h3 id="mapa-excluir">Excluir um mapa</h3>
+          <p>Na lista de painéis, acesse o detalhe e exclua o mapa. Atenção: excluir um mapa aprovado <strong>não</strong> remove os agendamentos já criados — eles continuam normalmente na agenda.</p>
+
+          <div class="tip"><span>💡</span><p>Use o Mapa de Atendimento sempre que precisar de uma auxiliar para organizar atendimentos externos. O link é único por mapa e expira junto com a data de execução.</p></div>
+        </div>
+      </section>
+      <!-- ════ FIM AGENDA EXTERNA ════ -->
 
     </main>
   </div>

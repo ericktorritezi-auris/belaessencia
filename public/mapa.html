@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Mapa de Atendimento</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#FAF7F2;--white:#FFFFFF;
+  --rose:#9B4D6A;--rose-deep:#7A3554;--rose-light:#F5E8EE;--rose-mid:#C98CA8;
+  --gold:#C4994A;--gold-light:#F5EDD8;
+  --dark:#1A1214;--text:#3D2B35;--text-light:#8A6B76;
+  --border:#E8D5DE;--border-light:#F0E2E8;
+  --success:#2D7D52;--success-bg:#E8F5EE;
+  --warn:#C47A30;--warn-bg:#FEF0E0;
+  --sh-sm:0 2px 8px rgba(155,77,106,.08);
+  --sh-md:0 4px 20px rgba(155,77,106,.12);
+  --r-sm:8px;--r-md:14px;--r-lg:20px;--r-xl:40px;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --cream:#1A1214;--white:#231820;--dark:#FAF7F2;--text:#EDD8E4;--text-light:#A87090;
+  --border:#3D2B35;--border-light:#2E1F28;--rose-light:#2A1520;
+  --success-bg:#0E2A1A;--warn-bg:#2A1A08;
+}}
+:root[data-theme="dark"]{
+  --cream:#1A1214;--white:#231820;--dark:#FAF7F2;--text:#EDD8E4;--text-light:#A87090;
+  --border:#3D2B35;--border-light:#2E1F28;--rose-light:#2A1520;
+  --success-bg:#0E2A1A;--warn-bg:#2A1A08;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%;font-family:'Nunito',sans-serif;background:var(--cream);color:var(--text);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body{padding:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+
+/* ── topbar ─── */
+.topbar{
+  background:linear-gradient(135deg,var(--rose),var(--rose-deep));
+  color:#fff;padding:14px 16px 14px;
+  display:flex;align-items:center;gap:10px;
+  position:sticky;top:env(safe-area-inset-top,0px);z-index:100;
+}
+.topbar-logo{width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.topbar-info{flex:1;min-width:0}
+.topbar-name{font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-sub{font-size:10px;opacity:.75;letter-spacing:.04em}
+.status-pill{font-size:10px;font-weight:800;padding:3px 9px;border-radius:99px;white-space:nowrap;background:rgba(255,255,255,.18);color:#fff}
+
+/* ── conteúdo ─── */
+.page{padding:16px;max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+
+/* ── card ─── */
+.card{background:var(--white);border:1px solid var(--border-light);border-radius:var(--r-lg);box-shadow:var(--sh-sm);overflow:hidden}
+.card-head{padding:12px 16px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card-ttl{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:600;color:var(--dark)}
+.card-body{padding:14px 16px}
+
+/* ── meta info grid ─── */
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.meta-cell{background:var(--cream);border-radius:var(--r-sm);padding:8px 10px}
+.meta-lbl{font-size:9.5px;font-weight:800;color:var(--text-light);text-transform:uppercase;letter-spacing:.06em}
+.meta-val{font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;color:var(--dark);margin-top:1px}
+
+/* ── item de atendimento ─── */
+.item{padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;align-items:flex-start;gap:10px}
+.item:last-child{border-bottom:none}
+.item-num{width:22px;height:22px;border-radius:50%;background:var(--rose-light);color:var(--rose);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.item-info{flex:1;min-width:0}
+.item-name{font-weight:700;font-size:13.5px;color:var(--dark)}
+.item-sub{font-size:11.5px;color:var(--text-light);margin-top:1px}
+.item-actions{display:flex;gap:6px;flex-shrink:0}
+.btn-icon{background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;color:var(--text);transition:.15s}
+.btn-icon:hover{background:var(--cream)}
+.btn-icon.del{color:#c00}
+
+/* ── empty state ─── */
+.empty{text-align:center;padding:28px 16px;color:var(--text-light);font-size:13px}
+.empty-icon{font-size:32px;margin-bottom:8px}
+
+/* ── formulário de item ─── */
+.form-grid{display:grid;gap:10px}
+.field label{font-size:11.5px;font-weight:700;color:var(--text-light);display:block;margin-bottom:4px}
+.fi{width:100%;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--text);background:var(--white);outline:none;transition:.15s}
+.fi:focus{border-color:var(--rose)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* ── botões ─── */
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;border-radius:var(--r-xl);padding:12px 16px;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;transition:.2s;letter-spacing:.02em}
+.btn-primary{background:linear-gradient(135deg,var(--rose),var(--rose-deep));color:#fff;box-shadow:0 4px 14px rgba(155,77,106,.3)}
+.btn-primary:hover{filter:brightness(1.05)}
+.btn-secondary{background:var(--cream);color:var(--text);border:1.5px solid var(--border)}
+.btn-success{background:linear-gradient(135deg,var(--success),#1a5c3a);color:#fff;box-shadow:0 4px 14px rgba(45,125,82,.25)}
+.btn-disabled{background:var(--border);color:var(--text-light);cursor:not-allowed}
+
+/* ── obs devolução ─── */
+.obs-box{background:var(--warn-bg);border:1px solid #f0c080;border-radius:var(--r-md);padding:12px 14px;font-size:13px}
+.obs-title{font-weight:800;color:var(--warn);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+
+/* ── toast ─── */
+#toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%) translateY(80px);background:var(--dark);color:#fff;padding:10px 20px;border-radius:var(--r-xl);font-size:13px;font-weight:700;z-index:999;transition:transform .3s;white-space:nowrap;max-width:90vw;text-align:center}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.ok{background:var(--success)}
+#toast.error{background:#c00}
+
+/* ── modal ─── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:flex-end;justify-content:center;padding:0}
+.modal-sheet{background:var(--white);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));width:100%;max-width:560px;max-height:90vh;overflow-y:auto;animation:slideUp .25s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-handle{width:40px;height:4px;border-radius:99px;background:var(--border);margin:0 auto 16px}
+.modal-ttl{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:var(--dark);margin-bottom:14px}
+.hidden{display:none!important}
+
+/* ── resumo financeiro ─── */
+.fin-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px}
+.fin-row:last-child{border:none;font-weight:800;font-size:14px;padding-top:10px}
+
+/* ── footer ─── */
+.page-footer{text-align:center;font-size:11px;color:var(--text-light);padding:16px 0 24px;line-height:1.6}
+.page-footer span{font-family:'Cormorant Garamond',serif;font-size:13px;color:var(--rose-mid);font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- Topbar dinâmica -->
+<div class="topbar">
+  <div class="topbar-logo" id="tLogo">🌸</div>
+  <div class="topbar-info">
+    <div class="topbar-name" id="tName">Mapa de Atendimento</div>
+    <div class="topbar-sub" id="tSub">Carregando…</div>
+  </div>
+  <div class="status-pill" id="tStatus">–</div>
+</div>
+
+<!-- Conteúdo principal -->
+<div class="page" id="pageContent">
+  <p style="color:var(--text-light);font-size:13px;text-align:center;padding:40px 0">Carregando painel…</p>
+</div>
+
+<div id="toast"></div>
+
+<!-- Modal: adicionar/editar atendimento -->
+<div class="modal-overlay hidden" id="itemModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-ttl" id="itemModalTtl">Novo Atendimento</div>
+    <div class="form-grid">
+      <div class="field"><label>Nome do cliente *</label><input id="f-name" class="fi" placeholder="Nome completo"></div>
+      <div class="field"><label>WhatsApp do cliente</label><input id="f-phone" class="fi" placeholder="Ex: 41999999999" type="tel"></div>
+      <div class="field"><label>Procedimento *</label><input id="f-proc" class="fi" placeholder="Ex: Design de Sobrancelha" list="proc-list">
+        <datalist id="proc-list"></datalist>
+      </div>
+      <div class="two-col">
+        <div class="field"><label>Horário início *</label><input id="f-st" class="fi" type="time"></div>
+        <div class="field"><label>Horário fim *</label><input id="f-et" class="fi" type="time"></div>
+      </div>
+      <div class="field"><label>Valor (R$)</label><input id="f-price" class="fi" type="number" placeholder="0,00" min="0" step="0.01"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn btn-secondary" onclick="closeItemModal()" style="flex:1">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveItem()" style="flex:1" id="btnSaveItem">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const KEY = location.pathname.replace('/m/', '').replace(/\//g, '').toUpperCase();
+let _panel = null, _items = [], _procs = [], _editItemId = null, _readOnly = false;
+
+const STATUS_LABEL = {
+  filling:  '✏️ Preenchendo',
+  pending:  '⏳ Aguardando',
+  revision: '↩️ Em revisão',
+  approved: '✅ Aprovado',
+  expired:  '⏰ Expirado',
+};
+
+// ── Carrega dados ─────────────────────────────────────────────
+async function load() {
+  try {
+    const r = await fetch('/api/public/mapa/' + KEY);
+    if (r.status === 404) { renderClosed('not_found'); return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    _panel = data.panel;
+    _items = data.items || [];
+    _procs = data.procedures || [];
+    applyBranding(data.tenant);
+
+    if (['approved','expired'].includes(_panel.status)) {
+      renderClosed(_panel.status);
+      return;
+    }
+    _readOnly = !['filling','revision'].includes(_panel.status);
+    renderPage();
+  } catch(e) {
+    document.getElementById('pageContent').innerHTML =
+      `<p style="color:#b00;font-size:13px;text-align:center;padding:40px 0">Erro ao carregar: ${e.message}</p>`;
+  }
+}
+
+function applyBranding(tenant) {
+  if (!tenant) return;
+  const name = tenant.business_name || 'Belle Planner';
+  document.getElementById('tName').textContent = name;
+  if (tenant.primary_color) {
+    const p = tenant.primary_color;
+    document.documentElement.style.setProperty('--rose', p);
+  }
+}
+
+function renderClosed(state) {
+  // Redireciona para mapa-encerrado.html com parâmetro de estado
+  location.replace('/mapa-encerrado?s=' + state + '&k=' + KEY);
+}
+
+// ── Renderiza a página ─────────────────────────────────────────
+function renderPage() {
+  const p = _panel;
+  const d = new Date(p.exec_date + 'T12:00:00').toLocaleDateString('pt-BR');
+  // topbar
+  document.getElementById('tSub').textContent = p.city_name + ' · ' + d;
+  document.getElementById('tStatus').textContent = STATUS_LABEL[p.status] || p.status;
+
+  // Procedimentos no datalist
+  const dl = document.getElementById('proc-list');
+  dl.innerHTML = _procs.map(pr => `<option value="${pr.name}">`).join('');
+
+  const pg = document.getElementById('pageContent');
+
+  // Devolução pendente?
+  const obsBlock = (p.status === 'revision' && p.obs_devolucao)
+    ? `<div class="obs-box"><div class="obs-title">↩️ Motivo da devolução</div><p style="font-size:13px;color:var(--text)">${escHtml(p.obs_devolucao)}</p></div>`
+    : '';
+
+  // Resumo financeiro
+  const total = _items.reduce((s, i) => s + (parseFloat(i.price)||0), 0);
+  const comm  = total * (parseFloat(p.commission_pct)||0) / 100;
+  const finBlock = _items.length
+    ? `<div class="card"><div class="card-head"><div class="card-ttl">Resumo</div></div>
+        <div class="card-body">
+          <div class="fin-row"><span>Total de atendimentos</span><span>${_items.length}</span></div>
+          <div class="fin-row"><span>Valor total</span><span>R$ ${fmt(total)}</span></div>
+          <div class="fin-row"><span>Comissão (${p.commission_pct}%)</span><span style="color:var(--rose)">R$ ${fmt(comm)}</span></div>
+          <div class="fin-row"><span>Seu repasse</span><span style="color:var(--success)">R$ ${fmt(total - comm)}</span></div>
+        </div></div>` : '';
+
+  // Botão de submissão
+  const canSubmit = !_readOnly && _items.length > 0;
+  const submitBtn = !_readOnly
+    ? `<button class="${canSubmit ? 'btn btn-success' : 'btn btn-disabled'}" ${canSubmit?'onclick="submitForApproval()"':''}>
+        ✅ Enviar para Aprovação
+       </button>`
+    : `<div style="text-align:center;font-size:12.5px;color:var(--text-light);background:var(--cream);border-radius:var(--r-md);padding:12px">
+        ⏳ Painel enviado para aprovação. Aguardando retorno.
+       </div>`;
+
+  pg.innerHTML = `
+    ${obsBlock}
+    <div class="card">
+      <div class="card-head"><div class="card-ttl">Informações</div></div>
+      <div class="card-body">
+        <div class="meta-grid">
+          <div class="meta-cell"><div class="meta-lbl">Cidade</div><div class="meta-val">${escHtml(p.city_name)}</div></div>
+          <div class="meta-cell"><div class="meta-lbl">Data</div><div class="meta-val">${d}</div></div>
+          <div class="meta-cell"><div class="meta-lbl">Comissão</div><div class="meta-val">${p.commission_pct}%</div></div>
+          <div class="meta-cell"><div class="meta-lbl">Atendimentos</div><div class="meta-val" style="color:var(--rose)">${_items.length}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-ttl">Atendimentos</div>
+        ${!_readOnly ? '<button onclick="openAddItem()" style="background:linear-gradient(135deg,var(--rose),var(--rose-deep));color:#fff;border:none;border-radius:var(--r-xl);padding:7px 16px;font-size:12px;font-weight:800;cursor:pointer">+ Adicionar</button>' : ''}
+      </div>
+      <div class="card-body" style="padding:${_items.length?'0 16px':'14px 16px'}">
+        ${renderItems()}
+      </div>
+    </div>
+
+    ${finBlock}
+    ${submitBtn}
+    <div class="page-footer">Gerenciado por <span>Belle Planner</span><br>Agenda Externa · Mapa de Atendimento</div>
+  `;
+}
+
+function renderItems() {
+  if (!_items.length) return '<div class="empty"><div class="empty-icon">📋</div>Nenhum atendimento adicionado ainda.</div>';
+  return _items.map((it, idx) => {
+    const price = it.price ? 'R$ ' + fmt(it.price) : '—';
+    return `<div class="item">
+      <div class="item-num">${idx+1}</div>
+      <div class="item-info">
+        <div class="item-name">${escHtml(it.client_name)}</div>
+        <div class="item-sub">${escHtml(it.proc_name)} · ${it.st.slice(0,5)}–${it.et.slice(0,5)} · ${price}</div>
+        ${it.client_phone ? `<div class="item-sub" style="margin-top:1px">📱 ${escHtml(it.client_phone)}</div>` : ''}
+      </div>
+      ${!_readOnly ? `<div class="item-actions">
+        <button class="btn-icon" onclick="openEditItem(${it.id})">✏️</button>
+        <button class="btn-icon del" onclick="deleteItem(${it.id})">🗑</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── Modal de item ─────────────────────────────────────────────
+function openAddItem() {
+  _editItemId = null;
+  document.getElementById('itemModalTtl').textContent = 'Novo Atendimento';
+  document.getElementById('f-name').value  = '';
+  document.getElementById('f-phone').value = '';
+  document.getElementById('f-proc').value  = '';
+  document.getElementById('f-st').value    = '';
+  document.getElementById('f-et').value    = '';
+  document.getElementById('f-price').value = '';
+  document.getElementById('itemModal').classList.remove('hidden');
+}
+function openEditItem(id) {
+  const it = _items.find(i => i.id === id);
+  if (!it) return;
+  _editItemId = id;
+  document.getElementById('itemModalTtl').textContent = 'Editar Atendimento';
+  document.getElementById('f-name').value  = it.client_name;
+  document.getElementById('f-phone').value = it.client_phone || '';
+  document.getElementById('f-proc').value  = it.proc_name;
+  document.getElementById('f-st').value    = it.st ? it.st.slice(0,5) : '';
+  document.getElementById('f-et').value    = it.et ? it.et.slice(0,5) : '';
+  document.getElementById('f-price').value = it.price || '';
+  document.getElementById('itemModal').classList.remove('hidden');
+}
+function closeItemModal() {
+  document.getElementById('itemModal').classList.add('hidden');
+  _editItemId = null;
+}
+async function saveItem() {
+  const body = {
+    client_name:  document.getElementById('f-name').value.trim(),
+    client_phone: document.getElementById('f-phone').value.trim(),
+    proc_name:    document.getElementById('f-proc').value.trim(),
+    st:           document.getElementById('f-st').value,
+    et:           document.getElementById('f-et').value,
+    price:        document.getElementById('f-price').value || null,
+  };
+  if (!body.client_name || !body.proc_name || !body.st || !body.et)
+    return toast('Preencha: nome, procedimento, início e fim', 'error');
+  const btn = document.getElementById('btnSaveItem');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  try {
+    const url    = '/api/public/mapa/' + KEY + '/items' + (_editItemId ? '/' + _editItemId : '');
+    const method = _editItemId ? 'PUT' : 'POST';
+    const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
+    closeItemModal();
+    toast(_editItemId ? 'Atendimento atualizado!' : 'Atendimento adicionado!', 'ok');
+    await refreshItems();
+  } catch(e) { toast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Salvar'; }
+}
+async function deleteItem(id) {
+  if (!confirm('Remover este atendimento?')) return;
+  try {
+    const r = await fetch('/api/public/mapa/' + KEY + '/items/' + id, { method:'DELETE' });
+    if (!r.ok) throw new Error('Erro ao remover');
+    toast('Removido.', 'ok');
+    await refreshItems();
+  } catch(e) { toast(e.message, 'error'); }
+}
+async function refreshItems() {
+  const r = await fetch('/api/public/mapa/' + KEY);
+  if (!r.ok) return;
+  const data = await r.json();
+  _panel = data.panel;
+  _items = data.items || [];
+  if (['approved','expired'].includes(_panel.status)) { renderClosed(_panel.status); return; }
+  _readOnly = !['filling','revision'].includes(_panel.status);
+  renderPage();
+}
+
+// ── Enviar para aprovação ─────────────────────────────────────
+async function submitForApproval() {
+  if (!confirm('Enviar este mapa para aprovação? Você não poderá mais editar os atendimentos.')) return;
+  try {
+    const r = await fetch('/api/public/mapa/' + KEY + '/submit', { method:'POST' });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
+    toast('Enviado para aprovação! ✅', 'ok');
+    _panel.status = 'pending';
+    _readOnly = true;
+    renderPage();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Utilitários ───────────────────────────────────────────────
+function fmt(n) { return Number(n).toLocaleString('pt-BR', {minimumFractionDigits:2}); }
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+let _toastTimer;
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (type||'');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// Fecha modal ao clicar no overlay
+document.getElementById('itemModal').addEventListener('click', function(e){
+  if (e.target === this) closeItemModal();
+});
+
+load();
+</script>
+</body>
+</html>
