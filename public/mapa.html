@@ -464,6 +464,8 @@ async function load() {
       renderClosed(_panel.status); return;
     }
     _readOnly = !['filling','revision'].includes(_panel.status);
+    // validation = tenant editou e quer confirmação do auxiliar (read-only + botão confirmar)
+    if (_panel.status === 'validation') { _readOnly = true; }
     renderPage();
     populateProcSelect();
   } catch(e) {
@@ -497,8 +499,8 @@ function renderPage() {
   const d = rawDate ? new Date(rawDate+'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
   // Status badge
-  const LABELS = {filling:'Em preenchimento',pending:'Aguardando aprovação',revision:'Em revisão'};
-  const COLORS = {filling:'rgba(255,255,255,.18)',pending:'rgba(196,122,48,.3)',revision:'rgba(124,58,237,.3)'};
+  const LABELS = {filling:'Em preenchimento',pending:'Aguardando aprovação',revision:'Em revisão',validation:'Aguardando sua confirmação'};
+  const COLORS = {filling:'rgba(255,255,255,.18)',pending:'rgba(196,122,48,.3)',revision:'rgba(124,58,237,.3)',validation:'rgba(45,125,82,.35)'};
   const badge = document.getElementById('statusBadge');
   badge.textContent = LABELS[p.status] || p.status;
   badge.style.background = COLORS[p.status] || 'rgba(255,255,255,.18)';
@@ -551,6 +553,17 @@ function renderPage() {
     </div>`;
   }
 
+  // Banner de validação — tenant revisou, aguarda confirmação do auxiliar
+  if (p.status === 'validation') {
+    html += `<div class="comm-notice" style="margin-top:16px;background:#E8F5EE;border-color:rgba(45,125,82,.25)">
+      <div class="comm-notice-icon">👀</div>
+      <div class="comm-notice-text" style="color:#1A5C38">
+        <strong style="color:#2D7D52">Revise os agendamentos abaixo.</strong>
+        Os horários e procedimentos foram ajustados. Confirme para finalizar.
+      </div>
+    </div>`;
+  }
+
   // Lista de cards
   html += `<div class="sec-hdr">
     <div class="sec-title">Agendamentos</div>
@@ -572,6 +585,20 @@ function renderPage() {
   // Mostrar bottom bar
   if (!_readOnly) {
     document.getElementById('bottomBar').style.display = '';
+  } else if (p.status === 'validation') {
+    // Troca botão para "Confirmar Agendamentos"
+    const bar = document.getElementById('bottomBar');
+    bar.style.display = '';
+    bar.innerHTML = `<div class="bottom-bar-inner">
+      <div class="summary-chip">
+        <div class="s-count" id="totalCount">0</div>
+        <div class="s-label">Agendamentos</div>
+      </div>
+      <button class="btn-send" style="background:#2D7D52;box-shadow:0 4px 16px rgba(45,125,82,.3)" onclick="confirmValidation()">
+        <svg viewBox="0 0 24 24" width="17" height="17" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Confirmar Agendamentos
+      </button>
+    </div>`;
   }
 
   // Pre-fill modal dados estáticos
@@ -801,6 +828,27 @@ async function confirmSend() {
     alert('Erro ao enviar: '+e.message);
     if(btn){btn.disabled=false;btn.innerHTML='<svg viewBox="0 0 24 24" width="17" height="17" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar para Aprovação';}
   }
+}
+
+// ── confirmar validação (auxiliar confirma revisão do tenant) ─────
+async function confirmValidation() {
+  if (!confirm('Confirmar os agendamentos revisados?')) return;
+  try {
+    const r = await fetch('/api/public/mapa/'+KEY+'/confirm', {method:'POST'});
+    if (!r.ok) { const e=await r.json(); throw new Error(e.error||'Erro'); }
+    _panel.status = 'pending';
+    document.getElementById('statusBadge').textContent = '⏳ Aguardando aprovação final';
+    document.getElementById('statusBadge').style.background = 'rgba(196,122,48,.3)';
+    document.getElementById('bottomBar').style.display = 'none';
+    const bar = document.getElementById('bottomBar');
+    bar.style.display = 'none';
+    // Mostra banner de enviado
+    const banner = document.createElement('div');
+    banner.className = 'sent-banner show';
+    banner.innerHTML = '<div class="sb-icon">✅</div><div class="sb-title">Agendamentos confirmados!</div><div class="sb-sub">Os agendamentos foram confirmados. Aguarde a aprovação final.</div>';
+    const cardsList = document.getElementById('cardsList');
+    if (cardsList) cardsList.before(banner);
+  } catch(e) { alert('Erro: '+e.message); }
 }
 
 // ── help panel ────────────────────────────────────────────────────

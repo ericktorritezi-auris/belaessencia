@@ -2081,7 +2081,10 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                       <button id="btn-mapa-edit" onclick="mapaOpenEdit()" style="background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">✏️ Editar</button>
                       <button id="btn-mapa-devolver" onclick="mapaDevolver()" style="display:none;background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">↩️ Devolver</button>
+                      <button id="btn-mapa-revisar" onclick="mapaStartReview()" style="display:none;background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#7c3aed">🔍 Revisar</button>
                       <button id="btn-mapa-approve" onclick="mapaApprove()" style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">✅ Aprovar</button>
+                      <button id="btn-mapa-send-val" onclick="mapaSendValidation()" style="display:none;background:linear-gradient(135deg,#2d7d52,#1e5c3c);color:#fff;border:none;border-radius:99px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">📤 Enviar para Validação</button>
+                      <button id="btn-mapa-cancel-review" onclick="mapaCancelReview()" style="display:none;background:var(--cream);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#b00">✕ Cancelar</button>
                     </div>
                   </div>
                   <div id="mapa-detail-meta" style="padding:10px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px"></div>
@@ -9872,24 +9875,27 @@ document.addEventListener('click', function(e) {
 })();
 
 // ── Estado do módulo ───────────────────────────────────────────────────────
-let _mapaPanels   = [];
-let _mapaPanel    = null;   // painel em detalhe/aprovação
-let _mapaEditItem = null;   // item sendo editado (null = novo)
-let _mapaLinkKey  = null;   // access_key do painel recém-criado
+let _mapaPanels     = [];
+let _mapaPanel      = null;   // painel em detalhe/aprovação
+let _mapaEditItem   = null;   // item sendo editado (null = novo)
+let _mapaLinkKey    = null;   // access_key do painel recém-criado
+let _mapaReviewMode = false;  // tenant revisando itens antes de enviar para validação
 
 const MAPA_STATUS_LABEL = {
-  filling:  '✏️ Preenchendo',
-  pending:  '⏳ Aguardando aprovação',
-  revision: '↩️ Em revisão',
-  approved: '✅ Aprovado',
-  expired:  '⏰ Expirado',
+  filling:    '✏️ Preenchendo',
+  pending:    '⏳ Aguardando aprovação',
+  revision:   '↩️ Em revisão',
+  validation: '👀 Aguardando confirmação',
+  approved:   '✅ Aprovado',
+  expired:    '⏰ Expirado',
 };
 const MAPA_STATUS_COLOR = {
-  filling:  '#6b7280',
-  pending:  '#c47a30',
-  revision: '#7c3aed',
-  approved: '#16a34a',
-  expired:  '#9ca3af',
+  filling:    '#6b7280',
+  pending:    '#c47a30',
+  revision:   '#7c3aed',
+  validation: '#2d7d52',
+  approved:   '#16a34a',
+  expired:    '#9ca3af',
 };
 
 // ── helpers de bottom sheet ──────────────────────────────────────────────
@@ -10081,6 +10087,7 @@ async function mapaOpenDetail(id) {
 function mapaBack() {
   document.getElementById('mapa-apv-overlay').classList.add('hidden');
   _mapaPanel = null;
+  _mapaReviewMode = false;
   mapaLoadList();
 }
 
@@ -10127,13 +10134,43 @@ function mapaRenderDetail() {
   } else { obsWrap.style.display = 'none'; }
 
   // Botões condicionais
-  const isPending = p.status === 'pending';
-  const canEdit   = ['filling','revision'].includes(p.status);
-  const isActive  = !['approved','expired'].includes(p.status);
-  document.getElementById('btn-mapa-approve').style.display  = isPending ? '' : 'none';
-  document.getElementById('btn-mapa-devolver').style.display = isPending ? '' : 'none';
-  document.getElementById('btn-mapa-edit').style.display     = isActive  ? '' : 'none';
-  document.getElementById('btn-mapa-add-item').style.display = canEdit   ? '' : 'none';
+  const isPending      = p.status === 'pending';
+  const isValidation   = p.status === 'validation';
+  const canEdit        = ['filling','revision'].includes(p.status);
+  const isActive       = !['approved','expired'].includes(p.status);
+  const inReview       = _mapaReviewMode && isPending;
+
+  // Modo normal
+  document.getElementById('btn-mapa-approve').style.display      = (isPending && !inReview) ? '' : 'none';
+  document.getElementById('btn-mapa-devolver').style.display     = (isPending && !inReview) ? '' : 'none';
+  document.getElementById('btn-mapa-revisar').style.display      = (isPending && !inReview) ? '' : 'none';
+  document.getElementById('btn-mapa-edit').style.display         = (isActive && !inReview) ? '' : 'none';
+  // Modo revisão
+  document.getElementById('btn-mapa-send-val').style.display     = inReview ? '' : 'none';
+  document.getElementById('btn-mapa-cancel-review').style.display= inReview ? '' : 'none';
+  // Adicionar item: permitido em edição normal OU em modo revisão
+  document.getElementById('btn-mapa-add-item').style.display     = (canEdit || inReview) ? '' : 'none';
+
+  // Aviso visual: em modo revisão
+  const existingReviewNotice = document.getElementById('mapa-review-notice');
+  if (existingReviewNotice) existingReviewNotice.remove();
+  if (inReview) {
+    const notice = document.createElement('div');
+    notice.id = 'mapa-review-notice';
+    notice.style.cssText = 'margin:0 16px 12px;padding:10px 14px;background:#EEF2FF;border:1px solid rgba(124,58,237,.25);border-radius:10px;display:flex;align-items:flex-start;gap:8px';
+    notice.innerHTML = '<div style="font-size:16px">🔍</div><div><div style="font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:2px">Modo Revisão</div><div style="font-size:11.5px;color:#5b21b6">Edite os atendimentos à vontade. Quando terminar, clique em "Enviar para Validação" para o auxiliar confirmar.</div></div>';
+    document.getElementById('mapa-items-body').before(notice);
+  }
+  // Aviso: aguardando confirmação da auxiliar
+  const existingValNotice = document.getElementById('mapa-val-notice');
+  if (existingValNotice) existingValNotice.remove();
+  if (isValidation) {
+    const notice = document.createElement('div');
+    notice.id = 'mapa-val-notice';
+    notice.style.cssText = 'margin:0 16px 12px;padding:10px 14px;background:#E8F5EE;border:1px solid rgba(45,125,82,.25);border-radius:10px;display:flex;align-items:flex-start;gap:8px';
+    notice.innerHTML = '<div style="font-size:16px">👀</div><div><div style="font-size:12px;font-weight:700;color:#2d7d52;margin-bottom:2px">Aguardando confirmação</div><div style="font-size:11.5px;color:#1e5c3c">O painel foi enviado para o auxiliar confirmar. Após a confirmação, ficará disponível para aprovação.</div></div>';
+    document.getElementById('mapa-items-body').before(notice);
+  }
 
   mapaRenderItems();
 }
@@ -10141,7 +10178,7 @@ function mapaRenderDetail() {
 function mapaRenderItems() {
   const p = _mapaPanel;
   const body = document.getElementById('mapa-items-body');
-  const canEdit = ['filling','revision'].includes(p.status);
+  const canEdit = ['filling','revision'].includes(p.status) || (_mapaReviewMode && p.status === 'pending');
   if (!p.items || !p.items.length) {
     body.innerHTML = `<p style="padding:16px 0;font-size:13px;color:var(--text-light);text-align:center">
       ${canEdit ? 'Nenhum atendimento. Clique em "+ Adicionar" para começar.' : 'Nenhum atendimento registrado.'}
@@ -10225,6 +10262,27 @@ async function mapaApprove() {
     const r = await fetch('/api/route-panels/' + _mapaPanel.id + '/approve', { method:'POST' });
     if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
     toast('Mapa aprovado! Agendamentos criados com sucesso.', 'ok');
+    await mapaOpenDetail(_mapaPanel.id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Revisar itens (tenant entra em modo de edição antes de enviar para auxiliar) ──
+function mapaStartReview() {
+  _mapaReviewMode = true;
+  mapaRenderDetail();
+}
+function mapaCancelReview() {
+  _mapaReviewMode = false;
+  mapaRenderDetail();
+}
+async function mapaSendValidation() {
+  if (!_mapaPanel) return;
+  if (!confirm('Enviar para o auxiliar confirmar os agendamentos?')) return;
+  try {
+    const r = await fetch('/api/route-panels/' + _mapaPanel.id + '/send-validation', { method:'POST' });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'Erro'); }
+    _mapaReviewMode = false;
+    toast('Painel enviado para validação da auxiliar.', 'ok');
     await mapaOpenDetail(_mapaPanel.id);
   } catch(e) { toast(e.message, 'error'); }
 }

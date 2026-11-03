@@ -8540,6 +8540,19 @@ app.post('/api/route-panels/:id/approve', requireAdmin, requireMapa, async (req,
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Admin: enviar para validação do auxiliar (tenant editou, quer que auxiliar confirme) ──
+app.post('/api/route-panels/:id/send-validation', requireAdmin, requireMapa, async (req, res) => {
+  try {
+    const { rows } = await req.db(
+      `UPDATE route_panels SET status='validation', obs_devolucao=NULL, updated_at=NOW()
+       WHERE id=$1 AND status IN ('pending','revision') RETURNING *`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Painel não encontrado ou status inválido' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Admin: devolver para revisão ──────────────────────────────────────────
 app.post('/api/route-panels/:id/devolver', requireAdmin, requireMapa, async (req, res) => {
   try {
@@ -8703,6 +8716,29 @@ app.delete('/api/public/mapa/:key/items/:itemId', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Confirmar validação (auxiliar confirma revisão do tenant → approved)
+app.post('/api/public/mapa/:key/confirm', async (req, res) => {
+  try {
+    if (!req.tenant) return res.status(403).json({ error: 'Não autorizado' });
+    const schema = req.schemaName;
+    const client = await pool.connect();
+    try {
+      await client.query(`SET search_path TO "${schema}", public`);
+      const { rows: panels } = await client.query(
+        `SELECT id, status FROM route_panels WHERE access_key=$1`, [req.params.key.toUpperCase()]
+      );
+      if (!panels.length) return res.status(404).json({ error: 'Painel não encontrado' });
+      if (panels[0].status !== 'validation')
+        return res.status(400).json({ error: 'Painel não está aguardando validação' });
+      await client.query(
+        `UPDATE route_panels SET status='pending', updated_at=NOW() WHERE id=$1`,
+        [panels[0].id]
+      );
+      res.json({ ok: true });
+    } finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Enviar para aprovação (auxiliar muda filling/revision → pending)
 app.post('/api/public/mapa/:key/submit', async (req, res) => {
   try {
@@ -8744,7 +8780,7 @@ cron.schedule('0 3 * * *', async () => {
         const result = await pool.query(
           `UPDATE "${sn}".route_panels
            SET status='expired', updated_at=NOW()
-           WHERE status IN ('filling','pending','revision')
+           WHERE status IN ('filling','pending','revision','validation')
              AND exec_date < CURRENT_DATE
            RETURNING id`
         );
@@ -8755,6 +8791,11 @@ cron.schedule('0 3 * * *', async () => {
     }
   } catch (e) { console.error('[Cron Mapa] Erro geral:', e.message); }
 }, { timezone: 'UTC' });
+
+// Página de encerramento do Mapa de Atendimento (aprovado / expirado / not_found)
+app.get('/mapa-encerrado', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'mapa-encerrado.html'));
+});
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
