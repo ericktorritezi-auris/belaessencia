@@ -520,6 +520,50 @@ footer span { color: var(--rose) }
 
 /* ── GRID CONTAINER ── */
 .container { max-width: 900px; margin: 0 auto }
+
+/* ── MAPA DE ATENDIMENTO ── */
+.mapa-flow {
+  display: flex; flex-direction: column; gap: 0;
+  max-width: 700px; margin: 48px auto 0; position: relative;
+}
+.mapa-flow::before {
+  content: ''; position: absolute; left: 21px; top: 32px; bottom: 32px;
+  width: 2px; background: linear-gradient(180deg, var(--rose), var(--gold), rgba(212,168,67,.1));
+  z-index: 0;
+}
+.mapa-step {
+  display: flex; gap: 20px; align-items: flex-start;
+  padding: 20px 0; position: relative; z-index: 1;
+}
+.mapa-step-num {
+  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 900;
+  background: linear-gradient(135deg, rgba(15,8,12,1), rgba(30,12,18,1));
+  border: 2px solid var(--rose); color: var(--rose);
+  font-family: 'Playfair Display', serif;
+}
+.mapa-step-body { flex: 1; padding-top: 10px }
+.mapa-step-title { font-weight: 700; font-size: 15px; margin-bottom: 5px }
+.mapa-step-desc { font-size: 13px; color: var(--dim); line-height: 1.6 }
+
+.mapa-highlight {
+  display: grid; grid-template-columns: 1fr;
+  gap: 16px; max-width: 700px; margin-left: auto; margin-right: auto;
+}
+@media(min-width:600px){ .mapa-highlight { grid-template-columns: 1fr 1fr } }
+.mapa-pill {
+  background: rgba(255,255,255,.03); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px;
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.mapa-pill-icon {
+  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  background: rgba(212,168,67,.08); border: 1px solid rgba(212,168,67,.2);
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+.mapa-pill-title { font-weight: 700; font-size: 13px; color: var(--white); margin-bottom: 3px }
+.mapa-pill-desc { font-size: 12px; color: var(--dim); line-height: 1.55 }
 </style>
 </head>
 <body>
@@ -740,7 +784,7 @@ footer span { color: var(--rose) }
     <div class="tag">Investimento</div>
     <h2 class="section-title">Simples, <em>transparente</em>, justo</h2>
     <div class="divider"></div>
-    <p class="section-sub" style="margin-bottom:40px">Sem surpresas. Sem taxas por agendamento. Você paga uma vez para começar e uma mensalidade fixa para continuar crescendo.<br><span style="color:var(--gold);font-size:13px;font-weight:600">✦ Pro Plus inclui Bella Chat — sua assistente IA que agenda por conversa.</span></p>
+    <p class="section-sub" style="margin-bottom:40px">Sem surpresas. Sem taxas por agendamento. Você paga uma vez para começar e uma mensalidade fixa para continuar crescendo.<br><span style="color:var(--gold);font-size:13px;font-weight:600">✦ Pro Plus inclui Bella Chat + Mapa de Atendimento.</span></p>
   </div>
   <div class="pricing-wrap">
 
@@ -784,7 +828,7 @@ footer span { color: var(--rose) }
       <div class="pricing-popular">✦ Mais Completo</div>
       <div class="pricing-badge">✦ Plano Pro Plus ✦</div>
       <div class="pricing-title">Pro Plus</div>
-      <div class="pricing-sub">Tudo do Profissional + Bella Chat IA + Suporte Prioritário</div>
+      <div class="pricing-sub">Tudo do Profissional + Bella Chat IA + Mapa de Atendimento + Suporte Prioritário</div>
       <div class="pricing-row">
         <div class="pricing-row-label">
           <strong style="font-size:13.5px;color:var(--white)">Implantação</strong><br>
@@ -804,15 +848,15 @@ footer span { color: var(--rose) }
           <li>Tudo do Plano Profissional</li>
           <li class="feat-plus"><strong style="color:var(--gold)">Bella Chat</strong> — assistente IA que agenda pelo WhatsApp</li>
           <li class="feat-plus">Clientes agendam conversando, sem navegar por menus</li>
+          <li class="feat-plus"><strong style="color:var(--gold)">Mapa de Atendimento</strong> — agenda para dias de atendimento externo</li>
           <li class="feat-plus">Integração com Google Agenda e Apple Calendar</li>
           <li class="feat-plus">Suporte prioritário com atendimento preferencial</li>
-          <li class="feat-plus">Relatórios avançados de atendimento</li>
         </ul>
       </div>
       <a href="https://wa.me/5511949851250?text=Olá,%20quero%20contratar%20o%20Plano%20Pro%20Plus%20Belle%20Planner" class="pricing-cta" target="_blank">
         💬 Quero o Plano Pro Plus
       </a>
-      <p class="pricing-note">⚡ Agenda no ar em até 48h · Bella Chat ativa no mesmo dia</p>
+      <p class="pricing-note">⚡ Agenda no ar em até 48h · Bella Chat + Mapa ativos no mesmo dia</p>
     </div>
 
   </div>
@@ -849,6 +893,84 @@ footer span { color: var(--rose) }
         <div style="font-size:13px;color:rgba(248,240,243,.5);line-height:1.6">No fim do fluxo, a Bella exibe o resumo completo e confirma o agendamento — o cliente sai satisfeito, você não precisa fazer nada.</div>
       </div>
     </div>
+    <div style="text-align:center;margin-top:40px">
+      <p style="font-size:13px;color:var(--gold);font-weight:600">✦ Disponível exclusivamente no Plano Pro Plus ✦</p>
+    </div>
+  </div>
+</section>
+
+<!-- MAPA DE ATENDIMENTO — Exclusivo Pro Plus -->
+<section style="background:linear-gradient(180deg,var(--bg) 0%,rgba(30,15,5,.6) 50%,var(--bg) 100%);border-top:1px solid rgba(212,168,67,.12);border-bottom:1px solid rgba(212,168,67,.12)">
+  <div class="container">
+    <div style="display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:12px">
+      <div class="section-tag" style="color:var(--gold)">Exclusivo Pro Plus</div>
+      <h2 class="section-title reveal">Mapa de <em>Atendimento</em></h2>
+      <div class="divider"></div>
+      <p class="section-sub reveal" style="margin:0 auto">Para profissionais que atendem em outras cidades com uma auxiliar: organize o dia externo de ponta a ponta, do planejamento à agenda confirmada — tudo coordenado pelo WhatsApp.</p>
+    </div>
+
+    <div class="mapa-flow">
+      <div class="mapa-step reveal">
+        <div class="mapa-step-num">1</div>
+        <div class="mapa-step-body">
+          <div class="mapa-step-title">Você cria o mapa do dia</div>
+          <div class="mapa-step-desc">Informe a cidade, data e auxiliar responsável. O sistema gera um painel de atendimento exclusivo para aquele dia externo.</div>
+        </div>
+      </div>
+      <div class="mapa-step reveal">
+        <div class="mapa-step-num">2</div>
+        <div class="mapa-step-body">
+          <div class="mapa-step-title">Auxiliar recebe o link e preenche</div>
+          <div class="mapa-step-desc">Um link exclusivo é compartilhado pelo WhatsApp. A auxiliar adiciona cada cliente com procedimento, horário e contato — diretamente pelo celular.</div>
+        </div>
+      </div>
+      <div class="mapa-step reveal">
+        <div class="mapa-step-num">3</div>
+        <div class="mapa-step-body">
+          <div class="mapa-step-title">Você revisa e aprova</div>
+          <div class="mapa-step-desc">Acessa o painel no seu app, verifica cada atendimento, faz ajustes se necessário e aprova com um toque. Ou devolve para a auxiliar revisar.</div>
+        </div>
+      </div>
+      <div class="mapa-step reveal">
+        <div class="mapa-step-num" style="border-color:var(--gold);color:var(--gold)">4</div>
+        <div class="mapa-step-body">
+          <div class="mapa-step-title">Agenda confirmada vai direto para a auxiliar</div>
+          <div class="mapa-step-desc">Com um clique, a agenda completa e aprovada — com horários, procedimentos, valores e comissão — é enviada formatada pelo WhatsApp para a auxiliar.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mapa-highlight" style="margin-top:40px">
+      <div class="mapa-pill reveal">
+        <div class="mapa-pill-icon">📍</div>
+        <div>
+          <div class="mapa-pill-title">Por cidade e data</div>
+          <div class="mapa-pill-desc">Cada mapa é vinculado a uma cidade e uma data específica — sem misturar informações de dias diferentes.</div>
+        </div>
+      </div>
+      <div class="mapa-pill reveal">
+        <div class="mapa-pill-icon">🤝</div>
+        <div>
+          <div class="mapa-pill-title">Colaboração com a auxiliar</div>
+          <div class="mapa-pill-desc">A auxiliar preenche pelo link sem precisar de acesso ao sistema — apenas um link no WhatsApp.</div>
+        </div>
+      </div>
+      <div class="mapa-pill reveal">
+        <div class="mapa-pill-icon">💰</div>
+        <div>
+          <div class="mapa-pill-title">Comissão calculada automaticamente</div>
+          <div class="mapa-pill-desc">O sistema calcula o total do dia, a comissão da auxiliar e o valor líquido — sem fazer conta no papel.</div>
+        </div>
+      </div>
+      <div class="mapa-pill reveal">
+        <div class="mapa-pill-icon">💬</div>
+        <div>
+          <div class="mapa-pill-title">Envio formatado pelo WhatsApp</div>
+          <div class="mapa-pill-desc">A agenda aprovada vai para a auxiliar já formatada, com todos os detalhes de cada atendimento do dia.</div>
+        </div>
+      </div>
+    </div>
+
     <div style="text-align:center;margin-top:40px">
       <p style="font-size:13px;color:var(--gold);font-weight:600">✦ Disponível exclusivamente no Plano Pro Plus ✦</p>
     </div>
