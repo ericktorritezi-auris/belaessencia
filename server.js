@@ -2239,6 +2239,18 @@ app.post('/api/expenses', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.put('/api/expenses/:id', requireAdmin, async (req, res) => {
+  const { category, description, amount, expense_date } = req.body;
+  if (!amount || !expense_date) return res.status(400).json({ error: 'Valor e data são obrigatórios' });
+  try {
+    const { rows } = await req.db(
+      'UPDATE expenses SET category=$1, description=$2, amount=$3, expense_date=$4 WHERE id=$5 RETURNING *',
+      [category||'outro', description||null, Number(amount), expense_date, req.params.id]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.delete('/api/expenses/:id', requireAdmin, async (req, res) => {
   try {
     await req.db('DELETE FROM expenses WHERE id=$1', [req.params.id]);

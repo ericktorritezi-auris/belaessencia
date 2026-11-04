@@ -1589,7 +1589,7 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
           <!-- MODAL NOVA DESPESA -->
           <div id="exp-modal-overlay" class="hidden" style="position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:16px">
             <div style="background:white;border-radius:16px;padding:24px;width:100%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
-              <div style="font-size:17px;font-weight:800;margin-bottom:20px">💸 Nova Despesa</div>
+              <div style="font-size:17px;font-weight:800;margin-bottom:20px" id="exp-modal-title">💸 Nova Despesa</div>
               <div class="fg" style="margin-bottom:14px">
                 <label>Categoria</label>
                 <select class="fi" id="exp-cat" onchange="toggleExpDesc()">
@@ -6728,7 +6728,10 @@ function renderExpensesTable() {
         <td>${EXP_LABELS[e.category]||e.category}</td>
         <td style="color:var(--text-light);font-size:12px">${e.description||'—'}</td>
         <td style="color:#c0392b;font-weight:700">${val}</td>
-        <td><button class="act-btn danger" onclick="deleteExpense(${e.id})" style="padding:4px 8px;font-size:11px">🗑</button></td>
+        <td style="white-space:nowrap">
+          <button class="act-btn" onclick="openExpenseModal(${e.id})" style="padding:4px 8px;font-size:11px;margin-right:4px" title="Editar">✏️</button>
+          <button class="act-btn danger" onclick="deleteExpense(${e.id})" style="padding:4px 8px;font-size:11px" title="Excluir">🗑</button>
+        </td>
       </tr>`;
     }).join('');
   }
@@ -6745,7 +6748,10 @@ function renderExpensesTable() {
           </div>
           <div style="text-align:right">
             <div style="font-size:17px;font-weight:800;color:#c0392b">${val}</div>
-            <button class="act-btn danger" onclick="deleteExpense(${e.id})" style="margin-top:6px;padding:4px 8px;font-size:11px">🗑 Remover</button>
+            <div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end">
+              <button class="act-btn" onclick="openExpenseModal(${e.id})" style="padding:4px 8px;font-size:11px" title="Editar">✏️ Editar</button>
+              <button class="act-btn danger" onclick="deleteExpense(${e.id})" style="padding:4px 8px;font-size:11px">🗑 Remover</button>
+            </div>
           </div>
         </div>
       </div>`;
@@ -6753,16 +6759,40 @@ function renderExpensesTable() {
   }
 }
 
-function openExpenseModal() {
-  const today = todayStr ? todayStr() : new Date().toISOString().slice(0,10);
-  const d = document.getElementById('exp-date');
-  if (d) d.value = today;
-  const cat = document.getElementById('exp-cat');
-  if (cat) { cat.value = 'alimentacao'; toggleExpDesc(); }
+let _editingExpenseId = null;
+
+function openExpenseModal(editId) {
+  _editingExpenseId = editId || null;
+  const title = document.getElementById('exp-modal-title');
+  if (title) title.textContent = _editingExpenseId ? '✏️ Editar Despesa' : '💸 Nova Despesa';
+
+  if (_editingExpenseId) {
+    // pré-preenche com os dados existentes
+    const exp = _expensesData.find(e => e.id === _editingExpenseId);
+    if (exp) {
+      const cat = document.getElementById('exp-cat');
+      if (cat) { cat.value = exp.category || 'outro'; toggleExpDesc(); }
+      const desc = document.getElementById('exp-desc');
+      if (desc) desc.value = exp.description || '';
+      const dt = document.getElementById('exp-date');
+      if (dt) dt.value = (exp.expense_date||'').slice(0,10);
+      const amt = document.getElementById('exp-amount');
+      if (amt) amt.value = exp.amount || '';
+    }
+  } else {
+    const today = todayStr ? todayStr() : new Date().toISOString().slice(0,10);
+    const d = document.getElementById('exp-date');
+    if (d) d.value = today;
+    const cat = document.getElementById('exp-cat');
+    if (cat) { cat.value = 'alimentacao'; toggleExpDesc(); }
+    const a = document.getElementById('exp-amount'); if (a) a.value = '';
+    const desc = document.getElementById('exp-desc'); if (desc) desc.value = '';
+  }
   document.getElementById('exp-modal-overlay').classList.remove('hidden');
 }
 function closeExpenseModal() {
   document.getElementById('exp-modal-overlay').classList.add('hidden');
+  _editingExpenseId = null;
   const a = document.getElementById('exp-amount'); if (a) a.value = '';
   const d = document.getElementById('exp-desc');   if (d) d.value = '';
 }
@@ -6778,8 +6808,13 @@ async function saveExpense() {
   const date        = document.getElementById('exp-date')?.value   || '';
   if (!amount || !date) { showToast('Preencha valor e data', 'error'); return; }
   try {
-    await POST('/api/expenses', { category, description: description||null, amount: Number(amount), expense_date: date });
-    showToast('✅ Despesa registrada', 'ok');
+    if (_editingExpenseId) {
+      await PUT('/api/expenses/' + _editingExpenseId, { category, description: description||null, amount: Number(amount), expense_date: date });
+      showToast('✅ Despesa atualizada', 'ok');
+    } else {
+      await POST('/api/expenses', { category, description: description||null, amount: Number(amount), expense_date: date });
+      showToast('✅ Despesa registrada', 'ok');
+    }
     closeExpenseModal();
     await loadExpenses();
   } catch(e) { showToast(e.message, 'error'); }
