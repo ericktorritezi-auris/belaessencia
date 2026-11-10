@@ -4582,7 +4582,20 @@ app.get('/api/availability/month', requireAdmin, async (req, res) => {
         if (slots30.length) result[dateStr] = slots30;
         continue;
       } else {
-        continue; // dia desabilitado sem liberação
+        // Verifica released_dates (dia inteiro liberado) — mesma soberania do calendário
+        const relDay = await req.db(
+          `SELECT work_start::text, work_end::text, break_start::text, break_end::text
+           FROM released_dates
+           WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+          [dateStr, cId]
+        );
+        if (!relDay.rowCount) continue; // dia desabilitado sem liberação — pula
+        workStart = relDay.rows[0].work_start;
+        workEnd   = relDay.rows[0].work_end;
+        breaks    = relDay.rows[0].break_start && relDay.rows[0].break_end
+          ? [{ s: relDay.rows[0].break_start, e: relDay.rows[0].break_end }]
+          : [];
+        hasWork   = true;
       }
 
       // 5. Converter work_start/work_end em minutos
