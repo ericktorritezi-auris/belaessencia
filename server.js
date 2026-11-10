@@ -4284,17 +4284,23 @@ app.get('/api/bella/availability', async (req, res) => {
           if (promoBlock.rowCount > 0 && Number(promoBlock.rows[0].id) !== Number(procId)) continue;
         } catch(e) {}
         // Dia ativo?
+        // releasedDay: linha de released_dates se o dia estiver inativo na config
+        let releasedDay = null;
         if (!cfg.is_active || !cfg.work_start) {
-          // Verifica released_dates ou released_slots específicos
-          const rel = await req.db(
-            `SELECT 1 FROM released_dates WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
+          // Busca released_dates com horários reais (não apenas existência)
+          const relRow = await req.db(
+            `SELECT work_start::text, work_end::text, break_start::text, break_end::text
+             FROM released_dates
+             WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
             [dateStr, Number(cityId)]
           );
           const relS = await req.db(
             `SELECT 1 FROM released_slots WHERE date=$1 AND (cardinality(city_ids)=0 OR $2=ANY(city_ids)) LIMIT 1`,
             [dateStr, Number(cityId)]
           );
-          if (!rel.rowCount && !relS.rowCount) continue;
+          if (!relRow.rowCount && !relS.rowCount) continue;
+          // Guarda os horários da liberação para uso na checagem de slots abaixo
+          if (relRow.rowCount) releasedDay = relRow.rows[0];
         }
         // Há pelo menos 1 procedimento disponível?
         const pRow = await req.db(
@@ -4314,11 +4320,17 @@ app.get('/api/bella/availability', async (req, res) => {
         );
         const busy = [...appts.rows, ...bkSlots.rows].map(r => ({ s: timeToMin(r.st), e: timeToMin(r.et) }));
         const dur = pRow.rows[0].dur;
-        const wStart = timeToMin(cfg.work_start || '08:00');
-        const wEnd   = timeToMin(cfg.work_end   || '18:00');
+        // Usa os horários da liberação quando o dia está inativo na config;
+        // isso garante que a Bella use a janela exata que o admin liberou.
+        const wStart = timeToMin(releasedDay ? releasedDay.work_start : (cfg.work_start || '08:00'));
+        const wEnd   = timeToMin(releasedDay ? releasedDay.work_end   : (cfg.work_end   || '18:00'));
         const nowMin = (i === 0) ? nowBRT.getHours()*60 + nowBRT.getMinutes() : 0;
         let hasSlot = false;
-        const brks = (cfg.breaks || []).filter(b => b && b.s && b.e).map(b => ({ s: timeToMin(b.s), e: timeToMin(b.e) }));
+        const brks = releasedDay
+          ? (releasedDay.break_start && releasedDay.break_end
+              ? [{ s: timeToMin(releasedDay.break_start), e: timeToMin(releasedDay.break_end) }]
+              : [])
+          : (cfg.breaks || []).filter(b => b && b.s && b.e).map(b => ({ s: timeToMin(b.s), e: timeToMin(b.e) }));
         for (let s = wStart; s + dur <= wEnd; s += 30) {
           if (s <= nowMin) continue;
           if (brks.some(b => s < b.e && s + dur > b.s)) continue;

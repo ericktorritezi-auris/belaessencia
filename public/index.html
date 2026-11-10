@@ -2835,7 +2835,12 @@ function isValidDay(date, cityId) {
   const [y,m,d] = date.split('-').map(Number);
   return (city.days || []).includes(new Date(y,m-1,d).getDay());
 }
-function renderCal() {
+async function renderCal() {
+  // Sempre re-busca cidades antes de renderizar o calendário,
+  // garantindo que liberações criadas pelo admin apareçam sem precisar
+  // recarregar a página (resolve o problema de soberania das liberações).
+  clearCitiesCache();
+  await loadCities();
   const{y,mo}=CAL;
   const first=new Date(y,mo,1).getDay(), dim=new Date(y,mo+1,0).getDate();
   const today=todayStr(), now=new Date();
