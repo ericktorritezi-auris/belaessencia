@@ -1765,7 +1765,10 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
                   </div>
                   <div id="pm-city-list" class="hidden" style="background:var(--cream);border:1.5px solid var(--border);border-radius:var(--r-sm);padding:12px;display:flex;flex-direction:column;gap:7px"></div>
                 </div>
-                <button class="btn btn-primary" onclick="createPromo()" style="width:auto;padding:10px 24px;margin-top:16px">🏷 Criar Promoção</button>
+                <div style="display:flex;gap:10px;margin-top:16px;align-items:center;flex-wrap:wrap">
+                  <button id="pm-submit-btn" class="btn btn-primary" onclick="createPromo()" style="width:auto;padding:10px 24px">🏷 Criar Promoção</button>
+                  <button id="pm-cancel-edit-btn" onclick="cancelEditPromo()" style="display:none;background:transparent;border:1.5px solid var(--border);border-radius:40px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text-light)">✕ Cancelar edição</button>
+                </div>
               </div>
             </div>
             <div class="tbl-wrap">
@@ -7606,6 +7609,7 @@ async function retroSave() {
 
 // ── PROMOÇÕES ────────────────────────────────────
 let _activePromo = undefined; // undefined=não buscou, null=sem promoção
+let _editingPromoId = null;   // null=modo criação, number=modo edição
 
 async function getActivePromo(refresh=false) {
   if (_activePromo === undefined || refresh) {
@@ -7770,6 +7774,7 @@ async function renderPromos() {
                 <div style="display:flex;flex-direction:column;gap:5px;margin-top:9px;align-items:flex-end">
                   ${p.active ? `<button class="act-btn" onclick="deactivatePromo(${p.id})" style="background:#1a1a1a;color:#FFD000;border-color:#FFD000">Desativar</button>` : ''}
                   <button class="act-btn danger" onclick="hardDeletePromo(${p.id})" style="color:var(--error);border-color:var(--error)">🗑 Excluir</button>
+                  <button class="act-btn" onclick="editPromo(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="color:#2563EB;border-color:#2563EB">✏️ Editar</button>
                 </div>
               </div>
             </div>
@@ -7790,6 +7795,7 @@ async function renderPromos() {
             <div style="display:flex;flex-direction:column;gap:5px;margin-top:9px;align-items:flex-end">
               ${p.active ? `<button class="act-btn" onclick="deactivatePromo(${p.id})">Desativar</button>` : ''}
               <button class="act-btn danger" onclick="hardDeletePromo(${p.id})" style="color:var(--error);border-color:var(--error)">🗑 Excluir</button>
+              <button class="act-btn" onclick="editPromo(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="color:#2563EB;border-color:#2563EB">✏️ Editar</button>
             </div>
           </div>
         </div>
@@ -7798,6 +7804,109 @@ async function renderPromos() {
   } catch(e) {
     el.innerHTML = `<div style="color:var(--error);font-size:12px">Erro: ${e.message}</div>`;
   }
+}
+
+// ── Edição de promoção ────────────────────────────────────────────
+async function editPromo(p) {
+  if (typeof p === 'string') { try { p = JSON.parse(p); } catch { return; } }
+  _editingPromoId = p.id;
+
+  // BF toggle
+  const isBF = p.is_black_friday === true || p.is_black_friday === 't';
+  const bfBtn = document.getElementById('pm-bf-btn');
+  bfBtn.dataset.active = isBF ? '1' : '0';
+  document.getElementById('pm-bf-dot').style.background = isBF ? '#FFD000' : '#333';
+  document.getElementById('pm-bf-status').textContent   = isBF ? 'ATIVADO' : 'DESATIVADO';
+  document.getElementById('pm-bf-hint').style.display   = isBF ? 'block' : 'none';
+  document.getElementById('pm-name-opt').style.display  = isBF ? 'inline' : 'none';
+
+  // Campos principais
+  document.getElementById('pm-name').value  = p.name || '';
+  document.getElementById('pm-start').value = p.start_date ? String(p.start_date).slice(0,10) : '';
+  document.getElementById('pm-end').value   = p.end_date   ? String(p.end_date).slice(0,10)   : '';
+
+  // Tipo
+  const type = p.type || 'percent';
+  document.getElementById('pm-type-pct').checked = type !== 'fixed_price';
+  document.getElementById('pm-type-fp').checked  = type === 'fixed_price';
+  await togglePromoType();
+
+  if (type === 'percent') {
+    document.getElementById('pm-disc').value = p.discount || '';
+    // Escopo de procedimentos
+    const isAllProcs = p.apply_to_all !== false;
+    document.getElementById('pm-all').checked = isAllProcs;
+    document.getElementById('pm-sel').checked = !isAllProcs;
+    togglePromoScope();
+    if (!isAllProcs && Array.isArray(p.proc_ids) && p.proc_ids.length) {
+      // Aguarda lista carregar e marca os selecionados
+      await new Promise(res => setTimeout(res, 400));
+      document.querySelectorAll('input[name="pm-proc"]').forEach(el => {
+        el.checked = p.proc_ids.map(Number).includes(Number(el.value));
+      });
+    }
+  } else {
+    // fixed_price: preenche preços nos campos já carregados pelo togglePromoType
+    if (Array.isArray(p.items) && p.items.length) {
+      await new Promise(res => setTimeout(res, 400));
+      document.querySelectorAll('#pm-fp-rows .fp-row').forEach(row => {
+        const item = p.items.find(i => Number(i.proc_id) === Number(row.dataset.procId));
+        const inp  = row.querySelector('.fp-price');
+        if (inp) inp.value = item ? String(item.promo_price).replace('.',',') : '';
+      });
+    }
+  }
+
+  // Cidades
+  const isAllCities = p.apply_to_all_cities !== false;
+  document.getElementById('pm-city-all').checked = isAllCities;
+  document.getElementById('pm-city-sel').checked = !isAllCities;
+  togglePromoCityScope();
+  if (!isAllCities && Array.isArray(p.city_ids_promo) && p.city_ids_promo.length) {
+    await new Promise(res => setTimeout(res, 400));
+    document.querySelectorAll('input[name="pm-city"]').forEach(el => {
+      el.checked = p.city_ids_promo.map(Number).includes(Number(el.value));
+    });
+  }
+
+  // Atualiza botão e mostra cancelar
+  const submitBtn = document.getElementById('pm-submit-btn');
+  submitBtn.textContent = '💾 Salvar Alterações';
+  submitBtn.style.background = '#2563EB';
+  document.getElementById('pm-cancel-edit-btn').style.display = 'inline-flex';
+
+  // Scroll suave até o formulário
+  document.getElementById('sec-promos').querySelector('.tbl-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelEditPromo() {
+  _editingPromoId = null;
+  const submitBtn = document.getElementById('pm-submit-btn');
+  submitBtn.textContent = '🏷 Criar Promoção';
+  submitBtn.style.background = '';
+  document.getElementById('pm-cancel-edit-btn').style.display = 'none';
+  // Limpa o form
+  document.getElementById('pm-name').value  = '';
+  document.getElementById('pm-start').value = '';
+  document.getElementById('pm-end').value   = '';
+  document.getElementById('pm-disc').value  = '';
+  const bfBtn = document.getElementById('pm-bf-btn');
+  bfBtn.dataset.active = '0';
+  document.getElementById('pm-bf-dot').style.background = '#333';
+  document.getElementById('pm-bf-status').textContent = 'DESATIVADO';
+  document.getElementById('pm-bf-hint').style.display = 'none';
+  document.getElementById('pm-name-opt').style.display = 'none';
+  document.getElementById('pm-type-pct').checked = true;
+  document.getElementById('pm-disc-wrap').classList.remove('hidden');
+  document.getElementById('pm-fp-wrap').classList.add('hidden');
+  document.getElementById('pm-scope-wrap').classList.remove('hidden');
+  document.getElementById('pm-all').checked = true;
+  document.getElementById('pm-proc-list').classList.add('hidden');
+  document.getElementById('pm-proc-list').innerHTML = '';
+  document.getElementById('pm-city-all').checked = true;
+  document.getElementById('pm-city-list').classList.add('hidden');
+  document.getElementById('pm-city-list').innerHTML = '';
+  document.getElementById('pm-fp-rows').innerHTML = '';
 }
 
 function toggleBFPromo() {
@@ -7861,33 +7970,16 @@ async function createPromo() {
   }
 
   try {
-    await POST('/api/promotions', payload);
-    // Reset form
-    document.getElementById('pm-name').value='';
-    document.getElementById('pm-start').value='';
-    document.getElementById('pm-end').value='';
-    // Reset BF toggle
-    const bfBtn = document.getElementById('pm-bf-btn');
-    bfBtn.dataset.active = '0';
-    document.getElementById('pm-bf-dot').style.background = '#333';
-    document.getElementById('pm-bf-status').textContent = 'DESATIVADO';
-    document.getElementById('pm-bf-hint').style.display = 'none';
-    document.getElementById('pm-name-opt').style.display = 'none';
-    document.getElementById('pm-disc').value='';
-    document.getElementById('pm-type-pct').checked = true;
-    document.getElementById('pm-disc-wrap').classList.remove('hidden');
-    document.getElementById('pm-fp-wrap').classList.add('hidden');
-    document.getElementById('pm-scope-wrap').classList.remove('hidden');
-    document.getElementById('pm-all').checked = true;
-    document.getElementById('pm-proc-list').classList.add('hidden');
-    document.getElementById('pm-proc-list').innerHTML='';
-    document.getElementById('pm-city-all').checked = true;
-    document.getElementById('pm-city-list').classList.add('hidden');
-    document.getElementById('pm-city-list').innerHTML='';
-    document.getElementById('pm-fp-rows').innerHTML='';
+    if (_editingPromoId) {
+      await PUT(`/api/promotions/${_editingPromoId}`, payload);
+      showToast('Promoção atualizada com sucesso! ✅','ok');
+    } else {
+      await POST('/api/promotions', payload);
+      showToast('Promoção criada com sucesso! 🎉','ok');
+    }
+    cancelEditPromo();
     _activePromo = undefined;
     clearProcsCache();
-    showToast('Promoção criada com sucesso! 🎉','ok');
     renderPromos();
   } catch(e) { showToast(e.message,'error'); }
 }

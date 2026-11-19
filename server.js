@@ -5285,6 +5285,52 @@ app.post('/api/promotions', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Admin: editar promoção existente (PUT)
+app.put('/api/promotions/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const { name, start_date, end_date, discount, apply_to_all, proc_ids, type = 'percent', items = [], is_black_friday = false, apply_to_all_cities, city_ids_promo } = req.body;
+  const isBF = is_black_friday === true || is_black_friday === 'true';
+  if ((!name || !name.trim()) && !isBF) return res.status(400).json({ error: 'Informe o nome da promoção' });
+  if (!start_date || !end_date) return res.status(400).json({ error: 'Informe as datas de início e fim' });
+  if (start_date > end_date) return res.status(400).json({ error: 'Data de início deve ser antes do fim' });
+  if (type === 'percent' && (!discount || Number(discount) <= 0 || Number(discount) > 100)) return res.status(400).json({ error: 'Desconto deve ser entre 1% e 100%' });
+  if (type === 'fixed_price' && (!items || items.length === 0)) return res.status(400).json({ error: 'Informe o valor promocional de ao menos um produto' });
+
+  const allProcs = type === 'fixed_price' ? false : (apply_to_all !== false);
+  const ids = type === 'fixed_price'
+    ? items.map(i => Number(i.proc_id))
+    : (allProcs ? [] : (Array.isArray(proc_ids) ? proc_ids.map(Number) : []));
+  if (type === 'percent' && !allProcs && ids.length === 0) return res.status(400).json({ error: 'Selecione ao menos um procedimento' });
+
+  const allCities = apply_to_all_cities !== false;
+  const cityIds = allCities ? [] : (Array.isArray(city_ids_promo) ? city_ids_promo.map(Number) : []);
+  if (!allCities && cityIds.length === 0) return res.status(400).json({ error: 'Selecione ao menos uma cidade' });
+
+  const discountVal = type === 'percent' ? Number(discount) : null;
+  const promoName = isBF ? (name && name.trim() ? name.trim() : 'Black Friday') : name;
+
+  try {
+    const { rowCount } = await req.db(
+      `UPDATE promotions SET name=$1, start_date=$2, end_date=$3, discount=$4, apply_to_all=$5, proc_ids=$6,
+       apply_to_all_cities=$7, city_ids_promo=$8, type=$9, is_black_friday=$10, active=TRUE
+       WHERE id=$11`,
+      [promoName, start_date, end_date, discountVal, allProcs, ids, allCities, cityIds, type, isBF, id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Promoção não encontrada' });
+    // Atualiza itens de preço fixo: remove os antigos e insere os novos
+    await req.db(`DELETE FROM promotion_items WHERE promotion_id = $1`, [id]);
+    if (type === 'fixed_price' && items.length > 0) {
+      for (const item of items) {
+        await req.db(
+          `INSERT INTO promotion_items (promotion_id, proc_id, promo_price) VALUES ($1, $2, $3)`,
+          [id, Number(item.proc_id), Number(item.promo_price)]
+        );
+      }
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Admin: desativar promoção (soft delete)
 app.patch('/api/promotions/:id/deactivate', requireAdmin, async (req, res) => {
   try {
