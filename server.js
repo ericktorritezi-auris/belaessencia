@@ -5082,8 +5082,16 @@ app.get('/api/availability/consult', requireAdmin, async (req, res) => {
     const blockedMap   = {};
     const releasedMap  = {};
     const relSlotsMap  = {};
-    for (const r of blockedRes.rows)   blockedMap[String(r.date).slice(0,10)]   = r;
-    for (const r of releasedRes.rows)  releasedMap[String(r.date).slice(0,10)]  = r;
+    for (const r of blockedRes.rows) {
+      const ds = String(r.date).slice(0,10);
+      if (!blockedMap[ds]) blockedMap[ds] = [];
+      blockedMap[ds].push(r);
+    }
+    for (const r of releasedRes.rows) {
+      const ds = String(r.date).slice(0,10);
+      if (!releasedMap[ds]) releasedMap[ds] = [];
+      releasedMap[ds].push(r);
+    }
     for (const r of relSlotsRes.rows) {
       const ds = String(r.date).slice(0,10);
       if (!relSlotsMap[ds]) relSlotsMap[ds] = [];
@@ -5098,20 +5106,19 @@ app.get('/api/availability/consult', requireAdmin, async (req, res) => {
       const dow = new Date(ds + 'T12:00:00').getDay(); // 0=dom
       const entries = [];
 
-      // 1) Bloqueios
-      const blk = blockedMap[ds];
-      if (blk) {
+      // 1) Bloqueios (pode haver múltiplos registros para a mesma data)
+      const blkArr = blockedMap[ds] || [];
+      for (const blk of blkArr) {
         const cidArr = Array.isArray(blk.city_ids) ? blk.city_ids : [];
-        // Filtra por cidade se necessário
         if (!cityFilter || cidArr.length === 0 || cidArr.includes(cityFilter)) {
           const cityNames = cidArr.length === 0 ? 'Todas as cidades' : cidArr.map(id => allCities.find(c => c.id === id)?.name || `Cidade ${id}`).join(', ');
           entries.push({ type: 'blocked', cityLabel: cityNames, reason: blk.reason || '' });
         }
       }
 
-      // 2) Liberações de dia inteiro
-      const rel = releasedMap[ds];
-      if (rel) {
+      // 2) Liberações de dia inteiro (pode haver múltiplos registros para a mesma data)
+      const relArr = releasedMap[ds] || [];
+      for (const rel of relArr) {
         const cidArr = Array.isArray(rel.city_ids) ? rel.city_ids : [];
         if (!cityFilter || cidArr.length === 0 || cidArr.includes(cityFilter)) {
           const cityNames = cidArr.length === 0 ? 'Todas as cidades' : cidArr.map(id => allCities.find(c => c.id === id)?.name || `Cidade ${id}`).join(', ');
@@ -5129,8 +5136,8 @@ app.get('/api/availability/consult', requireAdmin, async (req, res) => {
         }
       }
 
-      // 4) Agenda aberta por work_config
-      if (!blk) {
+      // 4) Agenda aberta por work_config (somente se não há bloqueio nem liberação manual no dia)
+      if (blkArr.length === 0 && relArr.length === 0 && slotArr.length === 0) {
         const activeCities = [];
         for (const city of allCities) {
           if (cityFilter && city.id !== cityFilter) continue;
@@ -5140,11 +5147,9 @@ app.get('/api/availability/consult', requireAdmin, async (req, res) => {
           const cfgGlobal  = workRes.rows.find(w => w.scope === 'global');
           const cfg = cfgCityDay || cfgDay || cfgGlobal;
           const isActive = cfg ? cfg.is_active : false;
-          if (isActive && !releasedMap[ds]) { // se não há liberação manual já listada
-            activeCities.push(city.name);
-          }
+          if (isActive) activeCities.push(city.name);
         }
-        if (activeCities.length > 0 && !releasedMap[ds] && slotArr.length === 0) {
+        if (activeCities.length > 0) {
           entries.push({ type: 'open', cityLabel: activeCities.join(', '), reason: '' });
         }
       }
