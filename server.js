@@ -1389,8 +1389,13 @@ async function initDB() {
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS apply_to_all_cities BOOLEAN NOT NULL DEFAULT TRUE`);
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS city_ids_promo INTEGER[] NOT NULL DEFAULT '{}'`);
 
-    // Migração: Black Friday
-    await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS is_black_friday BOOLEAN DEFAULT FALSE`);
+    // Migração: Black Friday — roda em todos os schemas de tenant existentes
+    {
+      const { rows: bfSchemas } = await client.query(`SELECT schema_name FROM tenants WHERE schema_name IS NOT NULL`);
+      for (const { schema_name } of bfSchemas) {
+        try { await client.query(`ALTER TABLE "${schema_name}".promotions ADD COLUMN IF NOT EXISTS is_black_friday BOOLEAN DEFAULT FALSE`); } catch {}
+      }
+    }
 
     // Migração v2.9.17: promoção por valor fixo por produto
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'percent'`);
