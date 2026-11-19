@@ -5079,21 +5079,30 @@ app.get('/api/availability/consult', requireAdmin, async (req, res) => {
       req.db(`SELECT id, name FROM cities WHERE is_active = TRUE ORDER BY name`),
     ]);
 
+    // Converte coluna DATE do postgres para string ISO "YYYY-MM-DD"
+    // node-postgres pode retornar Date objects ou strings — tratamos ambos
+    const toDateKey = (d) => {
+      if (d instanceof Date) {
+        return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      }
+      return String(d).slice(0,10);
+    };
+
     const blockedMap   = {};
     const releasedMap  = {};
     const relSlotsMap  = {};
     for (const r of blockedRes.rows) {
-      const ds = String(r.date).slice(0,10);
+      const ds = toDateKey(r.date);
       if (!blockedMap[ds]) blockedMap[ds] = [];
       blockedMap[ds].push(r);
     }
     for (const r of releasedRes.rows) {
-      const ds = String(r.date).slice(0,10);
+      const ds = toDateKey(r.date);
       if (!releasedMap[ds]) releasedMap[ds] = [];
       releasedMap[ds].push(r);
     }
     for (const r of relSlotsRes.rows) {
-      const ds = String(r.date).slice(0,10);
+      const ds = toDateKey(r.date);
       if (!relSlotsMap[ds]) relSlotsMap[ds] = [];
       relSlotsMap[ds].push(r);
     }
