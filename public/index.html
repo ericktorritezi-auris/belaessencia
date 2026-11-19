@@ -7852,7 +7852,8 @@ async function editPromo(p) {
       document.querySelectorAll('#pm-fp-rows .fp-row').forEach(row => {
         const item = p.items.find(i => Number(i.proc_id) === Number(row.dataset.procId));
         const inp  = row.querySelector('.fp-price');
-        if (inp) inp.value = item ? String(item.promo_price).replace('.',',') : '';
+        // type="number" exige ponto como separador decimal — não converter para vírgula
+        if (inp) inp.value = item ? String(item.promo_price).replace(',','.') : '';
       });
     }
   }
