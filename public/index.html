@@ -929,6 +929,8 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
         </div>
         <div class="adm-content">
           <div id="sec-agenda">
+            <!-- QUADRO DE AVISOS -->
+            <div id="notice-board" style="display:none;margin:12px 14px 0;padding:12px 14px;background:#FFFBEA;border:1.5px solid #E8C840;border-radius:12px;font-size:13px;color:#5C4A00;line-height:1.6"></div>
             <div class="stats-grid" id="today-stats"></div>
             <div class="tbl-wrap">
               <div class="tbl-head">
@@ -1028,10 +1030,66 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
             </div>
           </div>
 
+          <!-- SEC: CONSULTAR DATAS (tela completa, substitui avail) -->
+          <div id="sec-consult" class="hidden">
+            <div style="padding:14px 14px 0">
+              <button onclick="showSec('avail')" style="display:inline-flex;align-items:center;gap:6px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;color:var(--rose);background:none;border:none;cursor:pointer;padding:0;margin-bottom:14px">← Voltar para Disponibilidade</button>
+            </div>
+            <div class="tbl-wrap" style="margin:0 0 16px">
+              <div style="padding:14px 14px 10px">
+                <div class="tbl-ttl" style="margin-bottom:12px">🔍 Consultar Datas</div>
+                <!-- Filtros -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+                  <div>
+                    <div style="font-size:10px;font-weight:800;color:var(--text-light);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Ano</div>
+                    <select id="cs-year" onchange="csApplyFilters()" style="width:100%;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:9px 10px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--dark)"></select>
+                  </div>
+                  <div>
+                    <div style="font-size:10px;font-weight:800;color:var(--text-light);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Mês</div>
+                    <select id="cs-month" onchange="csApplyFilters()" style="width:100%;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:9px 10px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--dark)">
+                      <option value="0">Todos os meses</option>
+                      <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+                      <option value="3">Março</option><option value="4">Abril</option>
+                      <option value="5">Maio</option><option value="6">Junho</option>
+                      <option value="7">Julho</option><option value="8">Agosto</option>
+                      <option value="9">Setembro</option><option value="10">Outubro</option>
+                      <option value="11">Novembro</option><option value="12">Dezembro</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+                  <div>
+                    <div style="font-size:10px;font-weight:800;color:var(--text-light);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Data específica</div>
+                    <input type="date" id="cs-date" oninput="csApplyFilters()" style="width:100%;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:9px 10px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--dark)">
+                  </div>
+                  <div>
+                    <div style="font-size:10px;font-weight:800;color:var(--text-light);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Cidade</div>
+                    <select id="cs-city" onchange="csApplyFilters()" style="width:100%;background:#fff;border:1.5px solid var(--border);border-radius:var(--r-sm);padding:9px 10px;font-family:'Nunito',sans-serif;font-size:13px;color:var(--dark)">
+                      <option value="">Todas as cidades</option>
+                    </select>
+                  </div>
+                </div>
+                <!-- Toggle Retroativas -->
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+                  <button id="cs-retro-btn" onclick="csToggleRetro()" style="display:flex;align-items:center;gap:8px;background:var(--cream);border:1.5px solid var(--border);border-radius:40px;padding:7px 14px;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;color:var(--text-light);cursor:pointer">
+                    <span id="cs-retro-dot" style="width:12px;height:12px;border-radius:50%;background:var(--border);display:inline-block;transition:.2s"></span>
+                    Retroativas
+                  </button>
+                  <span style="font-size:11px;color:var(--text-light)" id="cs-retro-hint">Mostrando: hoje em diante</span>
+                </div>
+              </div>
+            </div>
+            <!-- Resultados -->
+            <div id="cs-result" style="padding:0 14px 20px;display:flex;flex-direction:column;gap:10px">
+              <div style="text-align:center;color:var(--text-light);font-size:13px;padding:20px">Carregando...</div>
+            </div>
+          </div>
+
           <!-- SEC: DISPONIBILIDADE -->
           <div id="sec-avail" class="hidden">
             <div class="tbl-head">
               <div class="tbl-ttl">📅 Disponibilidade</div>
+              <button onclick="showSec('consult');csInit()" style="display:inline-flex;align-items:center;gap:6px;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;color:var(--rose);background:var(--rose-light);border:1.5px solid var(--rose);border-radius:40px;padding:7px 14px;cursor:pointer;white-space:nowrap">🔍 Consultar Datas</button>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:flex-end">
               <div>
@@ -1630,9 +1688,18 @@ tr.drag-over{border-top:2.5px solid var(--rose)!important}
                 <p style="font-size:12px;color:var(--text-light);margin-bottom:16px;line-height:1.7">
                   O desconto é aplicado automaticamente nos procedimentos selecionados durante o período.
                 </p>
+                <!-- Toggle Black Friday -->
+                <div style="margin-bottom:14px">
+                  <button id="pm-bf-btn" onclick="toggleBFPromo()" style="display:flex;align-items:center;gap:10px;width:100%;background:#0A0A0A;border:2px solid #FFD000;border-radius:10px;padding:12px 14px;cursor:pointer;font-family:'Nunito',sans-serif">
+                    <span id="pm-bf-dot" style="width:16px;height:16px;border-radius:50%;background:#333;border:2px solid #FFD000;flex-shrink:0;transition:.2s"></span>
+                    <span style="font-size:13px;font-weight:800;color:#FFD000;letter-spacing:.04em">🖤 BLACK FRIDAY</span>
+                    <span id="pm-bf-status" style="margin-left:auto;font-size:11px;font-weight:700;color:#666">DESATIVADO</span>
+                  </button>
+                  <div id="pm-bf-hint" style="display:none;font-size:11.5px;color:var(--text-light);margin-top:6px;padding:0 2px;line-height:1.5">Arte especial Black Friday será exibida. Nome da promoção é opcional.</div>
+                </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                   <div class="fg" style="margin:0;grid-column:1/-1">
-                    <label>Nome da promoção</label>
+                    <label>Nome da promoção <span id="pm-name-opt" style="display:none;font-weight:400;font-size:11px;color:var(--text-light)">(opcional para Black Friday)</span></label>
                     <input type="text" class="fi" id="pm-name" placeholder="Ex: Outubro Rosa" style="width:100%;font-size:14px">
                   </div>
                   <div class="fg" style="margin:0">
@@ -2605,7 +2672,24 @@ async function renderProcs() {
     // Banner de promoção ativa
     let banner = '';
     if (promo) {
-      if (promo.type === 'fixed_price') {
+      const isBFpromo = promo.is_black_friday === true || promo.is_black_friday === 't';
+      if (isBFpromo) {
+        const discTxt = promo.discount ? `${Number(promo.discount).toFixed(0)}% OFF` : 'Oferta Especial';
+        banner = `
+          <div style="background:#0A0A0A;border:2px solid #FFD000;border-radius:14px;margin-bottom:14px;overflow:hidden;position:relative">
+            <div style="padding:16px;display:flex;align-items:center;gap:12px">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:9px;font-weight:800;letter-spacing:.15em;color:#666;text-transform:uppercase;margin-bottom:2px">Promoção Especial</div>
+                <div style="font-size:22px;font-weight:900;letter-spacing:.06em;background:linear-gradient(90deg,#FFD000,#FFA500);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-fill-color:transparent;line-height:1.1">BLACK FRIDAY</div>
+                <div style="font-size:11px;color:#888;margin-top:4px;font-weight:600">🗓 Válida até ${fmtDate(promo.end_date)}</div>
+              </div>
+              <div style="flex-shrink:0;text-align:center;background:rgba(255,208,0,.12);border:1.5px solid #FFD000;border-radius:10px;padding:8px 12px">
+                <div style="font-size:24px;font-weight:900;color:#FFD000;line-height:1">${discTxt}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (promo.type === 'fixed_price') {
         // Banner de destaque para valor fixo — visualmente impactante, contrasta com qualquer tema
         banner = `
           <div class="promo-banner promo-banner-fp" style="
@@ -3287,9 +3371,9 @@ const SEC_TITLES={
   revenue:'Receita',cockpit:'Cockpit Financeiro',receivables:'Contas a Receber',expenses:'Contas a Pagar','summary-fin':'Resumo Financeiro',promos:'Promoções',commem:'Datas Comemorativas',webpush:'Web Push',
   cities:'Cidades',schedules:'Configuração de Horários',report:'Agendamentos',historico:'Histórico de Atividades',lembretes:'Lembretes',
   procs:'Procedimentos','cert-config':'Certificados',profile:'Perfil & Senha',lgpd:'Log LGPD',backup:'Backup',
-  mapa:'Mapa de Atendimento'
+  mapa:'Mapa de Atendimento',consult:'Consultar Datas'
 };
-const ALL_SECS = ['agenda','manual','retro','tatica','blocked','released','avail','report','historico','lembretes','nps','revenue','cockpit','receivables','expenses','summary-fin','promos','commem','webpush','cities','schedules','procs','cert-config','profile','lgpd','backup','mapa'];
+const ALL_SECS = ['agenda','manual','retro','tatica','blocked','released','avail','consult','report','historico','lembretes','nps','revenue','cockpit','receivables','expenses','summary-fin','promos','commem','webpush','cities','schedules','procs','cert-config','profile','lgpd','backup','mapa'];
 
 function showSec(name){
   if (name === 'profile') renderBiometricProfileCard();
@@ -3298,7 +3382,7 @@ function showSec(name){
     const el=document.getElementById(`nav-${s}`); if(el) el.classList.toggle('active',s===name);
   });
   document.getElementById('adm-ttl').textContent=SEC_TITLES[name]||name;
-  if(name==='agenda'){resetValuesVisibility();renderStats();renderAgenda();subscribePush('admin').catch(()=>{})}
+  if(name==='agenda'){resetValuesVisibility();renderStats();renderAgenda();loadNoticeBoard();subscribePush('admin').catch(()=>{})}
   if(name==='manual') initManualBooking();
   if(name==='retro') initRetro();
   if(name==='cockpit')      initCockpit();
@@ -3323,6 +3407,131 @@ function showSec(name){
   if(name==='profile') loadProfile();
   if(name==='backup') renderBackupSummary();
   if(window.innerWidth<=768) document.getElementById('adm-sb').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════
+// QUADRO DE AVISOS
+// ══════════════════════════════════════════════════
+async function loadNoticeBoard() {
+  const board = document.getElementById('notice-board');
+  if (!board) return;
+  try {
+    const dates = await GET('/api/agenda/upcoming-dates');
+    if (!dates || !dates.length) { board.style.display = 'none'; return; }
+    // Formata datas DD/MM/AAAA
+    const formatted = dates.map(d => {
+      const parts = String(d).slice(0,10).split('-');
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    });
+    const tenantName = window._tenantConfig?.business_name || '';
+    const greeting = tenantName ? `Olá, ${tenantName}! 👋 ` : 'Olá! 👋 ';
+    board.style.display = 'block';
+    board.innerHTML = `${greeting}Sua agenda está bem movimentada. Veja as datas que possuem procedimentos já cadastrados em ${new Date().getFullYear()}: <strong>${formatted.join(', ')}</strong>.`;
+  } catch(e) { board.style.display = 'none'; }
+}
+
+// ══════════════════════════════════════════════════
+// CONSULTAR DATAS
+// ══════════════════════════════════════════════════
+let _csRetro = false;
+
+function csInit() {
+  // Preenche ano
+  const yearEl = document.getElementById('cs-year');
+  if (yearEl && !yearEl.options.length) {
+    const y = new Date().getFullYear();
+    for (let i = y - 1; i <= y + 1; i++) {
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = i;
+      if (i === y) opt.selected = true;
+      yearEl.appendChild(opt);
+    }
+  }
+  // Mês atual
+  const monthEl = document.getElementById('cs-month');
+  if (monthEl) monthEl.value = new Date().getMonth() + 1;
+  // Preenche cidades
+  const cityEl = document.getElementById('cs-city');
+  if (cityEl && cityEl.options.length <= 1) {
+    CITIES.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id; opt.textContent = c.short || c.name;
+      cityEl.appendChild(opt);
+    });
+  }
+  _csRetro = false;
+  csLoadData();
+}
+
+function csToggleRetro() {
+  _csRetro = !_csRetro;
+  const dot = document.getElementById('cs-retro-dot');
+  const hint = document.getElementById('cs-retro-hint');
+  const btn = document.getElementById('cs-retro-btn');
+  if (dot) dot.style.background = _csRetro ? 'var(--rose)' : 'var(--border)';
+  if (btn) btn.style.background = _csRetro ? 'var(--rose-light)' : 'var(--cream)';
+  if (btn) btn.style.borderColor = _csRetro ? 'var(--rose)' : 'var(--border)';
+  if (btn) btn.style.color = _csRetro ? 'var(--rose)' : 'var(--text-light)';
+  if (hint) hint.textContent = _csRetro ? 'Mostrando: retroativos (antes de hoje)' : 'Mostrando: hoje em diante';
+  csLoadData();
+}
+
+function csApplyFilters() {
+  // Se data específica foi preenchida, zera ano/mês
+  const dateEl = document.getElementById('cs-date');
+  if (dateEl && dateEl.value) {
+    // data específica ativa — ignora ano/mês
+  }
+  csLoadData();
+}
+
+async function csLoadData() {
+  const result = document.getElementById('cs-result');
+  if (!result) return;
+  result.innerHTML = '<div style="text-align:center;color:var(--text-light);font-size:13px;padding:20px">Carregando...</div>';
+  try {
+    const year  = document.getElementById('cs-year')?.value || new Date().getFullYear();
+    const month = document.getElementById('cs-month')?.value || '0';
+    const date  = document.getElementById('cs-date')?.value || '';
+    const city  = document.getElementById('cs-city')?.value || '';
+    let url = `/api/availability/consult?year=${year}&month=${month}&retroativas=${_csRetro?1:0}`;
+    if (date) url += `&date=${date}`;
+    if (city) url += `&city_id=${city}`;
+    const data = await GET(url);
+    if (!data || !data.length) {
+      result.innerHTML = '<div style="text-align:center;color:var(--text-light);font-size:13px;padding:20px">Nenhuma configuração encontrada para o período.</div>';
+      return;
+    }
+    const MONTHS = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    const DOW = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    result.innerHTML = data.map(day => {
+      const [y,m,d] = day.date.split('-');
+      const dow = new Date(day.date + 'T12:00:00').getDay();
+      const dateLabel = `${DOW[dow]}, ${parseInt(d)} de ${MONTHS[parseInt(m)-1]} de ${y}`;
+      const chips = day.entries.map(e => {
+        let cls, label;
+        if (e.type === 'blocked') {
+          cls = 'background:#FEE8E8;color:#C4564A;border:1.5px solid #EFC5C5';
+          label = `🚫 Agenda bloqueada · ${e.cityLabel}${e.reason ? ' · ' + e.reason : ''}`;
+        } else if (e.type === 'released') {
+          cls = 'background:#E8F5EE;color:#2D7D52;border:1.5px solid #B5DEC8';
+          label = `✅ Agenda liberada · ${e.cityLabel}${e.reason ? ' · ' + e.reason : ''}`;
+        } else {
+          cls = 'background:#EEF4FF;color:#2563EB;border:1.5px solid #BFD3F5';
+          label = `📅 Agenda aberta · ${e.cityLabel}`;
+        }
+        return `<div style="${cls};border-radius:40px;padding:5px 11px;font-size:11.5px;font-weight:700;line-height:1.4;display:inline-flex;align-items:center;gap:4px">${label}</div>`;
+      }).join('');
+      return `
+        <div style="background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:12px 14px">
+          <div style="font-size:12px;font-weight:800;color:var(--text-light);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">${dateLabel}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    result.innerHTML = `<div style="color:var(--error);font-size:13px;padding:16px">Erro ao carregar: ${e.message}</div>`;
+  }
 }
 
 // ── Block tab switcher ─────────────────────────────────────────
@@ -7533,6 +7742,7 @@ async function renderPromos() {
       const isExpired  = p.end_date < today;
       const statusClass = isActive?'ps-active':isUpcoming?'ps-upcoming':isExpired?'ps-expired':'ps-inactive';
       const statusLabel = isActive?'✓ Ativa agora':isUpcoming?'⏳ Agendada':isExpired?'Expirada':'Inativa';
+      const isBF = p.is_black_friday === true || p.is_black_friday === 't';
       const isFixedPrice = p.type === 'fixed_price';
       const scopeLabel  = isFixedPrice
         ? `${(p.items||[]).length} produto(s) com preço fixo`
@@ -7540,7 +7750,32 @@ async function renderPromos() {
       const cityLabel   = p.apply_to_all_cities !== false ? 'Todas as cidades' : `${(p.city_ids_promo||[]).length} cidade(s)`;
       const discBlock = isFixedPrice
         ? `<div class="promo-disc" style="font-size:13px;line-height:1.3">🏷<span style="font-size:11px;display:block;margin-top:2px">Valor fixo</span></div>`
-        : `<div class="promo-disc">${Number(p.discount).toFixed(0)}%<span>de desconto</span></div>`;
+        : `<div class="promo-disc">${Number(p.discount||0).toFixed(0)}%<span>de desconto</span></div>`;
+
+      if (isBF) {
+        return `
+          <div style="border-radius:12px;overflow:hidden;margin-bottom:8px;border:2px solid #FFD000;background:#0A0A0A">
+            <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                  <span style="font-size:16px;font-weight:900;letter-spacing:.08em;background:linear-gradient(90deg,#FFD000,#FFA500);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-fill-color:transparent">🖤 BLACK FRIDAY</span>
+                </div>
+                <div style="font-size:12px;color:#aaa;margin-bottom:4px">📅 ${fmtDate(p.start_date)} até ${fmtDate(p.end_date)}</div>
+                <div style="font-size:11px;color:#777">🎯 ${scopeLabel} · 📍 ${cityLabel}</div>
+                <span class="promo-status ${statusClass}" style="margin-top:6px;display:inline-block">${statusLabel}</span>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:28px;font-weight:900;color:#FFD000;line-height:1">${p.discount ? Number(p.discount).toFixed(0)+'%' : '🏷'}</div>
+                ${p.discount ? '<div style="font-size:10px;color:#FFD000;font-weight:700">OFF</div>' : ''}
+                <div style="display:flex;flex-direction:column;gap:5px;margin-top:9px;align-items:flex-end">
+                  ${p.active ? `<button class="act-btn" onclick="deactivatePromo(${p.id})" style="background:#1a1a1a;color:#FFD000;border-color:#FFD000">Desativar</button>` : ''}
+                  <button class="act-btn danger" onclick="hardDeletePromo(${p.id})" style="color:var(--error);border-color:var(--error)">🗑 Excluir</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
       return `
         <div class="promo-card ${isActive?'active-now':''}">
           <div>
@@ -7565,15 +7800,26 @@ async function renderPromos() {
   }
 }
 
+function toggleBFPromo() {
+  const isBF = document.getElementById('pm-bf-btn').dataset.active !== '1';
+  document.getElementById('pm-bf-btn').dataset.active = isBF ? '1' : '0';
+  document.getElementById('pm-bf-dot').style.background = isBF ? '#FFD000' : '#333';
+  document.getElementById('pm-bf-status').textContent = isBF ? 'ATIVADO' : 'DESATIVADO';
+  document.getElementById('pm-bf-hint').style.display = isBF ? 'block' : 'none';
+  document.getElementById('pm-name-opt').style.display = isBF ? 'inline' : 'none';
+}
+
 async function createPromo() {
+  const isBF  = document.getElementById('pm-bf-btn').dataset.active === '1';
   const name  = document.getElementById('pm-name').value.trim();
   const start = document.getElementById('pm-start').value;
   const end   = document.getElementById('pm-end').value;
   const type  = document.querySelector('input[name="pm-type"]:checked')?.value || 'percent';
-  if (!name || !start || !end) { showToast('Preencha nome e datas','error'); return; }
+  if (!isBF && !name) { showToast('Preencha o nome da promoção','error'); return; }
+  if (!start || !end) { showToast('Preencha as datas','error'); return; }
   if (start > end) { showToast('Data de início deve ser antes do fim','error'); return; }
 
-  let payload = { name, start_date: start, end_date: end, type };
+  let payload = { name: name || 'Black Friday', start_date: start, end_date: end, type, is_black_friday: isBF };
 
   if (type === 'fixed_price') {
     // Coleta itens com preço preenchido
@@ -7620,6 +7866,13 @@ async function createPromo() {
     document.getElementById('pm-name').value='';
     document.getElementById('pm-start').value='';
     document.getElementById('pm-end').value='';
+    // Reset BF toggle
+    const bfBtn = document.getElementById('pm-bf-btn');
+    bfBtn.dataset.active = '0';
+    document.getElementById('pm-bf-dot').style.background = '#333';
+    document.getElementById('pm-bf-status').textContent = 'DESATIVADO';
+    document.getElementById('pm-bf-hint').style.display = 'none';
+    document.getElementById('pm-name-opt').style.display = 'none';
     document.getElementById('pm-disc').value='';
     document.getElementById('pm-type-pct').checked = true;
     document.getElementById('pm-disc-wrap').classList.remove('hidden');

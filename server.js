@@ -1389,6 +1389,9 @@ async function initDB() {
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS apply_to_all_cities BOOLEAN NOT NULL DEFAULT TRUE`);
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS city_ids_promo INTEGER[] NOT NULL DEFAULT '{}'`);
 
+    // Migração: Black Friday
+    await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS is_black_friday BOOLEAN DEFAULT FALSE`);
+
     // Migração v2.9.17: promoção por valor fixo por produto
     await client.query(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'percent'`);
     await client.query(`ALTER TABLE promotions ALTER COLUMN type TYPE VARCHAR(20)`);
@@ -4996,6 +4999,160 @@ app.get('/master/api/lgpd/consents', requireMaster, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Quadro de Avisos: datas com agendamentos (admin) ────────────────────────
+app.get('/api/agenda/upcoming-dates', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await req.db(
+      `SELECT DISTINCT date FROM appointments
+       WHERE date > CURRENT_DATE
+         AND date <= (DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '1 year - 1 day')
+       ORDER BY date`
+    );
+    res.json(rows.map(r => r.date));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Consultar Datas (admin) ──────────────────────────────────────────────────
+app.get('/api/availability/consult', requireAdmin, async (req, res) => {
+  try {
+    const { year, month, date: specificDate, city_id, retroativas } = req.query;
+    const isRetro = retroativas === '1' || retroativas === 'true';
+
+    // Fuso Brasil
+    const nowBRT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const todayStr = `${nowBRT.getFullYear()}-${String(nowBRT.getMonth()+1).padStart(2,'0')}-${String(nowBRT.getDate()).padStart(2,'0')}`;
+
+    // Determina range de datas a consultar
+    let dates = [];
+    if (specificDate) {
+      // Data específica
+      dates = [specificDate];
+    } else {
+      const y = parseInt(year) || nowBRT.getFullYear();
+      const m = parseInt(month); // 0 = todos os meses
+      let startDate, endDate;
+      if (m && m >= 1 && m <= 12) {
+        const daysInMonth = new Date(y, m, 0).getDate();
+        startDate = `${y}-${String(m).padStart(2,'0')}-01`;
+        endDate   = `${y}-${String(m).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+      } else {
+        startDate = `${y}-01-01`;
+        endDate   = `${y}-12-31`;
+      }
+      // Aplica filtro retroativa
+      if (!isRetro) {
+        // apenas hoje em diante
+        if (startDate < todayStr) startDate = todayStr;
+      } else {
+        // apenas até ontem
+        const yesterday = new Date(nowBRT);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const ystStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
+        if (endDate > ystStr) endDate = ystStr;
+      }
+      // Gera lista de datas no range
+      let cur = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T00:00:00');
+      while (cur <= end) {
+        const ds = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+        dates.push(ds);
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    if (!dates.length) return res.json([]);
+
+    // Carrega dados relevantes de uma vez
+    const minDate = dates[0];
+    const maxDate = dates[dates.length - 1];
+
+    const [blockedRes, releasedRes, relSlotsRes, workRes, citiesRes] = await Promise.all([
+      req.db(`SELECT date, reason, city_ids FROM blocked_dates WHERE date >= $1 AND date <= $2 ORDER BY date`, [minDate, maxDate]),
+      req.db(`SELECT date, city_ids, work_start, work_end, reason FROM released_dates WHERE date >= $1 AND date <= $2 ORDER BY date`, [minDate, maxDate]),
+      req.db(`SELECT date, city_ids, reason FROM released_slots WHERE date >= $1 AND date <= $2 ORDER BY date`, [minDate, maxDate]),
+      req.db(`SELECT scope, city_id, day_of_week, is_active FROM work_configs ORDER BY scope`),
+      req.db(`SELECT id, name FROM cities WHERE is_active = TRUE ORDER BY name`),
+    ]);
+
+    const blockedMap   = {};
+    const releasedMap  = {};
+    const relSlotsMap  = {};
+    for (const r of blockedRes.rows)   blockedMap[String(r.date).slice(0,10)]   = r;
+    for (const r of releasedRes.rows)  releasedMap[String(r.date).slice(0,10)]  = r;
+    for (const r of relSlotsRes.rows) {
+      const ds = String(r.date).slice(0,10);
+      if (!relSlotsMap[ds]) relSlotsMap[ds] = [];
+      relSlotsMap[ds].push(r);
+    }
+
+    const allCities = citiesRes.rows; // [{id, name}]
+    const cityFilter = city_id ? parseInt(city_id) : null;
+
+    const result = [];
+    for (const ds of dates) {
+      const dow = new Date(ds + 'T12:00:00').getDay(); // 0=dom
+      const entries = [];
+
+      // 1) Bloqueios
+      const blk = blockedMap[ds];
+      if (blk) {
+        const cidArr = Array.isArray(blk.city_ids) ? blk.city_ids : [];
+        // Filtra por cidade se necessário
+        if (!cityFilter || cidArr.length === 0 || cidArr.includes(cityFilter)) {
+          const cityNames = cidArr.length === 0 ? 'Todas as cidades' : cidArr.map(id => allCities.find(c => c.id === id)?.name || `Cidade ${id}`).join(', ');
+          entries.push({ type: 'blocked', cityLabel: cityNames, reason: blk.reason || '' });
+        }
+      }
+
+      // 2) Liberações de dia inteiro
+      const rel = releasedMap[ds];
+      if (rel) {
+        const cidArr = Array.isArray(rel.city_ids) ? rel.city_ids : [];
+        if (!cityFilter || cidArr.length === 0 || cidArr.includes(cityFilter)) {
+          const cityNames = cidArr.length === 0 ? 'Todas as cidades' : cidArr.map(id => allCities.find(c => c.id === id)?.name || `Cidade ${id}`).join(', ');
+          entries.push({ type: 'released', cityLabel: cityNames, reason: rel.reason || '' });
+        }
+      }
+
+      // 3) Liberações de horário específico
+      const slotArr = relSlotsMap[ds] || [];
+      for (const slot of slotArr) {
+        const cidArr = Array.isArray(slot.city_ids) ? slot.city_ids : [];
+        if (!cityFilter || cidArr.length === 0 || cidArr.includes(cityFilter)) {
+          const cityNames = cidArr.length === 0 ? 'Todas as cidades' : cidArr.map(id => allCities.find(c => c.id === id)?.name || `Cidade ${id}`).join(', ');
+          entries.push({ type: 'released', cityLabel: cityNames, reason: slot.reason || '' });
+        }
+      }
+
+      // 4) Agenda aberta por work_config
+      if (!blk) {
+        const activeCities = [];
+        for (const city of allCities) {
+          if (cityFilter && city.id !== cityFilter) continue;
+          // city_day > day > global
+          const cfgCityDay = workRes.rows.find(w => w.scope === 'city_day' && w.city_id === city.id && w.day_of_week === dow);
+          const cfgDay     = workRes.rows.find(w => w.scope === 'day'      && w.day_of_week === dow);
+          const cfgGlobal  = workRes.rows.find(w => w.scope === 'global');
+          const cfg = cfgCityDay || cfgDay || cfgGlobal;
+          const isActive = cfg ? cfg.is_active : false;
+          if (isActive && !releasedMap[ds]) { // se não há liberação manual já listada
+            activeCities.push(city.name);
+          }
+        }
+        if (activeCities.length > 0 && !releasedMap[ds] && slotArr.length === 0) {
+          entries.push({ type: 'open', cityLabel: activeCities.join(', '), reason: '' });
+        }
+      }
+
+      if (entries.length > 0) {
+        result.push({ date: ds, entries });
+      }
+    }
+
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Promoções ────────────────────────────────────────────────────────────────
 
 // Público: retorna promoção ativa agora (se existir)
@@ -5051,8 +5208,13 @@ app.get('/api/promotions', requireAdmin, async (req, res) => {
 
 // Admin: criar promoção
 app.post('/api/promotions', requireAdmin, async (req, res) => {
-  const { name, start_date, end_date, discount, apply_to_all, proc_ids, type = 'percent', items = [] } = req.body;
-  if (!name || !start_date || !end_date) {
+  const { name, start_date, end_date, discount, apply_to_all, proc_ids, type = 'percent', items = [], is_black_friday = false } = req.body;
+  const isBF = is_black_friday === true || is_black_friday === 'true';
+  // Nome obrigatório apenas se não for Black Friday
+  if ((!name || !name.trim()) && !isBF) {
+    return res.status(400).json({ error: 'Informe o nome da promoção' });
+  }
+  if (!start_date || !end_date) {
     return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
   }
   if (type === 'percent' && !discount) {
@@ -5082,10 +5244,11 @@ app.post('/api/promotions', requireAdmin, async (req, res) => {
   }
   try {
     const discountVal = type === 'percent' ? Number(discount) : null;
+    const promoName = isBF ? (name && name.trim() ? name.trim() : 'Black Friday') : name;
     const { rows } = await req.db(
-      `INSERT INTO promotions (name, start_date, end_date, discount, apply_to_all, proc_ids, apply_to_all_cities, city_ids_promo, type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [name, start_date, end_date, discountVal, allProcs, ids, allCities, cityIds, type]
+      `INSERT INTO promotions (name, start_date, end_date, discount, apply_to_all, proc_ids, apply_to_all_cities, city_ids_promo, type, is_black_friday)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [promoName, start_date, end_date, discountVal, allProcs, ids, allCities, cityIds, type, isBF]
     );
     const promo = rows[0];
     // Se for valor fixo, inserir os itens na tabela promotion_items
@@ -8051,7 +8214,11 @@ async function bellaRespond({ message, history, name, tenant, procedures, active
       let promoAnnounce = '';
       if (activePromo) {
         const promoName = activePromo.name || 'Promoção Especial';
-        if (activePromo.type === 'fixed_price' && activePromo.items?.length) {
+        const isBF = activePromo.is_black_friday === true || activePromo.is_black_friday === 't';
+        if (isBF) {
+          const discTxt = activePromo.discount ? ` com *${activePromo.discount}% OFF*` : '';
+          promoAnnounce = `\n\n🖤🛍️ *BLACK FRIDAY!* Temos uma *promoção especial de Black Friday*${discTxt}! Não perca essa oportunidade incrível! ✨`;
+        } else if (activePromo.type === 'fixed_price' && activePromo.items?.length) {
           const promoLines = activePromo.items
             .map(item => {
               const proc = procedures.find(p => Number(p.id) === Number(item.proc_id));
@@ -8096,8 +8263,13 @@ async function bellaRespond({ message, history, name, tenant, procedures, active
   }
 
   // — Promoção / desconto / oferta
-  if (/promoc|promocao|promoção|desconto|oferta|especial|outubro rosa|campanha/.test(msg)) {
+  if (/promoc|promocao|promoção|desconto|oferta|especial|outubro rosa|campanha|black friday|blackfriday/.test(msg)) {
     if (activePromo) {
+      const isBF = activePromo.is_black_friday === true || activePromo.is_black_friday === 't';
+      if (isBF) {
+        const discTxt = activePromo.discount ? ` *${activePromo.discount}% OFF*` : '';
+        return `${greeting}🖤🛍️ Sim! Temos uma *promoção especial de Black Friday*${discTxt}!\n\nÉ a nossa melhor oferta do ano! Aproveite e agende agora para garantir o desconto:\n\n👉 [Ver promoção](/)`;
+      }
       const promoName = activePromo.name || 'Promoção Especial';
       if (activePromo.type === 'fixed_price' && activePromo.items?.length) {
         // Monta lista com preços riscados
